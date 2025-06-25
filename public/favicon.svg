@@ -1,0 +1,29 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="32" height="32" rx="8" fill="#ffffff"/>
+  
+  <!-- DNA helix simplified -->
+  <g transform="translate(8, 8)">
+    <!-- DNA strands -->
+    <path d="M2 2 Q 4 4 6 2 Q 8 0 10 2" fill="none" stroke="#22c55e" stroke-width="1.5"/>
+    <path d="M2 6 Q 4 4 6 6 Q 8 8 10 6" fill="none" stroke="#0ea5e9" stroke-width="1.5"/>
+    <path d="M2 10 Q 4 12 6 10 Q 8 8 10 10" fill="none" stroke="#22c55e" stroke-width="1.5"/>
+    <path d="M2 14 Q 4 12 6 14 Q 8 16 10 14" fill="none" stroke="#0ea5e9" stroke-width="1.5"/>
+    
+    <!-- Connection points -->
+    <circle cx="3" cy="4" r="0.5" fill="#22c55e"/>
+    <circle cx="5" cy="4" r="0.5" fill="#0ea5e9"/>
+    <circle cx="7" cy="4" r="0.5" fill="#22c55e"/>
+    <circle cx="9" cy="4" r="0.5" fill="#0ea5e9"/>
+    
+    <circle cx="3" cy="12" r="0.5" fill="#0ea5e9"/>
+    <circle cx="5" cy="12" r="0.5" fill="#22c55e"/>
+    <circle cx="7" cy="12" r="0.5" fill="#0ea5e9"/>
+    <circle cx="9" cy="12" r="0.5" fill="#22c55e"/>
+  </g>
+  
+  <!-- Small CG text -->
+  <text x="12" y="26" font-family="Arial, sans-serif" font-size="8" font-weight="bold">
+    <tspan fill="#22c55e">C</tspan><tspan fill="#0ea5e9">G</tspan>
+  </text>
+</svg> 

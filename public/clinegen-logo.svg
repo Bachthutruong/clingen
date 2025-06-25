@@ -1,0 +1,34 @@
+<svg width="200" height="60" viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="30" cy="30" r="25" fill="none" stroke="#22c55e" stroke-width="2" opacity="0.3"/>
+  
+  <!-- DNA helix design -->
+  <g transform="translate(20, 15)">
+    <!-- DNA strands -->
+    <path d="M5 5 Q 10 10 15 5 Q 20 0 25 5" fill="none" stroke="#22c55e" stroke-width="2"/>
+    <path d="M5 10 Q 10 5 15 10 Q 20 15 25 10" fill="none" stroke="#0ea5e9" stroke-width="2"/>
+    <path d="M5 15 Q 10 20 15 15 Q 20 10 25 15" fill="none" stroke="#22c55e" stroke-width="2"/>
+    <path d="M5 20 Q 10 15 15 20 Q 20 25 25 20" fill="none" stroke="#0ea5e9" stroke-width="2"/>
+    
+    <!-- Connection points -->
+    <circle cx="8" cy="7.5" r="1" fill="#22c55e"/>
+    <circle cx="12" cy="7.5" r="1" fill="#0ea5e9"/>
+    <circle cx="18" cy="7.5" r="1" fill="#22c55e"/>
+    <circle cx="22" cy="7.5" r="1" fill="#0ea5e9"/>
+    
+    <circle cx="8" cy="17.5" r="1" fill="#0ea5e9"/>
+    <circle cx="12" cy="17.5" r="1" fill="#22c55e"/>
+    <circle cx="18" cy="17.5" r="1" fill="#0ea5e9"/>
+    <circle cx="22" cy="17.5" r="1" fill="#22c55e"/>
+  </g>
+  
+  <!-- ClinGen Text -->
+  <text x="65" y="25" font-family="Arial, sans-serif" font-size="18" font-weight="bold">
+    <tspan fill="#22c55e">Clin</tspan><tspan fill="#0ea5e9">Gen</tspan>
+  </text>
+  
+  <!-- Tagline -->
+  <text x="65" y="40" font-family="Arial, sans-serif" font-size="8" fill="#666">
+    KHÁM PHÁ GEN - NÂNG TẦM SỨC KHỎE VIỆT
+  </text>
+</svg> 
