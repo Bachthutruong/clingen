@@ -19,6 +19,7 @@ import TestResults from '@/pages/Lab/TestResults'
 import SupplyManagement from '@/pages/Lab/SupplyManagement'
 import SampleManagement from '@/pages/Lab/SampleManagement'
 import LabStatistics from '@/pages/Lab/Statistics'
+import InventoryManagement from '@/pages/Lab/InventoryManagement'
 
 // Finance pages
 import FinancialReports from '@/pages/Finance/FinancialReports'
@@ -157,6 +158,14 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['admin', 'lab_technician']}>
                     <LabStatistics />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="inventory-management"
+                element={
+                  <ProtectedRoute allowedRoles={['admin', 'lab_technician']}>
+                    <InventoryManagement />
                   </ProtectedRoute>
                 } 
               />

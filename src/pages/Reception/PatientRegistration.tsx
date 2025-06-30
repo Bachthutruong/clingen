@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { User, Phone, Mail, MapPin, Calendar, Users, Plus, Search, Loader2 } from 'lucide-react'
 import { patientsApi, referralSourcesApi } from '@/services'
+import { getGenderLabel } from '@/types/api'
 import type { ReferralSourceAPI, PatientAPI } from '@/types/api'
 
 const patientSchema = z.object({
@@ -153,14 +154,7 @@ const PatientRegistration: React.FC = () => {
     return age.toString()
   }
 
-  const getGenderLabel = (gender: number) => {
-    switch (gender) {
-      case 0: return 'Nam'
-      case 1: return 'Nữ'
-      case 2: return 'Khác'
-      default: return 'Không xác định'
-    }
-  }
+
 
   const birthYear = watch('birthYear')
 
@@ -316,8 +310,8 @@ const PatientRegistration: React.FC = () => {
                   }`}
                 >
                   <option value="">Chọn giới tính</option>
-                  <option value={0}>Nam</option>
-                  <option value={1}>Nữ</option>
+                  <option value={0}>Nữ</option>
+                  <option value={1}>Nam</option>
                   <option value={2}>Khác</option>
                 </select>
                 {errors.gender && (

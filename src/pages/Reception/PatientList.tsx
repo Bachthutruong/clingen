@@ -18,6 +18,7 @@ import {
   Loader2
 } from 'lucide-react'
 import { patientsApi } from '@/services'
+import { getGenderLabel } from '@/types/api'
 import type { PatientAPI, PaginatedResponse } from '@/types/api'
 import { formatDate } from '@/lib/utils'
 
@@ -87,20 +88,11 @@ const PatientList: React.FC = () => {
     toast('Xuất danh sách bệnh nhân ra file Excel')
   }
 
-  const getGenderLabel = (gender: number) => {
-    switch (gender) {
-      case 0: return 'Nam'
-      case 1: return 'Nữ'
-      case 2: return 'Khác'
-      default: return 'Không xác định'
-    }
-  }
-
   const getGenderColor = (gender: number) => {
     switch (gender) {
-      case 0: return 'bg-blue-100 text-blue-800'
-      case 1: return 'bg-pink-100 text-pink-800'
-      case 2: return 'bg-gray-100 text-gray-800'
+      case 0: return 'bg-pink-100 text-pink-800' // Nữ
+      case 1: return 'bg-blue-100 text-blue-800' // Nam
+      case 2: return 'bg-gray-100 text-gray-800' // Khác
       default: return 'bg-gray-100 text-gray-800'
     }
   }
@@ -186,16 +178,16 @@ const PatientList: React.FC = () => {
               </div>
             </div>
 
-            <select
-              value={genderFilter}
-              onChange={(e) => setGenderFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md"
-            >
-              <option value="">Tất cả giới tính</option>
-              <option value="0">Nam</option>
-              <option value="1">Nữ</option>
-              <option value="2">Khác</option>
-            </select>
+                            <select
+                  value={genderFilter}
+                  onChange={(e) => setGenderFilter(e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="">Tất cả giới tính</option>
+                  <option value="0">Nữ</option>
+                  <option value="1">Nam</option>
+                  <option value="2">Khác</option>
+                </select>
 
             <select
               value={ageFilter}

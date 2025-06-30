@@ -20,6 +20,7 @@ import {
   Loader2
 } from 'lucide-react'
 import { patientsApi } from '@/services'
+import { getGenderLabel } from '@/types/api'
 import type { PatientAPI, PaginatedResponse, PatientTestDTO } from '@/types/api'
 import { formatDate, formatDateTime } from '@/lib/utils'
 
@@ -268,14 +269,7 @@ const PatientInfo: React.FC = () => {
     }
   }
 
-  const getGenderLabel = (gender: number) => {
-    switch (gender) {
-      case 0: return 'Nam'
-      case 1: return 'Nữ'
-      case 2: return 'Khác'
-      default: return 'Không xác định'
-    }
-  }
+
 
   const handleViewDetails = (registration: Registration) => {
     setSelectedPatient(registration.patient)

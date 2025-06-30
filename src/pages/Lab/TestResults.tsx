@@ -31,7 +31,7 @@ interface TestResult {
   patientName: string
   patientCode: string
   patientAge: number
-  patientGender: string
+  patientGender: number
   testService: string
   serviceCode: string
   parameters: TestParameter[]
@@ -71,7 +71,7 @@ const TestResults: React.FC = () => {
       patientName: 'Nguyễn Văn A',
       patientCode: 'BN001',
       patientAge: 34,
-      patientGender: 'male',
+      patientGender: 1, // Nam
       testService: 'Công thức máu toàn phần',
       serviceCode: 'CBC',
       parameters: [
@@ -123,7 +123,7 @@ const TestResults: React.FC = () => {
       patientName: 'Trần Thị B',
       patientCode: 'BN002',
       patientAge: 39,
-      patientGender: 'female',
+      patientGender: 0, // Nữ
       testService: 'Glucose máu đói',
       serviceCode: 'GLU',
       parameters: [
@@ -153,7 +153,7 @@ const TestResults: React.FC = () => {
       patientName: 'Lê Văn C',
       patientCode: 'BN003',
       patientAge: 45,
-      patientGender: 'male',
+      patientGender: 1, // Nam
       testService: 'Cholesterol toàn phần',
       serviceCode: 'CHOL',
       parameters: [
@@ -501,7 +501,7 @@ const TestResults: React.FC = () => {
                     <div>
                       <span className="text-gray-600">Giới tính:</span>
                       <span className="ml-2 font-medium">
-                        {selectedResult.patientGender === 'male' ? 'Nam' : 'Nữ'}
+                        {selectedResult.patientGender === 1 ? 'Nam' : selectedResult.patientGender === 0 ? 'Nữ' : 'Khác'}
                       </span>
                     </div>
                     <div>

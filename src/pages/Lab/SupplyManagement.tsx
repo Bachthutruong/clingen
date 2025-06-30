@@ -54,12 +54,12 @@ const SupplyManagement: React.FC = () => {
     packagingId: 0,
     importTime: '',
     expiryTime: '',
-    type: 0
+    type: 1 // 1 - hóa chất
   })
 
   // Transaction form state
   const [transactionForm, setTransactionForm] = useState({
-    logType: 0, // 0: import, 1: export, 2: adjustment
+    logType: 1, // 1: nhập kho, 2: xuất kho
     quantity: 0,
     materialId: 0,
     note: ''
@@ -205,7 +205,7 @@ const SupplyManagement: React.FC = () => {
       
       toast.success('Nhập kho thành công!')
       setTransactionForm({
-        logType: 0,
+        logType: 1, // 1: nhập kho
         quantity: 0,
         materialId: 0,
         note: ''
@@ -235,7 +235,7 @@ const SupplyManagement: React.FC = () => {
       
       toast.success('Xuất kho thành công!')
       setTransactionForm({
-        logType: 1,
+        logType: 2, // 2: xuất kho
         quantity: 0,
         materialId: 0,
         note: ''
@@ -281,7 +281,7 @@ const SupplyManagement: React.FC = () => {
         packagingId: 0,
         importTime: '',
         expiryTime: '',
-        type: 0
+        type: 1 // 1 - hóa chất
       })
       setIsAddingNew(false)
       await fetchMaterials()
@@ -437,11 +437,8 @@ const SupplyManagement: React.FC = () => {
               className="px-3 py-2 border border-gray-300 rounded-md"
             >
               <option value="">Tất cả loại</option>
-              <option value="0">Thuốc thử</option>
-              <option value="1">Thiết bị</option>
-              <option value="2">Vật tư tiêu hao</option>
-              <option value="3">Hóa chất</option>
-              <option value="4">Khác</option>
+              <option value="1">Hóa chất</option>
+              <option value="2">Vật tư</option>
             </select>
           </div>
         </CardContent>

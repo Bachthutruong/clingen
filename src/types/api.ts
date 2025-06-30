@@ -27,34 +27,116 @@ export interface InventorySearchDTO extends SearchDTO {
   toImportDate?: string
   fromExpiryDate?: string
   toExpiryDate?: string
-  materialType?: number
+  materialType?: number // 1 - hóa chất, 2 - vật tư
 }
 
 export interface InventoryLogsSearchDTO extends SearchDTO {
-  logType?: number
+  logType?: number // 1 - nhập kho, 2 - xuất kho
   fromDate?: string
   toDate?: string
 }
 
 // Test Price Config DTO
 export interface TestPriceConfigDTO {
-  quantityRangeId?: number
+  quantityRangeId?: number // Id của khung số lượng nếu select từ dropdown/nếu sửa số lượng min hoặc max thì trường này null
   minQuantity: number
   maxQuantity: number
-  price: number
+  price: number // Giá theo cái khung này
 }
 
 // Test Type DTO
-export interface TestType {
+export interface TestTypeDTO {
   id?: number
-  name: string
-  code: string
-  description?: string
-  price: number
-  status: number // 0: inactive, 1: active
-  testSampleIds: number[]
+  name: string // Tên xét nghiệm
+  code: string // Mã xét nghiệm
+  description?: string // Mô tả chi tiết xét nghiệm
+  price: number // Giá xét nghiệm (VNĐ)
+  status: number // Trạng thái: 0 không hoạt động, 1 hoạt động
+  testSampleIds: number[] // array<integer> Items integer int64
 }
 
+// Test Sample DTO
+export interface TestSampleDTO {
+  id?: number
+  name: string
+}
+
+// Referral Source DTO
+export interface ReferralSourceDTO {
+  id?: number
+  name: string // Tên nguồn gửi
+  code: string // Mã nguồn gửi
+  priceConfigs: Array<{
+    testTypeId: number // int64
+    testPriceConfigs: TestPriceConfigDTO[]
+  }> // List loại xét nghiệm
+  status: number // Trạng thái: 0 không hoạt động, 1 hoạt động
+}
+
+export interface ReferralSourceTestTypeDTO {
+  testTypeId: number // int64
+  testPriceConfigs: TestPriceConfigDTO[]
+}
+
+// Patient DTO
+export interface PatientInfoDTO {
+  id?: number
+  fullName: string // Họ tên bệnh nhân
+  birthYear: string // Năm sinh - date format
+  gender: number // Giới tính: 0 nữ, 1 nam, 2 khác
+  address?: string // Địa chỉ nơi cư trú
+  phoneNumber: string // Số điện thoại liên hệ
+  reasonForVisit?: string // Lý do đến khám
+  referralSourceId?: number // Nguồn đến (ví dụ: tự đến, giới thiệu, chuyển viện) - int64
+  email?: string // Địa chỉ email
+  guardianName?: string // Tên người bảo lãnh
+  guardianRelationship?: string // Quan hệ với người bệnh (ví dụ: cha, mẹ, anh chị em)
+  guardianPhoneNumber?: string // Số điện thoại của người bảo lãnh
+  typeTests: PatientTestDTO[] // Danh sách dịch vụ xét nghiệm
+}
+
+export interface PatientTestDTO {
+  testId: number // int64
+  testSampleId: number // int64
+  testSampleName?: string
+}
+
+// Packaging DTO
+export interface PackagingDTO {
+  id?: number
+  name: string // ≥ 1 characters
+  code: string // ≥ 1 characters
+  quantity: number // int64
+  status: number // int32
+}
+
+// Material DTO (Vật tư / hoá chất)
+export interface MaterialDTO {
+  id?: number
+  name: string // Tên vật tư / hoá chất - ≥ 1 characters
+  code: string // Mã vật tư / hoá chất - ≥ 1 characters
+  quantity: number // Số lượng - int64
+  packagingId: number // Id quy cách đóng gói - int64
+  importTime: string // Thời gian nhập kho - date-time
+  expiryTime?: string // Hạn sử dụng - date-time
+  type: number // Loại: 1 - hóa chất, 2 - vật tư - int32
+}
+
+// Inventory Log DTO
+export interface InventoryLogItemDTO {
+  type: number // Loại hàng hóa: 1 - hóa chất, 2 - vật tư - int32
+  materialId: number // ID của vật tư hoặc hóa chất - int64
+  quantity: number // Số lượng xuất / nhập - int64
+  expiryDate?: string // Hạn sử dụng - date format
+}
+
+export interface InventoryLogsDTO {
+  logType: number // Loại log: 1 - nhập kho, 2 - xuất kho - int32
+  items: InventoryLogItemDTO[]
+  note?: string // Ghi chú
+}
+
+// Create/Update Request types
 export interface CreateTestTypeRequest {
   name: string
   code: string
@@ -64,58 +146,18 @@ export interface CreateTestTypeRequest {
   testSampleIds: number[]
 }
 
-// Test Sample DTO
-export interface TestSample {
-  id?: number
-  name: string
-}
-
 export interface CreateTestSampleRequest {
   name: string
-}
-
-// Referral Source DTO
-export interface ReferralSourceAPI {
-  id?: number
-  name: string
-  code: string
-  priceConfigs: TestPriceConfigDTO[]
-  status: number
-}
-
-export interface ReferralSourceTestTypeDTO {
-  testTypeId: number
-  testPriceConfigs: TestPriceConfigDTO[]
 }
 
 export interface CreateReferralSourceRequest {
   name: string
   code: string
-  priceConfigs: TestPriceConfigDTO[]
+  priceConfigs: Array<{
+    testTypeId: number
+    testPriceConfigs: TestPriceConfigDTO[]
+  }>
   status: number
-}
-
-// Patient DTO
-export interface PatientAPI {
-  id?: number
-  fullName: string
-  birthYear: string // date format
-  gender: number // 0: male, 1: female, 2: other
-  address?: string
-  phoneNumber: string
-  reasonForVisit?: string
-  referralSourceId?: number
-  email?: string
-  guardianName?: string
-  guardianRelationship?: string
-  guardianPhoneNumber?: string
-  typeTests: PatientTestDTO[]
-}
-
-export interface PatientTestDTO {
-  testId: number
-  testSampleId: number
-  testSampleName?: string
 }
 
 export interface CreatePatientRequest {
@@ -133,32 +175,11 @@ export interface CreatePatientRequest {
   typeTests: PatientTestDTO[]
 }
 
-// Packaging DTO
-export interface Packaging {
-  id?: number
-  name: string
-  code: string
-  quantity: number
-  status: number
-}
-
 export interface CreatePackagingRequest {
   name: string
   code: string
   quantity: number
   status: number
-}
-
-// Material DTO (Vật tư / hoá chất)
-export interface Material {
-  id?: number
-  name: string
-  code: string
-  quantity: number
-  packagingId: number
-  importTime: string // date-time
-  expiryTime?: string // date-time
-  type: number // material type
 }
 
 export interface CreateMaterialRequest {
@@ -169,20 +190,6 @@ export interface CreateMaterialRequest {
   importTime: string
   expiryTime?: string
   type: number
-}
-
-// Inventory Log DTO
-export interface InventoryLogItemDTO {
-  type: number
-  materialId: number
-  quantity: number
-  expiryDate?: string
-}
-
-export interface InventoryLogsDTO {
-  logType: number
-  items: InventoryLogItemDTO[]
-  note?: string
 }
 
 export interface CreateInventoryLogRequest {
@@ -230,6 +237,16 @@ export interface TestTypeSearchParams extends SearchDTO {}
 export interface ReferralSourceSearchParams extends SearchDTO {}
 export interface PatientSearchParams extends SearchDTO {}
 
+// Backward compatibility aliases
+export type TestType = TestTypeDTO
+export type TestSample = TestSampleDTO
+export type ReferralSourceAPI = ReferralSourceDTO
+export type PatientAPI = PatientInfoDTO
+export type Packaging = PackagingDTO
+export type Material = MaterialDTO
+export type InventorySearchRequest = InventorySearchDTO
+export type InventoryLogSearchRequest = InventoryLogsSearchDTO
+
 // Enums for status values
 export enum Status {
   INACTIVE = 0,
@@ -237,24 +254,19 @@ export enum Status {
 }
 
 export enum Gender {
-  MALE = 0,
-  FEMALE = 1,
-  OTHER = 2
+  FEMALE = 0, // Nữ
+  MALE = 1,   // Nam  
+  OTHER = 2   // Khác
 }
 
 export enum MaterialType {
-  REAGENT = 0,
-  EQUIPMENT = 1,
-  CONSUMABLE = 2,
-  CHEMICAL = 3,
-  OTHER = 4
+  CHEMICAL = 1, // Hóa chất
+  SUPPLY = 2    // Vật tư
 }
 
 export enum InventoryLogType {
-  IMPORT = 0,
-  EXPORT = 1,
-  ADJUSTMENT = 2,
-  EXPIRED = 3
+  IMPORT = 1, // Nhập kho
+  EXPORT = 2  // Xuất kho
 }
 
 // Helper functions
@@ -264,8 +276,8 @@ export function getStatusLabel(status: number): string {
 
 export function getGenderLabel(gender: number): string {
   switch (gender) {
-    case 0: return 'Nam'
-    case 1: return 'Nữ'
+    case 0: return 'Nữ'
+    case 1: return 'Nam'
     case 2: return 'Khác'
     default: return 'Không xác định'
   }
@@ -273,21 +285,94 @@ export function getGenderLabel(gender: number): string {
 
 export function getMaterialTypeLabel(type: number): string {
   switch (type) {
-    case 0: return 'Thuốc thử'
-    case 1: return 'Thiết bị'
-    case 2: return 'Vật tư tiêu hao'
-    case 3: return 'Hóa chất'
-    case 4: return 'Khác'
+    case 1: return 'Hóa chất'
+    case 2: return 'Vật tư'
     default: return 'Không xác định'
   }
 }
 
 export function getInventoryLogTypeLabel(logType: number): string {
   switch (logType) {
-    case 0: return 'Nhập kho'
-    case 1: return 'Xuất kho'
-    case 2: return 'Điều chỉnh'
-    case 3: return 'Hết hạn'
+    case 1: return 'Nhập kho'
+    case 2: return 'Xuất kho'
     default: return 'Không xác định'
   }
+}
+
+// Additional helper for currency formatting
+export function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
+// Additional helper for date formatting
+export function formatDateTime(dateString?: string): string {
+  if (!dateString) return 'Chưa có'
+  return new Date(dateString).toLocaleString('vi-VN')
+}
+
+export function formatDate(dateString?: string): string {
+  if (!dateString) return 'Chưa có'
+  return new Date(dateString).toLocaleDateString('vi-VN')
+}
+
+// Additional types for Inventory Management (for compatibility with existing code)
+export interface InventoryItem {
+  id?: number
+  name: string
+  code: string
+  description?: string
+  unit: string
+  currentStock: number
+  minStock: number
+  maxStock: number
+  unitPrice: number
+  location?: string
+  materialType: number // 1 - hóa chất, 2 - vật tư
+  status: number
+  importDate?: string
+  expiryDate?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface InventoryLog {
+  id?: number
+  inventoryId: number
+  logType: number // 1: Nhập, 2: Xuất
+  quantity: number
+  remainingQuantity?: number
+  reason?: string
+  note?: string
+  createdBy?: string
+  createdAt?: string
+  inventoryItem?: InventoryItem
+}
+
+export interface InventoryCreateRequest {
+  name: string
+  code: string
+  description?: string
+  unit: string
+  currentStock: number
+  minStock: number
+  maxStock: number
+  unitPrice: number
+  location?: string
+  materialType: number // 1 - hóa chất, 2 - vật tư
+  status: number
+  importDate?: string
+  expiryDate?: string
+}
+
+export interface InventoryLogCreateRequest {
+  inventoryId: number
+  logType: number // 1 - nhập kho, 2 - xuất kho
+  quantity: number
+  reason?: string
+  note?: string
 } 
