@@ -128,10 +128,10 @@ const Login: React.FC = () => {
           <div className="mt-6 p-4 bg-muted rounded-lg">
             <h4 className="text-sm font-medium mb-2">Tài khoản demo:</h4>
             <div className="text-xs space-y-1 text-muted-foreground">
-              <div>Admin: admin@clinic.com / 123456</div>
-              <div>Nhân viên: staff@clinic.com / 123456</div>
-              <div>Xét nghiệm: lab@clinic.com / 123456</div>
-              <div>Kế toán: accountant@clinic.com / 123456</div>
+              <div>Admin: admin@clinic.com / admin123</div>
+              <div>Nhân viên: receptionist@clinic.com / receptionist123</div>
+              <div>Xét nghiệm: lab@clinic.com / lab123</div>
+              <div>Kế toán: accountant@clinic.com / accountant123</div>
             </div>
           </div>
         </CardContent>

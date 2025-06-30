@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import type { User, AuthContextType, LoginCredentials } from '@/types/auth'
-// import { authApi } from '@/services/api'
-import { jwtDecode } from 'jwt-decode'
+import { config } from '@/config'
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
@@ -24,27 +23,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     const initAuth = () => {
-      const storedToken = localStorage.getItem('token')
-      const storedUser = localStorage.getItem('user')
+      const storedToken = localStorage.getItem(config.TOKEN_STORAGE_KEY)
+      const storedUser = localStorage.getItem(config.USER_STORAGE_KEY)
 
       if (storedToken && storedUser) {
         try {
-          // Kiểm tra token có hết hạn không
-          const decoded: any = jwtDecode(storedToken)
-          const currentTime = Date.now() / 1000
-
-          if (decoded.exp > currentTime) {
-            setToken(storedToken)
-            setUser(JSON.parse(storedUser))
-          } else {
-            // Token hết hạn, xóa khỏi localStorage
-            localStorage.removeItem('token')
-            localStorage.removeItem('user')
-          }
+          setToken(storedToken)
+          setUser(JSON.parse(storedUser))
         } catch (error) {
-          console.error('Invalid token:', error)
-          localStorage.removeItem('token')
-          localStorage.removeItem('user')
+          console.error('Invalid stored auth data:', error)
+          localStorage.removeItem(config.TOKEN_STORAGE_KEY)
+          localStorage.removeItem(config.USER_STORAGE_KEY)
         }
       }
       setIsLoading(false)
@@ -57,69 +46,67 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true)
       
-      // Mock authentication for demo purposes
-      // Replace this with actual API call: const response = await authApi.login(credentials)
-      
-      // Demo users
-      const demoUsers = {
-        'admin@clinic.com': { 
-          id: '1', 
-          email: 'admin@clinic.com', 
-          name: 'Nguyễn Văn Admin', 
-          role: 'admin' as const,
-          phone: '0123456789',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+      // Mock authentication - check for demo accounts
+      const mockUsers = [
+        {
+          id: '1',
+          email: 'admin@clinic.com',
+          password: 'admin123',
+          name: 'Admin User',
+          role: 'admin' as const
         },
-        'staff@clinic.com': { 
+        {
           id: '2', 
-          email: 'staff@clinic.com', 
-          name: 'Trần Thị Nhân Viên', 
-          role: 'receptionist' as const,
-          phone: '0123456788',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          email: 'receptionist@clinic.com',
+          password: 'receptionist123', 
+          name: 'Receptionist User',
+          role: 'receptionist' as const
         },
-        'lab@clinic.com': { 
-          id: '3', 
-          email: 'lab@clinic.com', 
-          name: 'Lê Văn Xét Nghiệm', 
-          role: 'lab_technician' as const,
-          phone: '0123456787',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+        {
+          id: '3',
+          email: 'lab@clinic.com',
+          password: 'lab123',
+          name: 'Lab Technician',
+          role: 'lab_technician' as const
         },
-        'accountant@clinic.com': { 
-          id: '4', 
-          email: 'accountant@clinic.com', 
-          name: 'Phạm Thị Kế Toán', 
-          role: 'accountant' as const,
-          phone: '0123456786',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+        {
+          id: '4',
+          email: 'accountant@clinic.com',
+          password: 'accountant123',
+          name: 'Accountant User',
+          role: 'accountant' as const
         }
-      }
+      ]
 
       // Simulate API delay
       await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      const user = demoUsers[credentials.email as keyof typeof demoUsers]
-      
-      if (!user || credentials.password !== '123456') {
-        throw new Error('Invalid credentials')
+
+      const mockUser = mockUsers.find(
+        u => u.email === credentials.email && u.password === credentials.password
+      )
+
+      if (!mockUser) {
+        throw new Error('Email hoặc mật khẩu không đúng')
       }
 
-      const mockResponse = {
-        user,
-        token: 'mock-jwt-token-' + user.id,
-        refreshToken: 'mock-refresh-token-' + user.id
+      // Create mock user and token
+      const user: User = {
+        id: mockUser.id,
+        email: mockUser.email,
+        name: mockUser.name,
+        role: mockUser.role,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       }
+
+      const mockToken = `mock_token_${mockUser.id}_${Date.now()}`
       
-      setUser(mockResponse.user)
-      setToken(mockResponse.token)
+      setUser(user)
+      setToken(mockToken)
       
-      localStorage.setItem('token', mockResponse.token)
-      localStorage.setItem('user', JSON.stringify(mockResponse.user))
+      localStorage.setItem(config.TOKEN_STORAGE_KEY, mockToken)
+      localStorage.setItem(config.USER_STORAGE_KEY, JSON.stringify(user))
+
     } catch (error) {
       console.error('Login failed:', error)
       throw error
@@ -131,8 +118,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = () => {
     setUser(null)
     setToken(null)
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
+    localStorage.removeItem(config.TOKEN_STORAGE_KEY)
+    localStorage.removeItem(config.USER_STORAGE_KEY)
   }
 
   const value: AuthContextType = {

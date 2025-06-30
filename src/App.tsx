@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/contexts/AuthContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
@@ -16,6 +17,7 @@ import PatientInfo from '@/pages/Lab/PatientInfo'
 import SampleStatus from '@/pages/Lab/SampleStatus'
 import TestResults from '@/pages/Lab/TestResults'
 import SupplyManagement from '@/pages/Lab/SupplyManagement'
+import SampleManagement from '@/pages/Lab/SampleManagement'
 import LabStatistics from '@/pages/Lab/Statistics'
 
 // Finance pages
@@ -143,6 +145,14 @@ function App() {
                 } 
               />
               <Route 
+                path="sample-management"
+                element={
+                  <ProtectedRoute allowedRoles={['admin', 'lab_technician']}>
+                    <SampleManagement />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
                 path="statistics"
                 element={
                   <ProtectedRoute allowedRoles={['admin', 'lab_technician']}>
@@ -246,6 +256,28 @@ function App() {
           {/* Catch all route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <Toaster 
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#363636',
+              color: '#fff',
+            },
+            success: {
+              duration: 3000,
+              style: {
+                background: '#10b981',
+              },
+            },
+            error: {
+              duration: 5000,
+              style: {
+                background: '#ef4444',
+              },
+            },
+          }}
+        />
       </Router>
     </AuthProvider>
   )

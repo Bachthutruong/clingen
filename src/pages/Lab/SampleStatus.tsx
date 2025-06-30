@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { toast } from 'react-hot-toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -204,17 +205,17 @@ const SampleStatus: React.FC = () => {
   }
 
   const handleUpdateStatus = (sampleId: string, newStatus: string) => {
-    alert(`Cập nhật trạng thái ${newStatus} cho mẫu ${sampleId}`)
+    toast.success(`Cập nhật trạng thái ${newStatus} cho mẫu ${sampleId}`)
   }
 
   const handleViewDetails = (sample: Sample) => {
-    alert(`Xem chi tiết mẫu: ${sample.sampleCode}`)
+    toast(`Xem chi tiết mẫu: ${sample.sampleCode}`)
   }
 
   const handleReject = (sample: Sample) => {
     const reason = prompt('Nhập lý do từ chối mẫu:')
     if (reason) {
-      alert(`Từ chối mẫu ${sample.sampleCode} với lý do: ${reason}`)
+      toast.error(`Từ chối mẫu ${sample.sampleCode} với lý do: ${reason}`)
     }
   }
 

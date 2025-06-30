@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { toast } from 'react-hot-toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,168 +12,152 @@ import {
   Trash2,
   Save,
   X,
-  Phone,
-  Mail,
-  MapPin,
-  User,
-  Percent
+  Loader2,
+  AlertCircle
 } from 'lucide-react'
-import type { ReferralSource } from '@/types/patient'
+import { referralSourcesApi } from '@/services'
+import type { ReferralSourceAPI, PaginatedResponse } from '@/types/api'
 
 interface ReferralSourceForm {
   name: string
-  type: 'hospital' | 'clinic' | 'doctor' | 'self' | 'other'
-  contactPerson: string
-  phone: string
-  email: string
-  address: string
-  priceModifier: number
+  code: string
+  status: number
 }
 
 const ReferralSources: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [isFormOpen, setIsFormOpen] = useState(false)
-  const [editingSource, setEditingSource] = useState<ReferralSource | null>(null)
+  const [editingSource, setEditingSource] = useState<ReferralSourceAPI | null>(null)
   const [formData, setFormData] = useState<ReferralSourceForm>({
     name: '',
-    type: 'self',
-    contactPerson: '',
-    phone: '',
-    email: '',
-    address: '',
-    priceModifier: 0
+    code: '',
+    status: 1
   })
 
-  // Mock data
-  const [referralSources, setReferralSources] = useState<ReferralSource[]>([
-    {
-      id: '1',
-      name: 'Tự đến',
-      type: 'self',
-      contactPerson: '',
-      phone: '',
-      email: '',
-      address: '',
-      priceModifier: 0,
-      createdAt: '2024-01-01'
-    },
-    {
-      id: '2',
-      name: 'Bệnh viện Chợ Rẫy',
-      type: 'hospital',
-      contactPerson: 'BS. Nguyễn Văn A',
-      phone: '028-12345678',
-      email: 'choray@hospital.com',
-      address: '201B Nguyễn Chí Thanh, Q.5, TP.HCM',
-      priceModifier: -10,
-      createdAt: '2024-01-01'
-    },
-    {
-      id: '3',
-      name: 'Phòng khám Đa khoa ABC',
-      type: 'clinic',
-      contactPerson: 'BS. Trần Thị B',
-      phone: '028-87654321',
-      email: 'abc@clinic.com',
-      address: '123 Đường ABC, Q.1, TP.HCM',
-      priceModifier: -5,
-      createdAt: '2024-01-01'
-    },
-    {
-      id: '4',
-      name: 'BS. Lê Văn C - Tim mạch',
-      type: 'doctor',
-      contactPerson: 'BS. Lê Văn C',
-      phone: '0909123456',
-      email: 'levanc@doctor.com',
-      address: '456 Đường XYZ, Q.3, TP.HCM',
-      priceModifier: -15,
-      createdAt: '2024-01-01'
-    },
-  ])
+  // API state
+  const [referralSourcesData, setReferralSourcesData] = useState<PaginatedResponse<ReferralSourceAPI> | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [pageSize] = useState(20)
 
-  const filteredSources = referralSources.filter(source =>
-    source.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    source.contactPerson?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (source.phone || '').includes(searchQuery)
-  )
+  // Fetch referral sources from API
+  const fetchReferralSources = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await referralSourcesApi.getAll({
+        pageIndex: currentPage,
+        pageSize: pageSize,
+        keyword: searchQuery || undefined
+      })
+      
+      setReferralSourcesData(response)
+    } catch (err) {
+      console.error('Error fetching referral sources:', err)
+      setError('Không thể tải danh sách nguồn gửi. Vui lòng thử lại.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Effect to fetch data when filters change
+  useEffect(() => {
+    fetchReferralSources()
+  }, [currentPage, searchQuery])
+
+  const referralSources = referralSourcesData?.content || []
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (editingSource) {
-      // Update existing source
-      setReferralSources(prev =>
-        prev.map(source =>
-          source.id === editingSource.id
-            ? { ...source, ...formData }
-            : source
-        )
-      )
-    } else {
-      // Add new source
-      const newSource: ReferralSource = {
-        id: Date.now().toString(),
-        ...formData,
-        createdAt: new Date().toISOString()
-      }
-      setReferralSources(prev => [...prev, newSource])
+    if (!formData.name.trim() || !formData.code.trim()) {
+      toast.error('Vui lòng nhập tên và mã nguồn gửi')
+      return
     }
 
-    // Reset form
+    try {
+      setSubmitting(true)
+      
+      const submitData = {
+        name: formData.name,
+        code: formData.code,
+        priceConfigs: [], // Empty array as per API structure
+        status: formData.status
+      }
+      
+      if (editingSource) {
+        // Update existing source
+        const updatedSource = await referralSourcesApi.update(editingSource.id!, submitData)
+        console.log('Updated referral source:', updatedSource)
+      } else {
+        // Add new source
+        const newSource = await referralSourcesApi.create(submitData)
+        console.log('Created referral source:', newSource)
+      }
+
+      // Refresh the list
+      await fetchReferralSources()
+      
+      // Reset form
+      resetForm()
+      toast.success(editingSource ? 'Cập nhật nguồn gửi thành công!' : 'Thêm nguồn gửi thành công!')
+    } catch (error) {
+      console.error('Error saving referral source:', error)
+      toast.error('Có lỗi xảy ra khi lưu nguồn gửi. Vui lòng thử lại!')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleEdit = (source: ReferralSourceAPI) => {
+    setEditingSource(source)
+    setFormData({
+      name: source.name,
+      code: source.code,
+      status: source.status
+    })
+    setIsFormOpen(true)
+  }
+
+  const handleDelete = async (id: number, name: string) => {
+    if (!confirm(`Bạn có chắc chắn muốn xóa nguồn gửi "${name}"?`)) {
+      return
+    }
+
+    try {
+      await referralSourcesApi.delete(id)
+      await fetchReferralSources()
+      toast.success('Xóa nguồn gửi thành công!')
+    } catch (error) {
+      console.error('Error deleting referral source:', error)
+      toast.error('Có lỗi xảy ra khi xóa nguồn gửi. Vui lòng thử lại!')
+    }
+  }
+
+  const resetForm = () => {
     setFormData({
       name: '',
-      type: 'self',
-      contactPerson: '',
-      phone: '',
-      email: '',
-      address: '',
-      priceModifier: 0
+      code: '',
+      status: 1
     })
     setIsFormOpen(false)
     setEditingSource(null)
   }
 
-  const handleEdit = (source: ReferralSource) => {
-    setEditingSource(source)
-    setFormData({
-      name: source.name,
-      type: source.type,
-      contactPerson: source.contactPerson || '',
-      phone: source.phone || '',
-      email: source.email || '',
-      address: source.address || '',
-      priceModifier: source.priceModifier || 0
-    })
-    setIsFormOpen(true)
+  const getStatusLabel = (status: number) => {
+    return status === 1 ? 'Hoạt động' : 'Không hoạt động'
   }
 
-  const handleDelete = (id: string) => {
-    if (confirm('Bạn có chắc chắn muốn xóa nguồn gửi này?')) {
-      setReferralSources(prev => prev.filter(source => source.id !== id))
-    }
+  const getStatusColor = (status: number) => {
+    return status === 1 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
   }
 
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'self': return 'Tự đến'
-      case 'hospital': return 'Bệnh viện'
-      case 'clinic': return 'Phòng khám'
-      case 'doctor': return 'Bác sĩ'
-      case 'other': return 'Khác'
-      default: return type
-    }
-  }
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'self': return 'bg-gray-100 text-gray-800'
-      case 'hospital': return 'bg-blue-100 text-blue-800'
-      case 'clinic': return 'bg-green-100 text-green-800'
-      case 'doctor': return 'bg-purple-100 text-purple-800'
-      case 'other': return 'bg-orange-100 text-orange-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
+  const handleSearch = () => {
+    setCurrentPage(0)
+    fetchReferralSources()
   }
 
   return (
@@ -209,91 +194,113 @@ const ReferralSources: React.FC = () => {
                 placeholder="Tìm kiếm nguồn gửi..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                 className="pl-10"
               />
             </div>
+            <Button onClick={handleSearch} disabled={loading}>
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Referral Sources List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredSources.map(source => (
-          <Card key={source.id} className="shadow-lg border-0 hover:shadow-xl transition-shadow">
-            <CardHeader className="pb-3">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <CardTitle className="text-lg">{source.name}</CardTitle>
-                  <span className={`inline-block px-2 py-1 text-xs rounded-full mt-2 ${getTypeColor(source.type)}`}>
-                    {getTypeLabel(source.type)}
-                  </span>
-                </div>
-                <div className="flex space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleEdit(source)}
-                  >
-                    <Edit3 size={14} />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-red-500 hover:bg-red-50"
-                    onClick={() => handleDelete(source.id)}
-                  >
-                    <Trash2 size={14} />
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {source.contactPerson && (
-                <div className="flex items-center space-x-2 text-sm text-gray-600">
-                  <User size={14} />
-                  <span>{source.contactPerson}</span>
-                </div>
-              )}
-              
-              {source.phone && (
-                <div className="flex items-center space-x-2 text-sm text-gray-600">
-                  <Phone size={14} />
-                  <span>{source.phone}</span>
-                </div>
-              )}
-              
-              {source.email && (
-                <div className="flex items-center space-x-2 text-sm text-gray-600">
-                  <Mail size={14} />
-                  <span>{source.email}</span>
-                </div>
-              )}
-              
-              {source.address && (
-                <div className="flex items-center space-x-2 text-sm text-gray-600">
-                  <MapPin size={14} />
-                  <span className="line-clamp-2">{source.address}</span>
-                </div>
-              )}
+      {/* Error Message */}
+      {error && (
+        <Card className="shadow-lg border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center space-x-2 text-red-600">
+              <AlertCircle size={20} />
+              <span>{error}</span>
+              <Button variant="outline" size="sm" onClick={fetchReferralSources}>
+                Thử lại
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-              {(source.priceModifier || 0) !== 0 && (
-                <div className="flex items-center space-x-2 text-sm">
-                  <Percent size={14} />
-                  <span className={(source.priceModifier || 0) > 0 ? 'text-red-600' : 'text-green-600'}>
-                    {(source.priceModifier || 0) > 0 ? '+' : ''}{source.priceModifier || 0}% giá
-                  </span>
+      {/* Referral Sources List */}
+      {loading && referralSources.length === 0 ? (
+        <div className="text-center py-12">
+          <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
+          <p className="mt-4 text-gray-500">Đang tải danh sách nguồn gửi...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {referralSources.map(source => (
+            <Card key={source.id} className="shadow-lg border-0 hover:shadow-xl transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <CardTitle className="text-lg">{source.name}</CardTitle>
+                    <p className="text-sm text-gray-600 font-medium">
+                      Mã: {source.code}
+                    </p>
+                    <span className={`inline-block px-2 py-1 text-xs rounded-full mt-2 ${getStatusColor(source.status)}`}>
+                      {getStatusLabel(source.status)}
+                    </span>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEdit(source)}
+                    >
+                      <Edit3 size={14} />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-500 hover:bg-red-50"
+                      onClick={() => handleDelete(source.id!, source.name)}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-        
-        {filteredSources.length === 0 && (
-          <div className="col-span-full text-center py-12 text-gray-500">
-            {searchQuery ? 'Không tìm thấy nguồn gửi phù hợp' : 'Chưa có nguồn gửi nào'}
-          </div>
-        )}
-      </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {source.priceConfigs && source.priceConfigs.length > 0 && (
+                  <div className="text-sm text-gray-600">
+                    <p className="font-medium">Cấu hình giá:</p>
+                    <p>{source.priceConfigs.length} cấu hình</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+          
+          {!loading && referralSources.length === 0 && (
+            <div className="col-span-full text-center py-12 text-gray-500">
+              {searchQuery ? 'Không tìm thấy nguồn gửi phù hợp' : 'Chưa có nguồn gửi nào'}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {referralSourcesData && referralSourcesData.totalPages > 1 && (
+        <div className="flex justify-center items-center space-x-2">
+          <Button
+            variant="outline"
+            onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+            disabled={currentPage === 0 || loading}
+          >
+            Trước
+          </Button>
+          <span className="text-sm text-gray-600">
+            Trang {currentPage + 1} / {referralSourcesData.totalPages}
+          </span>
+          <Button
+            variant="outline"
+            onClick={() => setCurrentPage(Math.min(referralSourcesData.totalPages - 1, currentPage + 1))}
+            disabled={currentPage >= referralSourcesData.totalPages - 1 || loading}
+          >
+            Sau
+          </Button>
+        </div>
+      )}
 
       {/* Add/Edit Form Modal */}
       {isFormOpen && (
@@ -307,19 +314,8 @@ const ReferralSources: React.FC = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    setIsFormOpen(false)
-                    setEditingSource(null)
-                    setFormData({
-                      name: '',
-                      type: 'self',
-                      contactPerson: '',
-                      phone: '',
-                      email: '',
-                      address: '',
-                      priceModifier: 0
-                    })
-                  }}
+                  onClick={resetForm}
+                  disabled={submitting}
                 >
                   <X size={16} />
                 </Button>
@@ -336,98 +332,59 @@ const ReferralSources: React.FC = () => {
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       placeholder="VD: Bệnh viện ABC"
                       required
+                      disabled={submitting}
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="type">Loại nguồn gửi *</Label>
-                    <select
-                      id="type"
-                      value={formData.type}
-                      onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    <Label htmlFor="code">Mã nguồn gửi *</Label>
+                    <Input
+                      id="code"
+                      value={formData.code}
+                      onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                      placeholder="VD: BV_ABC"
                       required
-                    >
-                      <option value="self">Tự đến</option>
-                      <option value="hospital">Bệnh viện</option>
-                      <option value="clinic">Phòng khám</option>
-                      <option value="doctor">Bác sĩ</option>
-                      <option value="other">Khác</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="contactPerson">Người liên hệ</Label>
-                    <Input
-                      id="contactPerson"
-                      value={formData.contactPerson}
-                      onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
-                      placeholder="VD: BS. Nguyễn Văn A"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Số điện thoại</Label>
-                    <Input
-                      id="phone"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="VD: 028-12345678"
+                      disabled={submitting}
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="VD: contact@hospital.com"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="address">Địa chỉ</Label>
-                  <Input
-                    id="address"
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    placeholder="VD: 123 Đường ABC, Quận 1, TP.HCM"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="priceModifier">Điều chỉnh giá (%)</Label>
-                  <Input
-                    id="priceModifier"
-                    type="number"
-                    value={formData.priceModifier}
-                    onChange={(e) => setFormData({ ...formData, priceModifier: parseFloat(e.target.value) || 0 })}
-                    placeholder="VD: -10 (giảm 10%), 5 (tăng 5%)"
-                  />
-                  <p className="text-sm text-gray-500">
-                    Số âm để giảm giá, số dương để tăng giá. VD: -10 = giảm 10%
-                  </p>
+                  <Label htmlFor="status">Trạng thái *</Label>
+                  <select
+                    id="status"
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                    required
+                    disabled={submitting}
+                  >
+                    <option value={1}>Hoạt động</option>
+                    <option value={0}>Không hoạt động</option>
+                  </select>
                 </div>
 
                 <div className="flex justify-end space-x-4 pt-4 border-t">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => {
-                      setIsFormOpen(false)
-                      setEditingSource(null)
-                    }}
+                    onClick={resetForm}
+                    disabled={submitting}
                   >
                     Hủy
                   </Button>
-                  <Button type="submit">
-                    <Save size={16} className="mr-2" />
-                    {editingSource ? 'Cập nhật' : 'Thêm mới'}
+                  <Button type="submit" disabled={submitting}>
+                    {submitting ? (
+                      <>
+                        <Loader2 size={16} className="mr-2 animate-spin" />
+                        {editingSource ? 'Đang cập nhật...' : 'Đang thêm...'}
+                      </>
+                    ) : (
+                      <>
+                        <Save size={16} className="mr-2" />
+                        {editingSource ? 'Cập nhật' : 'Thêm mới'}
+                      </>
+                    )}
                   </Button>
                 </div>
               </form>

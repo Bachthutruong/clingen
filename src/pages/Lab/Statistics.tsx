@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { toast } from 'react-hot-toast'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -174,11 +175,11 @@ const Statistics: React.FC = () => {
 //   const rejectionRate = Math.round((totalStats.rejectedTests / totalStats.totalTests) * 100)
 
   const handleExportReport = () => {
-    alert('Xuất báo cáo thống kê thành công!')
+    toast.success('Xuất báo cáo thống kê thành công!')
   }
 
   const handleRefreshData = () => {
-    alert('Làm mới dữ liệu thành công!')
+    toast.success('Làm mới dữ liệu thành công!')
   }
 
   const getPerformanceColor = (value: number, good: number, excellent: number) => {

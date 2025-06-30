@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { toast } from 'react-hot-toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -270,7 +271,7 @@ const UserManagement: React.FC = () => {
   }
 
   const handleSaveUser = () => {
-    alert('Lưu thông tin người dùng thành công!')
+    toast.success('Lưu thông tin người dùng thành công!')
     setIsEditing(false)
   }
 
@@ -282,12 +283,12 @@ const UserManagement: React.FC = () => {
 
   const handleToggleStatus = (user: User) => {
     const newStatus = user.status === 'active' ? 'inactive' : 'active'
-    alert(`${newStatus === 'active' ? 'Kích hoạt' : 'Vô hiệu hóa'} tài khoản ${user.fullName} thành công!`)
+    toast.success(`${newStatus === 'active' ? 'Kích hoạt' : 'Vô hiệu hóa'} tài khoản ${user.fullName} thành công!`)
   }
 
   const handleResetPassword = (user: User) => {
     if (confirm(`Bạn có chắc chắn muốn reset mật khẩu cho ${user.fullName}?`)) {
-      alert(`Reset mật khẩu cho ${user.fullName} thành công! Mật khẩu mới đã được gửi qua email.`)
+      toast.success(`Reset mật khẩu cho ${user.fullName} thành công! Mật khẩu mới đã được gửi qua email.`)
     }
   }
 

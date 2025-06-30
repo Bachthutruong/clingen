@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { toast } from 'react-hot-toast'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -167,11 +168,11 @@ const FinancialReports: React.FC = () => {
   const testCountGrowth = ((currentMonth.testCount - previousMonth.testCount) / previousMonth.testCount) * 100
 
   const handleExportReport = (format: 'pdf' | 'excel') => {
-    alert(`Xuất báo cáo ${format.toUpperCase()} thành công!`)
+    toast.success(`Xuất báo cáo ${format.toUpperCase()} thành công!`)
   }
 
   const handlePrintReport = () => {
-    alert('In báo cáo thành công!')
+    toast.success('In báo cáo thành công!')
   }
 
   const handleViewDetails = (data: FinancialData) => {

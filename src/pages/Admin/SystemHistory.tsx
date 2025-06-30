@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { toast } from 'react-hot-toast'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -294,12 +295,12 @@ const SystemHistory: React.FC = () => {
   }
 
   const handleExportLogs = () => {
-    alert('Xuất logs thành công!')
+    toast.success('Xuất logs thành công!')
   }
 
   const handleClearLogs = () => {
     if (confirm('Bạn có chắc chắn muốn xóa các logs cũ?')) {
-      alert('Xóa logs cũ thành công!')
+      toast.success('Xóa logs cũ thành công!')
     }
   }
 

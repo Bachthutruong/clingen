@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { toast } from 'react-hot-toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,9 +14,11 @@ import {
   User,
   Filter,
   Download,
-  UserPlus
+  UserPlus,
+  Loader2
 } from 'lucide-react'
-import type { Patient } from '@/types/patient'
+import { patientsApi } from '@/services'
+import type { PatientAPI, PaginatedResponse } from '@/types/api'
 import { formatDate } from '@/lib/utils'
 
 const PatientList: React.FC = () => {
@@ -24,98 +27,45 @@ const PatientList: React.FC = () => {
   const [ageFilter, setAgeFilter] = useState<string>('')
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'age'>('date')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [currentPage, setCurrentPage] = useState(0)
+  const [pageSize] = useState(20)
 
-  // Mock data
-  const [patients] = useState<Patient[]>([
-    {
-      id: '1',
-      patientCode: 'BN001',
-      name: 'Nguyễn Văn A',
-      dateOfBirth: '1990-01-15',
-      gender: 'male',
-      phone: '0123456789',
-      email: 'nguyenvana@email.com',
-      address: '123 Đường ABC, Quận 1, TP.HCM',
-      idNumber: '123456789',
-      emergencyContact: {
-        name: 'Nguyễn Thị B',
-        phone: '0987654321',
-        relationship: 'Vợ'
-      },
-      createdAt: '2024-01-15T10:30:00',
-      updatedAt: '2024-01-15T10:30:00'
-    },
-    {
-      id: '2',
-      patientCode: 'BN002',
-      name: 'Trần Thị B',
-      dateOfBirth: '1985-03-20',
-      gender: 'female',
-      phone: '0987654321',
-      email: 'tranthib@email.com',
-      address: '456 Đường XYZ, Quận 3, TP.HCM',
-      idNumber: '987654321',
-      emergencyContact: {
-        name: 'Trần Văn C',
-        phone: '0123456789',
-        relationship: 'Chồng'
-      },
-      createdAt: '2024-01-14T14:20:00',
-      updatedAt: '2024-01-14T14:20:00'
-    },
-    {
-      id: '3',
-      patientCode: 'BN003',
-      name: 'Lê Văn C',
-      dateOfBirth: '1975-07-10',
-      gender: 'male',
-      phone: '0345678901',
-      email: 'levanc@email.com',
-      address: '789 Đường DEF, Quận 5, TP.HCM',
-      idNumber: '345678901',
-      emergencyContact: {
-        name: 'Lê Thị D',
-        phone: '0765432109',
-        relationship: 'Con gái'
-      },
-      createdAt: '2024-01-13T09:15:00',
-      updatedAt: '2024-01-13T09:15:00'
-    },
-    {
-      id: '4',
-      patientCode: 'BN004',
-      name: 'Phạm Thị D',
-      dateOfBirth: '2000-12-05',
-      gender: 'female',
-      phone: '0567890123',
-      email: 'phamthid@email.com',
-      address: '321 Đường GHI, Quận 7, TP.HCM',
-      idNumber: '567890123',
-      createdAt: '2024-01-12T16:45:00',
-      updatedAt: '2024-01-12T16:45:00'
-    },
-    {
-      id: '5',
-      patientCode: 'BN005',
-      name: 'Hoàng Văn E',
-      dateOfBirth: '1995-08-25',
-      gender: 'male',
-      phone: '0789012345',
-      address: '654 Đường JKL, Quận 2, TP.HCM',
-      idNumber: '789012345',
-      emergencyContact: {
-        name: 'Hoàng Thị F',
-        phone: '0234567890',
-        relationship: 'Mẹ'
-      },
-      createdAt: '2024-01-11T11:30:00',
-      updatedAt: '2024-01-11T11:30:00'
+  // API state
+  const [patientsData, setPatientsData] = useState<PaginatedResponse<PatientAPI> | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Fetch patients from API
+  const fetchPatients = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await patientsApi.getAll({
+        pageIndex: currentPage,
+        pageSize: pageSize,
+        keyword: searchQuery || undefined,
+        orderCol: sortBy === 'name' ? 'fullName' : sortBy === 'date' ? 'birthYear' : 'birthYear',
+        isDesc: sortOrder === 'desc'
+      })
+      
+      setPatientsData(response)
+    } catch (err) {
+      console.error('Error fetching patients:', err)
+      setError('Không thể tải danh sách bệnh nhân. Vui lòng thử lại.')
+    } finally {
+      setLoading(false)
     }
-  ])
+  }
 
-  const calculateAge = (dateOfBirth: string): number => {
+  // Effect to fetch data when filters change
+  useEffect(() => {
+    fetchPatients()
+  }, [currentPage, pageSize, searchQuery, sortBy, sortOrder])
+
+  const calculateAge = (birthYear: string): number => {
     const today = new Date()
-    const birth = new Date(dateOfBirth)
+    const birth = new Date(birthYear)
     let age = today.getFullYear() - birth.getFullYear()
     const monthDiff = today.getMonth() - birth.getMonth()
     
@@ -125,78 +75,32 @@ const PatientList: React.FC = () => {
     return age
   }
 
-  const filteredPatients = patients
-    .filter(patient => {
-      const matchesSearch = 
-        patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        patient.patientCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        patient.phone.includes(searchQuery) ||
-        patient.idNumber.includes(searchQuery)
-
-      const matchesGender = !genderFilter || patient.gender === genderFilter
-
-      let matchesAge = true
-      if (ageFilter) {
-        const age = calculateAge(patient.dateOfBirth)
-        switch (ageFilter) {
-          case 'child':
-            matchesAge = age < 18
-            break
-          case 'adult':
-            matchesAge = age >= 18 && age < 60
-            break
-          case 'elderly':
-            matchesAge = age >= 60
-            break
-        }
-      }
-
-      return matchesSearch && matchesGender && matchesAge
-    })
-    .sort((a, b) => {
-      let comparison = 0
-      
-      switch (sortBy) {
-        case 'name':
-          comparison = a.name.localeCompare(b.name, 'vi')
-          break
-        case 'date':
-          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          break
-        case 'age':
-          comparison = calculateAge(a.dateOfBirth) - calculateAge(b.dateOfBirth)
-          break
-      }
-      
-      return sortOrder === 'asc' ? comparison : -comparison
-    })
-
-  const handleViewDetails = (patient: Patient) => {
-    alert(`Xem chi tiết bệnh nhân: ${patient.name}`)
+  const handleViewDetails = (patient: PatientAPI) => {
+    toast(`Xem chi tiết bệnh nhân: ${patient.fullName}`)
   }
 
-  const handleEditPatient = (patient: Patient) => {
-    alert(`Chỉnh sửa thông tin bệnh nhân: ${patient.name}`)
+  const handleEditPatient = (patient: PatientAPI) => {
+    toast(`Chỉnh sửa thông tin bệnh nhân: ${patient.fullName}`)
   }
 
   const handleExport = () => {
-    alert('Xuất danh sách bệnh nhân ra file Excel')
+    toast('Xuất danh sách bệnh nhân ra file Excel')
   }
 
-  const getGenderLabel = (gender: string) => {
+  const getGenderLabel = (gender: number) => {
     switch (gender) {
-      case 'male': return 'Nam'
-      case 'female': return 'Nữ'
-      case 'other': return 'Khác'
-      default: return gender
+      case 0: return 'Nam'
+      case 1: return 'Nữ'
+      case 2: return 'Khác'
+      default: return 'Không xác định'
     }
   }
 
-  const getGenderColor = (gender: string) => {
+  const getGenderColor = (gender: number) => {
     switch (gender) {
-      case 'male': return 'bg-blue-100 text-blue-800'
-      case 'female': return 'bg-pink-100 text-pink-800'
-      case 'other': return 'bg-gray-100 text-gray-800'
+      case 0: return 'bg-blue-100 text-blue-800'
+      case 1: return 'bg-pink-100 text-pink-800'
+      case 2: return 'bg-gray-100 text-gray-800'
       default: return 'bg-gray-100 text-gray-800'
     }
   }
@@ -206,6 +110,26 @@ const PatientList: React.FC = () => {
     if (age < 60) return { label: 'Người lớn', color: 'bg-blue-100 text-blue-800' }
     return { label: 'Người cao tuổi', color: 'bg-orange-100 text-orange-800' }
   }
+
+  const handleSearch = () => {
+    setCurrentPage(0)
+    fetchPatients()
+  }
+
+  const patients = patientsData?.content || []
+  const totalPatients = patientsData?.totalElements || 0
+
+  // Filter patients by gender and age if needed
+  const filteredPatients = patients.filter(patient => {
+    const matchesGender = !genderFilter || patient.gender.toString() === genderFilter
+    const age = calculateAge(patient.birthYear)
+    const matchesAge = !ageFilter || 
+      (ageFilter === 'child' && age < 18) ||
+      (ageFilter === 'adult' && age >= 18 && age < 60) ||
+      (ageFilter === 'elderly' && age >= 60)
+    
+    return matchesGender && matchesAge
+  })
 
   return (
     <div className="space-y-6">
@@ -253,9 +177,10 @@ const PatientList: React.FC = () => {
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Tìm theo tên, mã BN, SĐT, CMND..."
+                  placeholder="Tìm theo tên, SĐT..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                   className="pl-10"
                 />
               </div>
@@ -267,9 +192,9 @@ const PatientList: React.FC = () => {
               className="px-3 py-2 border border-gray-300 rounded-md"
             >
               <option value="">Tất cả giới tính</option>
-              <option value="male">Nam</option>
-              <option value="female">Nữ</option>
-              <option value="other">Khác</option>
+              <option value="0">Nam</option>
+              <option value="1">Nữ</option>
+              <option value="2">Khác</option>
             </select>
 
             <select
@@ -310,7 +235,7 @@ const PatientList: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Tổng bệnh nhân</p>
-                <p className="text-2xl font-bold text-gray-900">{patients.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{totalPatients}</p>
               </div>
               <Users className="h-8 w-8 text-blue-600" />
             </div>
@@ -321,8 +246,8 @@ const PatientList: React.FC = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Kết quả tìm kiếm</p>
-                <p className="text-2xl font-bold text-gray-900">{filteredPatients.length}</p>
+                <p className="text-sm text-gray-600">Trang hiện tại</p>
+                <p className="text-2xl font-bold text-gray-900">{currentPage + 1}</p>
               </div>
               <Search className="h-8 w-8 text-green-600" />
             </div>
@@ -333,10 +258,8 @@ const PatientList: React.FC = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Nam</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {patients.filter(p => p.gender === 'male').length}
-                </p>
+                <p className="text-sm text-gray-600">Số lượng/trang</p>
+                <p className="text-2xl font-bold text-gray-900">{filteredPatients.length}</p>
               </div>
               <User className="h-8 w-8 text-blue-600" />
             </div>
@@ -347,10 +270,8 @@ const PatientList: React.FC = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Nữ</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {patients.filter(p => p.gender === 'female').length}
-                </p>
+                <p className="text-sm text-gray-600">Tổng trang</p>
+                <p className="text-2xl font-bold text-gray-900">{patientsData?.totalPages || 0}</p>
               </div>
               <User className="h-8 w-8 text-pink-600" />
             </div>
@@ -361,94 +282,126 @@ const PatientList: React.FC = () => {
       {/* Patient List */}
       <Card className="shadow-lg border-0">
         <CardHeader>
-          <CardTitle>Danh sách bệnh nhân ({filteredPatients.length})</CardTitle>
+          <CardTitle>
+            Danh sách bệnh nhân ({filteredPatients.length})
+            {loading && <Loader2 className="inline ml-2 h-5 w-5 animate-spin" />}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          {filteredPatients.length === 0 ? (
+          {error ? (
+            <div className="text-center py-12">
+              <p className="text-red-500 mb-4">{error}</p>
+              <Button onClick={fetchPatients}>Thử lại</Button>
+            </div>
+          ) : filteredPatients.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
-              {searchQuery || genderFilter || ageFilter 
-                ? 'Không tìm thấy bệnh nhân phù hợp với bộ lọc'
-                : 'Chưa có bệnh nhân nào'
-              }
+              {loading ? 'Đang tải...' : 'Không tìm thấy bệnh nhân nào'}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredPatients.map(patient => {
-                const age = calculateAge(patient.dateOfBirth)
-                const ageGroup = getAgeGroup(age)
-                
-                return (
-                  <Card key={patient.id} className="border hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-3">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <CardTitle className="text-lg">{patient.name}</CardTitle>
-                          <p className="text-sm text-gray-600 font-medium">
-                            Mã: {patient.patientCode}
-                          </p>
-                          <div className="flex space-x-2 mt-2">
-                            <span className={`inline-block px-2 py-1 text-xs rounded-full ${getGenderColor(patient.gender)}`}>
-                              {getGenderLabel(patient.gender)}
-                            </span>
-                            <span className={`inline-block px-2 py-1 text-xs rounded-full ${ageGroup.color}`}>
-                              {age} tuổi
-                            </span>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredPatients.map(patient => {
+                  const age = calculateAge(patient.birthYear)
+                  const ageGroup = getAgeGroup(age)
+                  
+                  return (
+                    <Card key={patient.id} className="border hover:shadow-md transition-shadow">
+                      <CardHeader className="pb-3">
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <CardTitle className="text-lg">{patient.fullName}</CardTitle>
+                            <div className="flex space-x-2 mt-2">
+                              <span className={`inline-block px-2 py-1 text-xs rounded-full ${getGenderColor(patient.gender)}`}>
+                                {getGenderLabel(patient.gender)}
+                              </span>
+                              <span className={`inline-block px-2 py-1 text-xs rounded-full ${ageGroup.color}`}>
+                                {age} tuổi
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewDetails(patient)}
+                            >
+                              <Eye size={14} />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditPatient(patient)}
+                            >
+                              <Edit3 size={14} />
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex space-x-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleViewDetails(patient)}
-                          >
-                            <Eye size={14} />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEditPatient(patient)}
-                          >
-                            <Edit3 size={14} />
-                          </Button>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        <div className="flex items-center space-x-2 text-sm text-gray-600">
+                          <Phone size={14} />
+                          <span>{patient.phoneNumber}</span>
                         </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div className="flex items-center space-x-2 text-sm text-gray-600">
-                        <Phone size={14} />
-                        <span>{patient.phone}</span>
-                      </div>
-                      
-                      <div className="flex items-center space-x-2 text-sm text-gray-600">
-                        <Calendar size={14} />
-                        <span>Sinh: {formatDate(patient.dateOfBirth)}</span>
-                      </div>
-                      
-                      <div className="flex items-center space-x-2 text-sm text-gray-600">
-                        <MapPin size={14} />
-                        <span className="line-clamp-2">{patient.address}</span>
-                      </div>
-
-                      {patient.emergencyContact && (
-                        <div className="pt-2 border-t">
-                          <p className="text-xs text-gray-500 mb-1">Liên hệ khẩn cấp:</p>
-                          <p className="text-sm text-gray-700">
-                            {patient.emergencyContact.name} ({patient.emergencyContact.relationship})
-                          </p>
-                          <p className="text-sm text-gray-600">{patient.emergencyContact.phone}</p>
+                        
+                        <div className="flex items-center space-x-2 text-sm text-gray-600">
+                          <Calendar size={14} />
+                          <span>Sinh: {formatDate(patient.birthYear)}</span>
                         </div>
-                      )}
+                        
+                        {patient.address && (
+                          <div className="flex items-center space-x-2 text-sm text-gray-600">
+                            <MapPin size={14} />
+                            <span className="line-clamp-2">{patient.address}</span>
+                          </div>
+                        )}
 
-                      <div className="pt-2 border-t">
-                        <p className="text-xs text-gray-500">
-                          Đăng ký: {formatDate(patient.createdAt)}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
+                        {patient.guardianName && (
+                          <div className="pt-2 border-t">
+                            <p className="text-xs text-gray-500 mb-1">Người giám hộ:</p>
+                            <p className="text-sm text-gray-700">
+                              {patient.guardianName} ({patient.guardianRelationship})
+                            </p>
+                            {patient.guardianPhoneNumber && (
+                              <p className="text-sm text-gray-600">{patient.guardianPhoneNumber}</p>
+                            )}
+                          </div>
+                        )}
+
+                        {patient.reasonForVisit && (
+                          <div className="pt-2 border-t">
+                            <p className="text-xs text-gray-500 mb-1">Lý do khám:</p>
+                            <p className="text-sm text-gray-600">{patient.reasonForVisit}</p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+
+              {/* Pagination */}
+              {patientsData && patientsData.totalPages > 1 && (
+                <div className="flex justify-center items-center space-x-2 mt-6">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                    disabled={currentPage === 0 || loading}
+                  >
+                    Trước
+                  </Button>
+                  <span className="text-sm text-gray-600">
+                    Trang {currentPage + 1} / {patientsData.totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentPage(Math.min(patientsData.totalPages - 1, currentPage + 1))}
+                    disabled={currentPage >= patientsData.totalPages - 1 || loading}
+                  >
+                    Sau
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

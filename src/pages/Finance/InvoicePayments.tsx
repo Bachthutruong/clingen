@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { toast } from 'react-hot-toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -296,17 +297,17 @@ const InvoicePayments: React.FC = () => {
   }
 
   const handlePrintInvoice = (invoice: Invoice) => {
-    alert(`In hóa đơn ${invoice.invoiceNumber}`)
+    toast(`In hóa đơn ${invoice.invoiceNumber}`)
   }
 
   const handleSendInvoice = (invoice: Invoice) => {
-    alert(`Gửi hóa đơn ${invoice.invoiceNumber} cho khách hàng`)
+    toast(`Gửi hóa đơn ${invoice.invoiceNumber} cho khách hàng`)
   }
 
   const handlePayment = (invoice: Invoice) => {
     const amount = prompt(`Nhập số tiền thanh toán cho hóa đơn ${invoice.invoiceNumber}:`)
     if (amount && !isNaN(Number(amount))) {
-      alert(`Ghi nhận thanh toán ${formatCurrency(Number(amount))} thành công!`)
+      toast.success(`Ghi nhận thanh toán ${formatCurrency(Number(amount))} thành công!`)
     }
   }
 

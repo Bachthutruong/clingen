@@ -1,176 +1,127 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-// import { Label } from '@/components/ui/label'
 import { 
   TestTube, 
   Search, 
   Plus, 
   Trash2, 
-//   Calculator,
   ShoppingCart,
   User,
-//   Calendar
+  Loader2,
+  AlertCircle
 } from 'lucide-react'
-import type { TestService, TestCategory, Patient } from '@/types/patient'
 import { formatCurrency } from '@/lib/utils'
+import { testTypesApi, patientsApi } from '@/services'
+import type { TestType, PatientAPI } from '@/types/api'
+import { toast } from 'react-hot-toast'
 
 interface SelectedService {
-  service: TestService
+  service: TestType
   quantity: number
   price: number
   total: number
 }
 
 const ServiceSelection: React.FC = () => {
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
+  const [selectedPatient, setSelectedPatient] = useState<PatientAPI | null>(null)
   const [searchPatientQuery, setSearchPatientQuery] = useState('')
   const [searchServiceQuery, setSearchServiceQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState<string>('')
   const [selectedServices, setSelectedServices] = useState<SelectedService[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Mock data
-  const mockTestCategories: TestCategory[] = [
-    { id: '1', name: 'Xét nghiệm máu', code: 'BLOOD', description: 'Các xét nghiệm liên quan đến máu' },
-    { id: '2', name: 'Xét nghiệm nước tiểu', code: 'URINE', description: 'Các xét nghiệm nước tiểu' },
-    { id: '3', name: 'Xét nghiệm sinh hóa', code: 'BIOCHEM', description: 'Các xét nghiệm sinh hóa máu' },
-    { id: '4', name: 'Xét nghiệm vi sinh', code: 'MICRO', description: 'Các xét nghiệm vi sinh vật' },
-    { id: '5', name: 'Xét nghiệm hormon', code: 'HORMONE', description: 'Các xét nghiệm hormon' },
-  ]
+  // API state
+  const [testTypes, setTestTypes] = useState<TestType[]>([])
+  const [patients, setPatients] = useState<PatientAPI[]>([])
+  
+  const [loadingTestTypes, setLoadingTestTypes] = useState(true)
+  const [loadingPatients, setLoadingPatients] = useState(false)
+  
+  const [error, setError] = useState<string | null>(null)
 
-  const mockTestServices: TestService[] = [
-    {
-      id: '1',
-      code: 'CBC',
-      name: 'Công thức máu toàn phần',
-      category: mockTestCategories[0],
-      basePrice: 150000,
-      description: 'Đếm số lượng và đánh giá hình thái các tế bào máu',
-      normalRange: 'Theo độ tuổi và giới tính',
-      unit: 'cells/μL',
-      isActive: true,
-      createdAt: '2024-01-01'
-    },
-    {
-      id: '2',
-      code: 'GLU',
-      name: 'Glucose máu đói',
-      category: mockTestCategories[2],
-      basePrice: 80000,
-      description: 'Xét nghiệm đường huyết lúc đói',
-      normalRange: '70-100 mg/dL',
-      unit: 'mg/dL',
-      isActive: true,
-      createdAt: '2024-01-01'
-    },
-    {
-      id: '3',
-      code: 'CHOL',
-      name: 'Cholesterol toàn phần',
-      category: mockTestCategories[2],
-      basePrice: 120000,
-      description: 'Xét nghiệm cholesterol tổng',
-      normalRange: '<200 mg/dL',
-      unit: 'mg/dL',
-      isActive: true,
-      createdAt: '2024-01-01'
-    },
-    {
-      id: '4',
-      code: 'TSH',
-      name: 'Hormone kích thích tuyến giáp',
-      category: mockTestCategories[4],
-      basePrice: 200000,
-      description: 'Xét nghiệm TSH',
-      normalRange: '0.4-4.0 mIU/L',
-      unit: 'mIU/L',
-      isActive: true,
-      createdAt: '2024-01-01'
-    },
-    {
-      id: '5',
-      code: 'UREA',
-      name: 'Urea máu',
-      category: mockTestCategories[2],
-      basePrice: 90000,
-      description: 'Xét nghiệm chức năng thận',
-      normalRange: '15-45 mg/dL',
-      unit: 'mg/dL',
-      isActive: true,
-      createdAt: '2024-01-01'
-    },
-  ]
+  // Fetch test types on component mount
+  useEffect(() => {
+    const fetchTestTypes = async () => {
+      try {
+        setLoadingTestTypes(true)
+        const response = await testTypesApi.getAll({ 
+          pageSize: 100, 
+          status: 1 // Active only
+        })
+        setTestTypes(response.content)
+      } catch (error) {
+        console.error('Error fetching test types:', error)
+        setError('Không thể tải danh sách xét nghiệm')
+      } finally {
+        setLoadingTestTypes(false)
+      }
+    }
 
-  const mockPatients: Patient[] = [
-    {
-      id: '1',
-      patientCode: 'BN001',
-      name: 'Nguyễn Văn A',
-      dateOfBirth: '1990-01-15',
-      gender: 'male',
-      phone: '0123456789',
-      address: '123 Đường ABC, Q1, TP.HCM',
-      idNumber: '123456789',
-      createdAt: '2024-01-01',
-      updatedAt: '2024-01-01'
-    },
-    {
-      id: '2',
-      patientCode: 'BN002',
-      name: 'Trần Thị B',
-      dateOfBirth: '1985-03-20',
-      gender: 'female',
-      phone: '0987654321',
-      address: '456 Đường XYZ, Q3, TP.HCM',
-      idNumber: '987654321',
-      createdAt: '2024-01-01',
-      updatedAt: '2024-01-01'
-    },
-  ]
+    fetchTestTypes()
+  }, [])
 
-  const filteredServices = mockTestServices.filter(service => {
-    const matchesSearch = service.name.toLowerCase().includes(searchServiceQuery.toLowerCase()) ||
-                         service.code.toLowerCase().includes(searchServiceQuery.toLowerCase())
-    const matchesCategory = !selectedCategory || service.category.id === selectedCategory
-    return matchesSearch && matchesCategory && service.isActive
+  // Search patients when query changes
+  useEffect(() => {
+    if (searchPatientQuery.trim()) {
+      searchPatients()
+    } else {
+      setPatients([])
+    }
+  }, [searchPatientQuery])
+
+  const searchPatients = async () => {
+    try {
+      setLoadingPatients(true)
+      const response = await patientsApi.getAll({ 
+        keyword: searchPatientQuery,
+        pageSize: 10,
+        status: 1 // Active only
+      })
+      setPatients(response.content)
+    } catch (error) {
+      console.error('Error searching patients:', error)
+    } finally {
+      setLoadingPatients(false)
+    }
+  }
+
+  const filteredTestTypes = testTypes.filter(testType => {
+    const matchesSearch = testType.name.toLowerCase().includes(searchServiceQuery.toLowerCase()) ||
+                         testType.code.toLowerCase().includes(searchServiceQuery.toLowerCase())
+    return matchesSearch
   })
 
-  const filteredPatients = mockPatients.filter(patient =>
-    patient.name.toLowerCase().includes(searchPatientQuery.toLowerCase()) ||
-    patient.patientCode.toLowerCase().includes(searchPatientQuery.toLowerCase()) ||
-    patient.phone.includes(searchPatientQuery)
-  )
-
-  const addService = (service: TestService) => {
-    const existingService = selectedServices.find(s => s.service.id === service.id)
+  const addService = (testType: TestType) => {
+    const existingService = selectedServices.find(s => s.service.id === testType.id)
     if (existingService) {
       setSelectedServices(prev =>
         prev.map(s =>
-          s.service.id === service.id
+          s.service.id === testType.id
             ? { ...s, quantity: s.quantity + 1, total: (s.quantity + 1) * s.price }
             : s
         )
       )
     } else {
+      // Use the price from the test type
+      const basePrice = testType.price || 100000 // Default price if not available
       setSelectedServices(prev => [
         ...prev,
         {
-          service,
+          service: testType,
           quantity: 1,
-          price: service.basePrice,
-          total: service.basePrice
+          price: basePrice,
+          total: basePrice
         }
       ])
     }
   }
 
-  const removeService = (serviceId: string) => {
+  const removeService = (serviceId: number) => {
     setSelectedServices(prev => prev.filter(s => s.service.id !== serviceId))
   }
 
-  const updateQuantity = (serviceId: string, quantity: number) => {
+  const updateQuantity = (serviceId: number, quantity: number) => {
     if (quantity <= 0) {
       removeService(serviceId)
       return
@@ -190,31 +141,37 @@ const ServiceSelection: React.FC = () => {
 
   const handleSubmit = async () => {
     if (!selectedPatient || selectedServices.length === 0) {
-      alert('Vui lòng chọn bệnh nhân và ít nhất một dịch vụ xét nghiệm!')
+      toast.error('Vui lòng chọn bệnh nhân và ít nhất một dịch vụ xét nghiệm!')
       return
     }
 
     setIsSubmitting(true)
     try {
-      // Simulate API call
+      // Here you would typically call a registration API
+      // For now, we'll simulate the API call
       await new Promise(resolve => setTimeout(resolve, 1500))
       
       const registrationData = {
         patientId: selectedPatient.id,
-        services: selectedServices,
+        services: selectedServices.map(s => ({
+          testTypeId: s.service.id,
+          quantity: s.quantity,
+          price: s.price
+        })),
         totalAmount: calculateTotal(),
         notes: ''
       }
       
       console.log('Registration data:', registrationData)
-      alert('Đã đăng ký dịch vụ xét nghiệm thành công!')
+      toast.success('Đã đăng ký dịch vụ xét nghiệm thành công!')
       
       // Reset form
       setSelectedServices([])
       setSelectedPatient(null)
       setSearchPatientQuery('')
     } catch (error) {
-      alert('Có lỗi xảy ra, vui lòng thử lại!')
+      console.error('Error submitting registration:', error)
+      toast.error('Có lỗi xảy ra, vui lòng thử lại!')
     } finally {
       setIsSubmitting(false)
     }
@@ -235,6 +192,18 @@ const ServiceSelection: React.FC = () => {
         </div>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <Card className="shadow-lg border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center space-x-2 text-red-600">
+              <AlertCircle size={20} />
+              <span>{error}</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Patient Selection */}
         <div className="lg:col-span-1">
@@ -254,15 +223,17 @@ const ServiceSelection: React.FC = () => {
                   onChange={(e) => setSearchPatientQuery(e.target.value)}
                   className="pl-10"
                 />
+                {loadingPatients && (
+                  <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-gray-400" />
+                )}
               </div>
 
               {selectedPatient ? (
                 <div className="p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h3 className="font-semibold text-blue-900">{selectedPatient.name}</h3>
-                      <p className="text-sm text-blue-700">Mã: {selectedPatient.patientCode}</p>
-                      <p className="text-sm text-blue-700">SĐT: {selectedPatient.phone}</p>
+                      <h3 className="font-semibold text-blue-900">{selectedPatient.fullName}</h3>
+                      <p className="text-sm text-blue-700">SĐT: {selectedPatient.phoneNumber}</p>
                     </div>
                     <Button
                       variant="outline"
@@ -275,19 +246,19 @@ const ServiceSelection: React.FC = () => {
                 </div>
               ) : (
                 <div className="max-h-60 overflow-y-auto space-y-2">
-                  {filteredPatients.map(patient => (
+                  {patients.map(patient => (
                     <div
                       key={patient.id}
                       className="p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
                       onClick={() => setSelectedPatient(patient)}
                     >
-                      <div className="font-medium">{patient.name}</div>
+                      <div className="font-medium">{patient.fullName}</div>
                       <div className="text-sm text-gray-600">
-                        {patient.patientCode} • {patient.phone}
+                        {patient.phoneNumber}
                       </div>
                     </div>
                   ))}
-                  {filteredPatients.length === 0 && searchPatientQuery && (
+                  {patients.length === 0 && searchPatientQuery && !loadingPatients && (
                     <p className="text-gray-500 text-center py-4">
                       Không tìm thấy bệnh nhân
                     </p>
@@ -326,7 +297,7 @@ const ServiceSelection: React.FC = () => {
                             variant="outline"
                             size="sm"
                             className="h-6 w-6 p-0"
-                            onClick={() => updateQuantity(item.service.id, item.quantity - 1)}
+                            onClick={() => updateQuantity(item.service.id!, item.quantity - 1)}
                           >
                             -
                           </Button>
@@ -335,7 +306,7 @@ const ServiceSelection: React.FC = () => {
                             variant="outline"
                             size="sm"
                             className="h-6 w-6 p-0"
-                            onClick={() => updateQuantity(item.service.id, item.quantity + 1)}
+                            onClick={() => updateQuantity(item.service.id!, item.quantity + 1)}
                           >
                             +
                           </Button>
@@ -344,7 +315,7 @@ const ServiceSelection: React.FC = () => {
                           variant="outline"
                           size="sm"
                           className="h-6 w-6 p-0 text-red-500 hover:bg-red-50"
-                          onClick={() => removeService(item.service.id)}
+                          onClick={() => removeService(item.service.id!)}
                         >
                           <Trash2 size={12} />
                         </Button>
@@ -364,7 +335,14 @@ const ServiceSelection: React.FC = () => {
                     onClick={handleSubmit}
                     disabled={isSubmitting || !selectedPatient}
                   >
-                    {isSubmitting ? 'Đang xử lý...' : 'Đăng ký xét nghiệm'}
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 size={16} className="mr-2 animate-spin" />
+                        Đang xử lý...
+                      </>
+                    ) : (
+                      'Đăng ký xét nghiệm'
+                    )}
                   </Button>
                 </div>
               )}
@@ -378,84 +356,71 @@ const ServiceSelection: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <TestTube size={20} className="text-purple-600" />
-                <span>Danh sách dịch vụ xét nghiệm</span>
+                <span>Danh sách loại xét nghiệm</span>
+                {loadingTestTypes && <Loader2 size={16} className="animate-spin" />}
               </CardTitle>
               <CardDescription>
-                Chọn các dịch vụ xét nghiệm cần thực hiện
+                Chọn các loại xét nghiệm cần thực hiện
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Tìm dịch vụ..."
-                    value={searchServiceQuery}
-                    onChange={(e) => setSearchServiceQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="">Tất cả danh mục</option>
-                  {mockTestCategories.map(category => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
+              {/* Search Filter */}
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Tìm loại xét nghiệm..."
+                  value={searchServiceQuery}
+                  onChange={(e) => setSearchServiceQuery(e.target.value)}
+                  className="pl-10"
+                />
               </div>
 
-              {/* Services Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
-                {filteredServices.map(service => (
-                  <div
-                    key={service.id}
-                    className="p-4 border rounded-lg hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900">{service.name}</h3>
-                        <p className="text-sm text-gray-600">Mã: {service.code}</p>
-                        <p className="text-sm text-blue-600">{service.category.name}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-semibold text-green-600">
-                          {formatCurrency(service.basePrice)}
+              {/* Test Types Grid */}
+              {loadingTestTypes ? (
+                <div className="text-center py-8">
+                  <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
+                  <p className="mt-4 text-gray-500">Đang tải danh sách xét nghiệm...</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+                  {filteredTestTypes.map(testType => (
+                    <div
+                      key={testType.id}
+                      className="p-4 border rounded-lg hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900">{testType.name}</h3>
+                          <p className="text-sm text-gray-600">Mã: {testType.code}</p>
                         </div>
-                        <Button
-                          size="sm"
-                          onClick={() => addService(service)}
-                          className="mt-2"
-                        >
-                          <Plus size={16} className="mr-1" />
-                          Chọn
-                        </Button>
+                        <div className="text-right">
+                          <div className="font-semibold text-green-600">
+                            {formatCurrency(testType.price || 100000)}
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => addService(testType)}
+                            className="mt-2"
+                          >
+                            <Plus size={16} className="mr-1" />
+                            Chọn
+                          </Button>
+                        </div>
                       </div>
+                      
+                      {testType.description && (
+                        <p className="text-sm text-gray-600 mb-2">{testType.description}</p>
+                      )}
                     </div>
-                    
-                    {service.description && (
-                      <p className="text-sm text-gray-600 mb-2">{service.description}</p>
-                    )}
-                    
-                    {service.normalRange && (
-                      <div className="text-xs text-gray-500">
-                        <span className="font-medium">Giá trị bình thường:</span> {service.normalRange}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                
-                {filteredServices.length === 0 && (
-                  <div className="col-span-2 text-center py-8 text-gray-500">
-                    Không tìm thấy dịch vụ phù hợp
-                  </div>
-                )}
-              </div>
+                  ))}
+                  
+                  {!loadingTestTypes && filteredTestTypes.length === 0 && (
+                    <div className="col-span-2 text-center py-8 text-gray-500">
+                      Không tìm thấy loại xét nghiệm phù hợp
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { toast } from 'react-hot-toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,143 +16,220 @@ import {
   CheckCircle,
   AlertTriangle,
   Microscope,
-  FileText
+  FileText,
+  Loader2
 } from 'lucide-react'
-import type { Patient, Registration, RegistrationService } from '@/types/patient'
+import { patientsApi } from '@/services'
+import type { PatientAPI, PaginatedResponse, PatientTestDTO } from '@/types/api'
 import { formatDate, formatDateTime } from '@/lib/utils'
+
+interface RegistrationService {
+  id: string
+  serviceId: string
+  service: {
+    id: string
+    code: string
+    name: string
+    category?: string
+  }
+  price: number
+  status: 'pending' | 'collecting' | 'testing' | 'completed'
+  result?: {
+    id: string
+    value: string
+    normalRange?: string
+    unit?: string
+    interpretation?: 'normal' | 'abnormal' | 'critical'
+    notes?: string
+    testedBy: string
+    testedAt: string
+  }
+}
+
+interface Registration {
+  id: string
+  patientId: number
+  patient: PatientAPI
+  registrationDate: string
+  services: RegistrationService[]
+  totalAmount: number
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
 
 const PatientInfo: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
+  const [selectedPatient, setSelectedPatient] = useState<PatientAPI | null>(null)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [pageSize] = useState(20)
 
-  // Mock data cho bệnh nhân có xét nghiệm
-  const [registrations] = useState<Registration[]>([
-    {
-      id: 'REG001',
-      patientId: '1',
-      patient: {
-        id: '1',
-        patientCode: 'BN001',
-        name: 'Nguyễn Văn A',
-        dateOfBirth: '1990-01-15',
-        gender: 'male',
-        phone: '0123456789',
-        address: '123 Đường ABC, Q1, TP.HCM',
-        idNumber: '123456789',
-        createdAt: '2024-01-15T10:30:00',
-        updatedAt: '2024-01-15T10:30:00'
-      },
-      registrationDate: '2024-01-25T08:00:00',
-      services: [
-        {
-          id: 'RS001',
-          serviceId: '1',
-          service: {
-            id: '1',
-            code: 'CBC',
-            name: 'Công thức máu toàn phần',
-            category: { id: '1', name: 'Xét nghiệm máu', code: 'BLOOD' },
-            basePrice: 150000,
-            isActive: true,
-            createdAt: '2024-01-01'
-          },
-          price: 150000,
-          status: 'collecting'
-        },
-        {
-          id: 'RS002',
-          serviceId: '2',
-          service: {
-            id: '2',
-            code: 'GLU',
-            name: 'Glucose máu đói',
-            category: { id: '2', name: 'Sinh hóa', code: 'BIOCHEM' },
-            basePrice: 80000,
-            isActive: true,
-            createdAt: '2024-01-01'
-          },
-          price: 80000,
-          status: 'testing'
-        },
-        {
-          id: 'RS003',
-          serviceId: '3',
-          service: {
-            id: '3',
-            code: 'CHOL',
-            name: 'Cholesterol toàn phần',
-            category: { id: '2', name: 'Sinh hóa', code: 'BIOCHEM' },
-            basePrice: 120000,
-            isActive: true,
-            createdAt: '2024-01-01'
-          },
-          price: 120000,
-          status: 'completed',
-          result: {
-            id: 'TR001',
-            registrationServiceId: 'RS003',
-            value: '185',
-            normalRange: '<200 mg/dL',
-            unit: 'mg/dL',
-            interpretation: 'normal',
-            notes: 'Kết quả bình thường',
-            testedBy: 'user3',
-            testedAt: '2024-01-25T14:30:00'
-          }
-        }
-      ],
-      totalAmount: 350000,
-      status: 'in_progress',
-      createdBy: 'user2',
-      createdAt: '2024-01-25T08:00:00',
-      updatedAt: '2024-01-25T14:30:00'
-    },
-    {
-      id: 'REG002',
-      patientId: '2',
-      patient: {
-        id: '2',
-        patientCode: 'BN002',
-        name: 'Trần Thị B',
-        dateOfBirth: '1985-03-20',
-        gender: 'female',
-        phone: '0987654321',
-        address: '456 Đường XYZ, Q3, TP.HCM',
-        idNumber: '987654321',
-        createdAt: '2024-01-14T14:20:00',
-        updatedAt: '2024-01-14T14:20:00'
-      },
-      registrationDate: '2024-01-24T09:30:00',
-      services: [
-        {
-          id: 'RS004',
-          serviceId: '4',
-          service: {
-            id: '4',
-            code: 'TSH',
-            name: 'Hormone kích thích tuyến giáp',
-            category: { id: '3', name: 'Hormone', code: 'HORMONE' },
-            basePrice: 200000,
-            isActive: true,
-            createdAt: '2024-01-01'
-          },
-          price: 200000,
-          status: 'pending'
-        }
-      ],
-      totalAmount: 200000,
-      status: 'pending',
-      createdBy: 'user2',
-      createdAt: '2024-01-24T09:30:00',
-      updatedAt: '2024-01-24T09:30:00'
+  // API state
+  const [patientsData, setPatientsData] = useState<PaginatedResponse<PatientAPI> | null>(null)
+  const [registrations, setRegistrations] = useState<Registration[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Fetch patients and their registrations from API
+  const fetchPatients = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const response = await patientsApi.getAll({
+        pageIndex: currentPage,
+        pageSize: pageSize,
+        keyword: searchQuery || undefined,
+        status: 1 // Active patients only
+      })
+      
+      setPatientsData(response)
+      
+      // Fetch registrations for all patients
+      await fetchRegistrations(response.content)
+      
+    } catch (err) {
+      console.error('Error fetching patients:', err)
+      setError('Không thể tải danh sách bệnh nhân. Vui lòng thử lại.')
+    } finally {
+      setLoading(false)
     }
-  ])
+  }
 
+  // Fetch registrations for patients
+  const fetchRegistrations = async (patients: PatientAPI[]) => {
+    try {
+      const registrationsPromises = patients.map(async (patient) => {
+        // Skip patients without ID
+        if (!patient.id) return []
+        
+        try {
+          // Fetch registrations for each patient
+          const patientRegistrations = await patientsApi.getRegistrations(patient.id)
+          
+          // Transform to expected format
+          return patientRegistrations.map((reg: any) => ({
+            id: reg.id || `REG${patient.id}`,
+            patientId: patient.id!,
+            patient: patient,
+            registrationDate: reg.registrationDate || new Date().toISOString(),
+            services: patient.typeTests?.map((test, index) => ({
+              id: `${patient.id}_${test.testId}_${index}`,
+              serviceId: test.testId.toString(),
+              service: {
+                id: test.testId.toString(),
+                code: `TEST_${test.testId}`,
+                name: test.testSampleName || `Xét nghiệm ${test.testId}`,
+                category: 'Xét nghiệm'
+              },
+              price: 150000, // Default price
+              status: getTestStatus(test),
+              // No result data in PatientTestDTO, will be fetched separately if needed
+            })) || [],
+            totalAmount: (patient.typeTests?.length || 0) * 150000,
+            status: getPatientStatus(patient),
+            createdBy: 'system',
+            createdAt: reg.createdAt || new Date().toISOString(),
+            updatedAt: reg.updatedAt || new Date().toISOString()
+          }))
+        } catch (patientError) {
+          console.warn(`Could not fetch registrations for patient ${patient.id}:`, patientError)
+          // Return a default registration if API fails
+          return [{
+            id: `REG${patient.id}`,
+            patientId: patient.id!,
+            patient: patient,
+            registrationDate: new Date().toISOString(),
+            services: patient.typeTests?.map((test, index) => ({
+              id: `${patient.id}_${test.testId}_${index}`,
+              serviceId: test.testId.toString(),
+              service: {
+                id: test.testId.toString(),
+                code: `TEST_${test.testId}`,
+                name: test.testSampleName || `Xét nghiệm ${test.testId}`,
+                category: 'Xét nghiệm'
+              },
+              price: 150000,
+              status: getTestStatus(test),
+            })) || [],
+            totalAmount: (patient.typeTests?.length || 0) * 150000,
+            status: getPatientStatus(patient),
+            createdBy: 'system',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }]
+        }
+      })
+
+      const allRegistrations = await Promise.all(registrationsPromises)
+      setRegistrations(allRegistrations.flat())
+      
+    } catch (err) {
+      console.error('Error fetching registrations:', err)
+      // Use patient data to create basic registrations
+      const basicRegistrations: Registration[] = patients
+        .filter(patient => patient.id) // Filter out patients without ID
+        .map(patient => ({
+          id: `REG${patient.id}`,
+          patientId: patient.id!,
+          patient: patient,
+          registrationDate: new Date().toISOString(),
+          services: patient.typeTests?.map((test, index) => ({
+            id: `${patient.id}_${test.testId}_${index}`,
+            serviceId: test.testId.toString(),
+            service: {
+              id: test.testId.toString(),
+              code: `TEST_${test.testId}`,
+              name: test.testSampleName || `Xét nghiệm ${test.testId}`,
+              category: 'Xét nghiệm'
+            },
+            price: 150000,
+            status: getTestStatus(test),
+          })) || [],
+          totalAmount: (patient.typeTests?.length || 0) * 150000,
+          status: getPatientStatus(patient),
+          createdBy: 'system',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }))
+      
+      setRegistrations(basicRegistrations)
+    }
+  }
+
+  // Helper function to determine test status
+  const getTestStatus = (test: PatientTestDTO): 'pending' | 'collecting' | 'testing' | 'completed' => {
+    // Since PatientTestDTO doesn't have status or result fields,
+    // we'll use a simple logic based on testSampleId presence
+    if (test.testSampleId && test.testSampleName) return 'testing'
+    if (test.testSampleId) return 'collecting'
+    return 'pending'
+  }
+
+  // Helper function to determine patient status
+  const getPatientStatus = (patient: PatientAPI): 'pending' | 'in_progress' | 'completed' | 'cancelled' => {
+    if (!patient.typeTests || patient.typeTests.length === 0) return 'pending'
+    
+    // Simple logic: if patient has tests, they're in progress
+    const hasTestsWithSamples = patient.typeTests.some(test => test.testSampleId)
+    if (hasTestsWithSamples) return 'in_progress'
+    
+    return 'pending'
+  }
+
+  // Effect to fetch data when filters change
+  useEffect(() => {
+    fetchPatients()
+  }, [currentPage, searchQuery])
+
+  // const patients = patientsData?.content || []
+
+  // Filter registrations based on search and status
   const filteredRegistrations = registrations.filter(reg => {
     const matchesSearch = 
-      reg.patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      reg.patient.patientCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      reg.patient.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       reg.id.toLowerCase().includes(searchQuery.toLowerCase())
 
     const matchesStatus = !statusFilter || 
@@ -190,17 +268,51 @@ const PatientInfo: React.FC = () => {
     }
   }
 
+  const getGenderLabel = (gender: number) => {
+    switch (gender) {
+      case 0: return 'Nam'
+      case 1: return 'Nữ'
+      case 2: return 'Khác'
+      default: return 'Không xác định'
+    }
+  }
+
   const handleViewDetails = (registration: Registration) => {
     setSelectedPatient(registration.patient)
   }
 
-  const handleUpdateStatus = (serviceId: string, newStatus: string) => {
-    alert(`Cập nhật trạng thái ${newStatus} cho dịch vụ ${serviceId}`)
+  const handleUpdateStatus = async (serviceId: string, newStatus: string) => {
+    try {
+      // In real implementation, call API to update status
+      // await registrationsApi.updateServiceStatus(registrationId, serviceId, newStatus)
+      toast.success(`Cập nhật trạng thái ${newStatus} cho dịch vụ ${serviceId}`)
+      // Refresh data after update
+      fetchPatients()
+    } catch (error) {
+      console.error('Error updating status:', error)
+      toast.error('Có lỗi xảy ra khi cập nhật trạng thái')
+    }
   }
 
-  const handleInputResult = (service: RegistrationService) => {
-    alert(`Nhập kết quả cho: ${service.service.name}`)
+  const handleInputResult = async (service: RegistrationService) => {
+    try {
+      // In real implementation, call API to add test result
+      // await registrationsApi.addTestResult(service.id, resultData)
+      toast.success(`Nhập kết quả cho: ${service.service.name}`)
+      // Refresh data after adding result
+      fetchPatients()
+    } catch (error) {
+      console.error('Error adding result:', error)
+      toast.error('Có lỗi xảy ra khi nhập kết quả')
+    }
   }
+
+  const handleSearch = () => {
+    setCurrentPage(0)
+    fetchPatients()
+  }
+
+  const allServices = registrations.flatMap(r => r.services)
 
   return (
     <div className="space-y-6">
@@ -225,9 +337,10 @@ const PatientInfo: React.FC = () => {
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Tìm theo tên bệnh nhân, mã BN, mã đăng ký..."
+                  placeholder="Tìm theo tên bệnh nhân, mã đăng ký..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                   className="pl-10"
                 />
               </div>
@@ -247,6 +360,21 @@ const PatientInfo: React.FC = () => {
         </CardContent>
       </Card>
 
+      {/* Error Message */}
+      {error && (
+        <Card className="shadow-lg border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center space-x-2 text-red-600">
+              <AlertTriangle size={20} />
+              <span>{error}</span>
+              <Button variant="outline" size="sm" onClick={fetchPatients}>
+                Thử lại
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="shadow-lg border-0">
@@ -255,7 +383,7 @@ const PatientInfo: React.FC = () => {
               <div>
                 <p className="text-sm text-gray-600">Chờ lấy mẫu</p>
                 <p className="text-2xl font-bold text-yellow-600">
-                  {registrations.flatMap(r => r.services).filter(s => s.status === 'pending').length}
+                  {allServices.filter(s => s.status === 'pending').length}
                 </p>
               </div>
               <Clock className="h-8 w-8 text-yellow-600" />
@@ -269,7 +397,7 @@ const PatientInfo: React.FC = () => {
               <div>
                 <p className="text-sm text-gray-600">Đang xét nghiệm</p>
                 <p className="text-2xl font-bold text-purple-600">
-                  {registrations.flatMap(r => r.services).filter(s => s.status === 'testing').length}
+                  {allServices.filter(s => s.status === 'testing').length}
                 </p>
               </div>
               <Microscope className="h-8 w-8 text-purple-600" />
@@ -283,7 +411,7 @@ const PatientInfo: React.FC = () => {
               <div>
                 <p className="text-sm text-gray-600">Hoàn thành</p>
                 <p className="text-2xl font-bold text-green-600">
-                  {registrations.flatMap(r => r.services).filter(s => s.status === 'completed').length}
+                  {allServices.filter(s => s.status === 'completed').length}
                 </p>
               </div>
               <CheckCircle className="h-8 w-8 text-green-600" />
@@ -297,7 +425,7 @@ const PatientInfo: React.FC = () => {
               <div>
                 <p className="text-sm text-gray-600">Tổng ca xét nghiệm</p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {registrations.flatMap(r => r.services).length}
+                  {allServices.length}
                 </p>
               </div>
               <TestTube className="h-8 w-8 text-blue-600" />
@@ -311,10 +439,18 @@ const PatientInfo: React.FC = () => {
         <div>
           <Card className="shadow-lg border-0">
             <CardHeader>
-              <CardTitle>Danh sách đăng ký ({filteredRegistrations.length})</CardTitle>
+              <CardTitle className="flex items-center space-x-2">
+                <span>Danh sách đăng ký ({filteredRegistrations.length})</span>
+                {loading && <Loader2 size={16} className="animate-spin" />}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              {filteredRegistrations.length === 0 ? (
+              {loading && filteredRegistrations.length === 0 ? (
+                <div className="text-center py-8">
+                  <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
+                  <p className="mt-4 text-gray-500">Đang tải dữ liệu...</p>
+                </div>
+              ) : filteredRegistrations.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   Không tìm thấy đăng ký phù hợp
                 </div>
@@ -325,9 +461,9 @@ const PatientInfo: React.FC = () => {
                       <CardContent className="p-4">
                         <div className="flex justify-between items-start mb-3">
                           <div>
-                            <h3 className="font-semibold text-lg">{registration.patient.name}</h3>
+                            <h3 className="font-semibold text-lg">{registration.patient.fullName}</h3>
                             <p className="text-sm text-gray-600">
-                              Mã BN: {registration.patient.patientCode} • Mã ĐK: {registration.id}
+                              Mã ĐK: {registration.id}
                             </p>
                             <p className="text-sm text-gray-600">
                               Đăng ký: {formatDateTime(registration.registrationDate)}
@@ -378,31 +514,29 @@ const PatientInfo: React.FC = () => {
               {selectedPatient ? (
                 <div className="space-y-4">
                   <div className="border-b pb-4">
-                    <h3 className="text-xl font-semibold">{selectedPatient.name}</h3>
+                    <h3 className="text-xl font-semibold">{selectedPatient.fullName}</h3>
                     <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
-                      <div>
-                        <span className="text-gray-600">Mã bệnh nhân:</span>
-                        <p className="font-medium">{selectedPatient.patientCode}</p>
-                      </div>
                       <div>
                         <span className="text-gray-600">Giới tính:</span>
                         <p className="font-medium">
-                          {selectedPatient.gender === 'male' ? 'Nam' : 'Nữ'}
+                          {getGenderLabel(selectedPatient.gender)}
                         </p>
                       </div>
                       <div>
                         <span className="text-gray-600">Ngày sinh:</span>
-                        <p className="font-medium">{formatDate(selectedPatient.dateOfBirth)}</p>
+                        <p className="font-medium">{formatDate(selectedPatient.birthYear)}</p>
                       </div>
                       <div>
                         <span className="text-gray-600">Số điện thoại:</span>
-                        <p className="font-medium">{selectedPatient.phone}</p>
+                        <p className="font-medium">{selectedPatient.phoneNumber}</p>
                       </div>
                     </div>
-                    <div className="mt-3">
-                      <span className="text-gray-600 text-sm">Địa chỉ:</span>
-                      <p className="font-medium">{selectedPatient.address}</p>
-                    </div>
+                    {selectedPatient.address && (
+                      <div className="mt-3">
+                        <span className="text-gray-600 text-sm">Địa chỉ:</span>
+                        <p className="font-medium">{selectedPatient.address}</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Test Services for selected patient */}
@@ -478,6 +612,29 @@ const PatientInfo: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {/* Pagination */}
+      {patientsData && patientsData.totalPages > 1 && (
+        <div className="flex justify-center items-center space-x-2">
+          <Button
+            variant="outline"
+            onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+            disabled={currentPage === 0 || loading}
+          >
+            Trước
+          </Button>
+          <span className="text-sm text-gray-600">
+            Trang {currentPage + 1} / {patientsData.totalPages}
+          </span>
+          <Button
+            variant="outline"
+            onClick={() => setCurrentPage(Math.min(patientsData.totalPages - 1, currentPage + 1))}
+            disabled={currentPage >= patientsData.totalPages - 1 || loading}
+          >
+            Sau
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

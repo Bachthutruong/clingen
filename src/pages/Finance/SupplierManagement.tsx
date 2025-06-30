@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { toast } from 'react-hot-toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -315,7 +316,7 @@ const SupplierManagement: React.FC = () => {
   }
 
   const handleSaveSupplier = () => {
-    alert('Lưu thông tin nhà cung cấp thành công!')
+    toast.success('Lưu thông tin nhà cung cấp thành công!')
     setIsEditing(false)
   }
 
@@ -331,7 +332,7 @@ const SupplierManagement: React.FC = () => {
   }
 
   const handleCreateOrder = (supplier: Supplier) => {
-    alert(`Tạo đơn hàng mới cho ${supplier.name}`)
+    toast(`Tạo đơn hàng mới cho ${supplier.name}`)
   }
 
   const stats = {

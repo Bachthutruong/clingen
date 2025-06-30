@@ -65,6 +65,7 @@ const menuItems: MenuItem[] = [
       { label: 'Trạng thái mẫu', path: '/lab/sample-status', roles: ['admin', 'lab_technician'] },
       { label: 'Kết quả xét nghiệm', path: '/lab/test-results', roles: ['admin', 'lab_technician'] },
       { label: 'Quản lý vật tư', path: '/lab/supply-management', roles: ['admin', 'lab_technician'] },
+      { label: 'Quản lý mẫu xét nghiệm', path: '/lab/sample-management', roles: ['admin', 'lab_technician'] },
       { label: 'Thống kê', path: '/lab/statistics', roles: ['admin', 'lab_technician'] }
     ]
   },

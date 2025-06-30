@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { toast } from 'react-hot-toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -259,16 +260,16 @@ const TestResults: React.FC = () => {
   }
 
   const handleSaveResult = () => {
-    alert('Lưu kết quả thành công!')
+    toast.success('Lưu kết quả thành công!')
     setIsEditing(false)
   }
 
   const handlePrintResult = (result: TestResult) => {
-    alert(`In kết quả xét nghiệm: ${result.sampleCode}`)
+    toast(`In kết quả xét nghiệm: ${result.sampleCode}`)
   }
 
   const handleApproveResult = (result: TestResult) => {
-    alert(`Phê duyệt kết quả: ${result.sampleCode}`)
+    toast.success(`Phê duyệt kết quả: ${result.sampleCode}`)
   }
 
   const stats = {
