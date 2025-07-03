@@ -15,10 +15,16 @@ import type { ReferralSourceAPI, PatientAPI } from '@/types/api'
 const patientSchema = z.object({
   fullName: z.string().min(2, 'Tên phải có ít nhất 2 ký tự'),
   birthYear: z.string().min(1, 'Vui lòng chọn ngày sinh'),
-  gender: z.number().min(0).max(2, 'Vui lòng chọn giới tính'),
+  gender: z.number({
+    required_error: 'Vui lòng chọn giới tính',
+    invalid_type_error: 'Vui lòng chọn giới tính',
+  }).min(0).max(2),
   phoneNumber: z.string().min(10, 'Số điện thoại phải có ít nhất 10 số'),
-  email: z.string().email('Email không hợp lệ').optional().or(z.literal('')),
-  address: z.string().min(5, 'Địa chỉ phải có ít nhất 5 ký tự').optional(),
+  email: z.string().optional().refine(
+    (val) => !val || val === '' || z.string().email().safeParse(val).success,
+    { message: 'Email không hợp lệ' }
+  ),
+  address: z.string().optional(),
   reasonForVisit: z.string().optional(),
   referralSourceId: z.number().optional(),
   guardianName: z.string().optional(),
@@ -42,10 +48,45 @@ const PatientRegistration: React.FC = () => {
     formState: { errors },
     reset,
     watch,
-    setValue
+    setValue,
+    // getValues
   } = useForm<PatientForm>({
     resolver: zodResolver(patientSchema),
+    defaultValues: {
+      fullName: '',
+      birthYear: '',
+      phoneNumber: '',
+      email: '',
+      address: '',
+      reasonForVisit: '',
+      guardianName: '',
+      guardianPhoneNumber: '',
+      guardianRelationship: '',
+    }
   })
+
+  // // Debug function
+  // const debugForm = () => {
+  //   const currentValues = getValues()
+  //   console.log('Current form values:', currentValues)
+  //   console.log('Form errors:', errors)
+  //   console.log('Referral sources state:', referralSources)
+  //   console.log('Is referralSources array?', Array.isArray(referralSources))
+  //   console.log('Type of referralSources:', typeof referralSources)
+  //   console.log('Referral sources length:', Array.isArray(referralSources) ? referralSources.length : 'N/A')
+  //   if (referralSources && !Array.isArray(referralSources)) {
+  //     console.log('referralSources.content:', (referralSources as any).content)
+  //     console.log('referralSources.content.content:', (referralSources as any).content?.content)
+  //   }
+  //   console.log('Loading referral sources:', loadingReferralSources)
+    
+  //   // Test validation manually
+  //   const result = patientSchema.safeParse(currentValues)
+  //   console.log('Manual validation result:', result)
+  //   if (!result.success) {
+  //     console.log('Validation errors:', result.error.format())
+  //   }
+  // }
 
   // Fetch referral sources on component mount
   useEffect(() => {
@@ -57,12 +98,36 @@ const PatientRegistration: React.FC = () => {
           status: 1, // Active only
           pageIndex: 0,
           pageSize: 100,
-          orderCol: 'name',
+          // orderCol: 'name',
           isDesc: false
         })
-        setReferralSources(response.content)
+        
+        console.log('Referral sources API response:', response)
+        console.log('Referral sources content:', response.content)
+        console.log('Type of response.content:', typeof response.content)
+        console.log('Is response.content array?', Array.isArray(response.content))
+        
+        // Handle nested structure: response.content.content
+        let actualArray = null
+        const responseAny = response as any
+        if (responseAny?.content?.content && Array.isArray(responseAny.content.content)) {
+          actualArray = responseAny.content.content
+          console.log('Found nested array at response.content.content:', actualArray)
+        } else if (responseAny?.content && Array.isArray(responseAny.content)) {
+          actualArray = responseAny.content
+          console.log('Found array at response.content:', actualArray)
+        }
+        
+        if (actualArray && Array.isArray(actualArray)) {
+          console.log('Setting referral sources to:', actualArray)
+          setReferralSources(actualArray)
+        } else {
+          console.warn('No valid array found, setting empty array')
+          setReferralSources([])
+        }
       } catch (error) {
         console.error('Error fetching referral sources:', error)
+        setReferralSources([]) // Set empty array on error
       } finally {
         setLoadingReferralSources(false)
       }
@@ -72,34 +137,70 @@ const PatientRegistration: React.FC = () => {
   }, [])
 
   const onSubmit = async (data: PatientForm) => {
+    console.log('Form data being submitted:', data)
     setIsSubmitting(true)
     
     try {
+      // Validate required fields
+      if (!data.fullName || !data.birthYear || data.gender === undefined || !data.phoneNumber) {
+        toast.error('Vui lòng điền đầy đủ các trường bắt buộc!')
+        return
+      }
+
       // Create patient data in the format expected by API
       const patientData = {
-        fullName: data.fullName,
-        birthYear: data.birthYear, // String format as expected by API
-        gender: data.gender,
-        phoneNumber: data.phoneNumber,
-        email: data.email || undefined,
-        address: data.address || undefined,
-        reasonForVisit: data.reasonForVisit || undefined,
-        referralSourceId: data.referralSourceId || undefined,
-        guardianName: data.guardianName || undefined,
-        guardianPhoneNumber: data.guardianPhoneNumber || undefined,
-        guardianRelationship: data.guardianRelationship || undefined,
-        typeTests: [] // Will be set later during service selection
+        fullName: data.fullName.trim(),
+        birthYear: data.birthYear, // YYYY-MM-DD format from date input
+        gender: Number(data.gender), // Ensure it's a number
+        address: data.address?.trim() || "",
+        phoneNumber: data.phoneNumber.trim(),
+        reasonForVisit: data.reasonForVisit?.trim() || "",
+        referralSourceId: data.referralSourceId || 0,
+        email: data.email?.trim() || "",
+        guardianName: data.guardianName?.trim() || "",
+        guardianRelationship: data.guardianRelationship?.trim() || "",
+        guardianPhoneNumber: data.guardianPhoneNumber?.trim() || "",
+        typeTests: []
       }
       
+      console.log('Patient data being sent to API:', patientData)
       const response = await patientsApi.create(patientData)
-      console.log(response)
+      console.log('API response:', response)
       toast.success(`Đã đăng ký bệnh nhân thành công!`)
       reset()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating patient:', error)
-      toast.error('Có lỗi xảy ra khi đăng ký bệnh nhân. Vui lòng thử lại!')
+      console.error('Error response:', error.response?.data)
+      console.error('Error status:', error.response?.status)
+      console.error('Error message:', error.message)
+      
+      // Show specific error from API if available
+      if (error.response?.data?.message) {
+        toast.error(`Lỗi: ${error.response.data.message}`)
+      } else if (error.response?.data?.error) {
+        toast.error(`Lỗi: ${error.response.data.error}`)
+      } else {
+        toast.error('Có lỗi xảy ra khi đăng ký bệnh nhân. Vui lòng thử lại!')
+      }
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const onError = (errors: any) => {
+    console.log('Form validation errors:', errors)
+    
+    // Debug: Log specific errors
+    Object.keys(errors).forEach(fieldName => {
+      console.log(`Field ${fieldName} error:`, errors[fieldName].message)
+    })
+    
+    // Show specific error messages
+    const firstError = Object.values(errors)[0] as any
+    if (firstError?.message) {
+      toast.error(firstError.message)
+    } else {
+      toast.error('Vui lòng kiểm tra lại thông tin đã nhập!')
     }
   }
 
@@ -113,7 +214,7 @@ const PatientRegistration: React.FC = () => {
         status: 1, // Active patients only
         pageIndex: 0,
         pageSize: 10,
-        orderCol: 'fullName',
+        // orderCol: 'fullName',
         isDesc: false
       })
       
@@ -257,7 +358,7 @@ const PatientRegistration: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={handleSubmit(onSubmit, onError)} className="space-y-6">
             {/* Basic Information */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               <div className="space-y-2">
@@ -304,7 +405,9 @@ const PatientRegistration: React.FC = () => {
                 </Label>
                 <select
                   id="gender"
-                  {...register('gender', { valueAsNumber: true })}
+                  {...register('gender', { 
+                    setValueAs: (value) => value === '' ? undefined : Number(value)
+                  })}
                   className={`w-full px-3 py-2 border rounded-md ${
                     errors.gender ? 'border-red-500' : 'border-gray-300'
                   }`}
@@ -389,16 +492,42 @@ const PatientRegistration: React.FC = () => {
               <Label htmlFor="referralSourceId">Nguồn gửi</Label>
               <select
                 id="referralSourceId"
-                {...register('referralSourceId', { valueAsNumber: true })}
+                {...register('referralSourceId', { 
+                  setValueAs: (value) => {
+                    if (value === '' || value === null || value === undefined) {
+                      return undefined
+                    }
+                    const numValue = Number(value)
+                    return isNaN(numValue) ? undefined : numValue
+                  }
+                })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 disabled={loadingReferralSources}
               >
                 <option value="">Chọn nguồn gửi</option>
-                {referralSources.map((source) => (
-                  <option key={source.id} value={source.id}>
-                    {source.name} ({source.code})
-                  </option>
-                ))}
+                {(() => {
+                  // Handle case where referralSources might be the whole response object
+                  let sources = referralSources
+                  const refSourcesAny = referralSources as any
+                  
+                  // Try nested structure first: referralSources.content.content
+                  if (refSourcesAny?.content?.content && Array.isArray(refSourcesAny.content.content)) {
+                    sources = refSourcesAny.content.content
+                  }
+                  // Then try single nested: referralSources.content
+                  else if (refSourcesAny?.content && Array.isArray(refSourcesAny.content)) {
+                    sources = refSourcesAny.content
+                  }
+                  
+                  if (Array.isArray(sources)) {
+                    return sources.map((source: any) => (
+                      <option key={source.id} value={source.id}>
+                        {source.name} ({source.code})
+                      </option>
+                    ))
+                  }
+                  return null
+                })()}
               </select>
               {loadingReferralSources && (
                 <p className="text-sm text-gray-500">Đang tải nguồn gửi...</p>
@@ -442,6 +571,14 @@ const PatientRegistration: React.FC = () => {
 
             {/* Submit Button */}
             <div className="flex justify-end space-x-4 pt-6 border-t">
+              {/* <Button
+                type="button"
+                variant="outline"
+                onClick={debugForm}
+                disabled={isSubmitting}
+              >
+                Debug Form
+              </Button> */}
               <Button
                 type="button"
                 variant="outline"

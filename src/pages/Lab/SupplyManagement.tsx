@@ -16,7 +16,10 @@ import {
   Save,
   FileText,
   Eye,
-  Loader2
+  Loader2,
+  Trash2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 import { materialsApi, inventoryApi, packagingApi } from '@/services/api'
 import type { 
@@ -35,6 +38,7 @@ const SupplyManagement: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false)
   const [showTransactions, setShowTransactions] = useState(false)
   const [isAddingNew, setIsAddingNew] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<Material | null>(null)
   const [currentPage, setCurrentPage] = useState(0)
   const [pageSize] = useState(20)
 
@@ -65,36 +69,126 @@ const SupplyManagement: React.FC = () => {
     note: ''
   })
 
+  // Debug API connection
+  const testApiConnection = async () => {
+    try {
+      // console.log('Testing API connection...')
+      // toast.loading('Đang test kết nối API...', { id: 'api-test' })
+      
+      // Try simple GET request first
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://pk.caduceus.vn/api/pkv1'}/material`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        }
+      })
+      
+      console.log('GET /material response status:', response.status)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('GET /material response data:', data)
+        toast.success(`✅ API kết nối thành công! Status: ${response.status}`, { id: 'api-test' })
+        return data
+      } else {
+        console.error('GET /material failed:', response.status, response.statusText)
+        toast.error(`❌ API thất bại! Status: ${response.status} - ${response.statusText}`, { id: 'api-test' })
+        return null
+      }
+    } catch (error) {
+      console.error('API connection test failed:', error)
+      // toast.error(`🔥 Lỗi kết nối API: ${error instanceof Error ? error.message : 'Unknown error'}`, { id: 'api-test' })
+      return null
+    }
+  }
+
   // Fetch materials from API
   const fetchMaterials = async () => {
     try {
       setLoading(true)
       setError(null)
       
-      const [materialsResponse, logsResponse, packagingResponse] = await Promise.all([
-        materialsApi.getAll({
-          keyword: searchQuery || undefined,
-          pageIndex: currentPage,
-          pageSize: pageSize,
-          materialType: typeFilter ? parseInt(typeFilter) : undefined
-        }),
-        inventoryApi.getLogs({
-          pageIndex: 0,
-          pageSize: 10
-        }),
-        packagingApi.getAll({
-          pageIndex: 0,
-          pageSize: 100
-        })
-      ])
+      console.log('Fetching materials with params:', {
+        keyword: searchQuery || undefined,
+        pageIndex: currentPage,
+        pageSize: pageSize,
+        materialType: typeFilter ? parseInt(typeFilter) : undefined
+      })
+
+      // Test API connection first
+      const connectionTest = await testApiConnection()
+      
+      // Fetch materials first, handle errors gracefully
+      let materialsResponse
+      try {
+        if (connectionTest) {
+          // If simple GET works, try our API call
+          materialsResponse = await materialsApi.getAll({
+            keyword: searchQuery || undefined,
+            pageIndex: currentPage,
+            pageSize: pageSize,
+            materialType: typeFilter ? parseInt(typeFilter) : undefined
+          })
+          console.log('Materials response:', materialsResponse)
+        } else {
+          throw new Error('API connection test failed')
+        }
+      } catch (materialsError) {
+        console.error('Materials API error:', materialsError)
+        // Set empty materials but continue with other APIs
+        materialsResponse = {
+          content: [],
+          totalElements: 0,
+          totalPages: 0,
+          size: pageSize,
+          number: currentPage,
+          first: true,
+          last: true,
+          numberOfElements: 0
+        }
+      }
+
+      // Fetch other data with error handling
+      let logsResponse
+      let packagingResponse
+      
+      try {
+        [logsResponse, packagingResponse] = await Promise.all([
+          inventoryApi.getLogs({
+            pageIndex: 0,
+            pageSize: 10
+          }).catch(err => {
+            console.warn('Inventory logs failed:', err)
+            return { content: [], totalElements: 0, totalPages: 0, size: 10, number: 0, first: true, last: true, numberOfElements: 0 }
+          }),
+          packagingApi.getAll({
+            pageIndex: 0,
+            pageSize: 100
+          }).catch(err => {
+            console.warn('Packaging API failed:', err)
+            return { content: [], totalElements: 0, totalPages: 0, size: 100, number: 0, first: true, last: true, numberOfElements: 0 }
+          })
+        ])
+      } catch (err) {
+        console.error('Error fetching additional data:', err)
+        logsResponse = { content: [], totalElements: 0, totalPages: 0, size: 10, number: 0, first: true, last: true, numberOfElements: 0 }
+        packagingResponse = { content: [], totalElements: 0, totalPages: 0, size: 100, number: 0, first: true, last: true, numberOfElements: 0 }
+      }
       
       setMaterialsData(materialsResponse)
       setLogsData(logsResponse)
       setPackagingData(packagingResponse)
       
+      // Show success message if we got some data
+      if (materialsResponse.content.length > 0) {
+        console.log(`Loaded ${materialsResponse.content.length} materials successfully`)
+      }
+      
     } catch (err) {
       console.error('Error fetching materials:', err)
-      setError('Không thể tải danh sách vật tư. Vui lòng thử lại.')
+      const errorMessage = err instanceof Error ? err.message : 'Không thể tải danh sách vật tư. Vui lòng thử lại.'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -108,16 +202,6 @@ const SupplyManagement: React.FC = () => {
   const materials = materialsData?.content || []
   const logs = logsData?.content || []
   const packagings = packagingData?.content || []
-
-  const filteredMaterials = materials.filter(material => {
-    const matchesSearch = 
-      material.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      material.code.toLowerCase().includes(searchQuery.toLowerCase())
-
-    const matchesType = !typeFilter || material.type.toString() === typeFilter
-
-    return matchesSearch && matchesType
-  })
 
   const getStockStatus = (material: Material) => {
     const now = new Date()
@@ -293,6 +377,29 @@ const SupplyManagement: React.FC = () => {
     }
   }
 
+  const handleDeleteMaterial = async (material: Material) => {
+    try {
+      setSubmitting(true)
+      await materialsApi.delete(material.id!)
+      toast.success('Xóa vật tư thành công!')
+      setShowDeleteConfirm(null)
+      await fetchMaterials()
+    } catch (error) {
+      console.error('Error deleting material:', error)
+      toast.error('Có lỗi xảy ra khi xóa vật tư')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handlePagination = (direction: 'prev' | 'next') => {
+    if (direction === 'prev' && currentPage > 0) {
+      setCurrentPage(currentPage - 1)
+    } else if (direction === 'next' && materialsData && currentPage < materialsData.totalPages - 1) {
+      setCurrentPage(currentPage + 1)
+    }
+  }
+
   const handleSearch = () => {
     setCurrentPage(0)
     fetchMaterials()
@@ -304,11 +411,11 @@ const SupplyManagement: React.FC = () => {
   }
 
   const stats = {
-    total: filteredMaterials.length,
-    normal: filteredMaterials.filter(m => getStockStatus(m).status === 'NORMAL').length,
-    lowStock: filteredMaterials.filter(m => getStockStatus(m).status === 'LOW_STOCK').length,
-    outOfStock: filteredMaterials.filter(m => getStockStatus(m).status === 'OUT_OF_STOCK').length,
-    expiring: filteredMaterials.filter(m => getStockStatus(m).status === 'EXPIRING').length,
+    total: materials.length,
+    normal: materials.filter((m: Material) => getStockStatus(m).status === 'NORMAL').length,
+    lowStock: materials.filter((m: Material) => getStockStatus(m).status === 'LOW_STOCK').length,
+    outOfStock: materials.filter((m: Material) => getStockStatus(m).status === 'OUT_OF_STOCK').length,
+    expiring: materials.filter((m: Material) => getStockStatus(m).status === 'EXPIRING').length,
   }
 
   return (
@@ -325,14 +432,37 @@ const SupplyManagement: React.FC = () => {
               <p className="text-orange-100">Quản lý kho vật tư và hóa chất phòng Lab</p>
             </div>
           </div>
-          <Button 
-            onClick={() => setIsAddingNew(true)}
-            className="bg-white text-orange-600 hover:bg-gray-100"
-            disabled={submitting}
-          >
-            <Plus size={16} className="mr-2" />
-            Thêm vật tư
-          </Button>
+          <div className="flex space-x-2">
+            {/* <Button 
+              onClick={testApiConnection}
+              variant="outline"
+              className="bg-white/10 text-white border-white/20 hover:bg-white/20"
+              disabled={submitting}
+            >
+              🔧 Debug API
+            </Button>
+            <Button 
+              onClick={() => {
+                setCurrentPage(0)
+                setSearchQuery('')
+                setTypeFilter('')
+                fetchMaterials()
+              }}
+              variant="outline"
+              className="bg-white/10 text-white border-white/20 hover:bg-white/20"
+              disabled={loading}
+            >
+              {loading ? <Loader2 size={16} className="animate-spin" /> : '🔄'} Refresh
+            </Button> */}
+            <Button 
+              onClick={() => setIsAddingNew(true)}
+              className="bg-white text-orange-600 hover:bg-gray-100"
+              disabled={submitting}
+            >
+              <Plus size={16} className="mr-2" />
+              Thêm vật tư
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -444,100 +574,175 @@ const SupplyManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Materials List */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>
+      {/* Materials Table */}
+      <Card className="shadow-lg border-0">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <span>Danh sách vật tư ({materialsData?.totalElements || 0})</span>
+              {loading && <Loader2 size={16} className="animate-spin" />}
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-500">
+                Trang {currentPage + 1} / {materialsData?.totalPages || 1}
+              </span>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading && materials.length === 0 ? (
+            <div className="text-center py-8">
+              <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
+              <p className="mt-4 text-gray-500">Đang tải dữ liệu...</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b bg-gray-50">
+                      <th className="text-left p-3 font-semibold">Mã</th>
+                      <th className="text-left p-3 font-semibold">Tên vật tư</th>
+                      <th className="text-left p-3 font-semibold">Loại</th>
+                      <th className="text-left p-3 font-semibold">Số lượng</th>
+                      <th className="text-left p-3 font-semibold">Đóng gói</th>
+                      <th className="text-left p-3 font-semibold">Trạng thái</th>
+                      <th className="text-left p-3 font-semibold">Hết hạn</th>
+                      <th className="text-left p-3 font-semibold">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {materials.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="text-center py-8 text-gray-500">
+                          Không tìm thấy vật tư phù hợp
+                        </td>
+                      </tr>
+                    ) : (
+                      materials.map(material => {
+                        const stockStatus = getStockStatus(material)
+                        
+                        return (
+                          <tr key={material.id} className="border-b hover:bg-gray-50 transition-colors">
+                            <td className="p-3 font-mono text-sm">{material.code}</td>
+                            <td className="p-3 font-medium">{material.name}</td>
+                            <td className="p-3 text-sm">{getMaterialTypeLabel(material.type)}</td>
+                            <td className="p-3 text-sm font-medium">{material.quantity}</td>
+                            <td className="p-3 text-sm">{getPackagingName(material.packagingId)}</td>
+                            <td className="p-3">
+                              <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${stockStatus.color}`}>
+                                {getStatusIcon(stockStatus.status)}
+                                <span className="ml-1">{stockStatus.label}</span>
+                              </span>
+                            </td>
+                            <td className="p-3 text-sm">
+                              {material.expiryTime ? formatDateTime(material.expiryTime) : '-'}
+                            </td>
+                            <td className="p-3">
+                              <div className="flex space-x-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleViewMaterial(material)}
+                                  title="Xem chi tiết"
+                                >
+                                  <Eye size={14} />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedMaterial(material)
+                                    setIsEditing(true)
+                                  }}
+                                  title="Chỉnh sửa"
+                                >
+                                  <Edit size={14} />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleViewTransactions(material)}
+                                  title="Lịch sử giao dịch"
+                                >
+                                  <FileText size={14} />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setShowDeleteConfirm(material)}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  title="Xóa"
+                                >
+                                  <Trash2 size={14} />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {materialsData && materialsData.totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                  <div className="text-sm text-gray-500">
+                    Hiển thị {materials.length} trên tổng số {materialsData.totalElements} vật tư
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePagination('prev')}
+                      disabled={currentPage === 0}
+                    >
+                      <ChevronLeft size={14} />
+                      Trước
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePagination('next')}
+                      disabled={currentPage >= materialsData.totalPages - 1}
+                    >
+                      Sau
+                      <ChevronRight size={14} />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Material Details Sidebar */}
+      {(selectedMaterial || showTransactions) && (
+        <div className="mt-6">
           <Card className="shadow-lg border-0">
             <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <span>Danh sách vật tư ({filteredMaterials.length})</span>
-                {loading && <Loader2 size={16} className="animate-spin" />}
+              <CardTitle className="flex items-center justify-between">
+                <span>
+                  {showTransactions ? `Lịch sử giao dịch - ${selectedMaterial?.name}` : 'Chi tiết vật tư'}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedMaterial(null)
+                    setShowTransactions(false)
+                    setIsEditing(false)
+                  }}
+                >
+                  <X size={14} />
+                </Button>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {loading && filteredMaterials.length === 0 ? (
-                <div className="text-center py-8">
-                  <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
-                  <p className="mt-4 text-gray-500">Đang tải dữ liệu...</p>
-                </div>
-              ) : filteredMaterials.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  Không tìm thấy vật tư phù hợp
-                </div>
-              ) : (
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {filteredMaterials.map(material => {
-                    const stockStatus = getStockStatus(material)
-                    
-                    return (
-                      <Card key={material.id} className="border hover:shadow-md transition-shadow">
-                        <CardContent className="p-4">
-                          <div className="flex justify-between items-start mb-3">
-                            <div className="flex-1">
-                              <h3 className="font-semibold text-lg">{material.name}</h3>
-                              <p className="text-sm text-gray-600">Mã: {material.code}</p>
-                              <p className="text-sm text-gray-600">
-                                Loại: {getMaterialTypeLabel(material.type)}
-                              </p>
-                              <div className="flex items-center space-x-2 mt-2">
-                                <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${stockStatus.color}`}>
-                                  {getStatusIcon(stockStatus.status)}
-                                  <span className="ml-1">{stockStatus.label}</span>
-                                </span>
-                              </div>
-                            </div>
-                            <div className="flex space-x-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleViewMaterial(material)}
-                              >
-                                <Eye size={14} />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleViewTransactions(material)}
-                              >
-                                <FileText size={14} />
-                              </Button>
-                            </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-600">Số lượng:</span>
-                              <p className="font-medium">{material.quantity}</p>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Đóng gói:</span>
-                              <p className="font-medium">{getPackagingName(material.packagingId)}</p>
-                            </div>
-                            {material.expiryTime && (
-                              <div className="col-span-2">
-                                <span className="text-gray-600">Hết hạn:</span>
-                                <p className="font-medium">{formatDateTime(material.expiryTime)}</p>
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Material Details / Transaction Form */}
-        <div>
-          {showTransactions ? (
-            <Card className="shadow-lg border-0">
-              <CardHeader>
-                <CardTitle>Lịch sử giao dịch - {selectedMaterial?.name}</CardTitle>
-              </CardHeader>
-              <CardContent>
+              {showTransactions ? (
                 <div className="space-y-4 max-h-96 overflow-y-auto">
                   {logs.map(log => (
                     <Card key={log.logType} className="border">
@@ -562,197 +767,234 @@ const SupplyManagement: React.FC = () => {
                     </div>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-          ) : selectedMaterial ? (
-            <Card className="shadow-lg border-0">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>Chi tiết vật tư</span>
+              ) : selectedMaterial ? (
+                <>
                   {!isEditing && (
-                    <Button variant="outline" size="sm" onClick={handleEditMaterial}>
-                      <Edit size={14} className="mr-1" />
-                      Sửa
-                    </Button>
+                    <div className="flex justify-end mb-4">
+                      <Button variant="outline" size="sm" onClick={handleEditMaterial}>
+                        <Edit size={14} className="mr-1" />
+                        Sửa
+                      </Button>
+                    </div>
                   )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {isEditing ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label>Mã vật tư</Label>
-                        <Input
-                          value={selectedMaterial.code}
-                          onChange={(e) => setSelectedMaterial({
-                            ...selectedMaterial,
-                            code: e.target.value
-                          })}
-                        />
-                      </div>
-                      <div>
-                        <Label>Tên vật tư</Label>
-                        <Input
-                          value={selectedMaterial.name}
-                          onChange={(e) => setSelectedMaterial({
-                            ...selectedMaterial,
-                            name: e.target.value
-                          })}
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label>Số lượng</Label>
-                        <Input
-                          type="number"
-                          value={selectedMaterial.quantity}
-                          onChange={(e) => setSelectedMaterial({
-                            ...selectedMaterial,
-                            quantity: parseInt(e.target.value) || 0
-                          })}
-                        />
-                      </div>
-                      <div>
-                        <Label>Loại</Label>
-                        <select
-                          value={selectedMaterial.type}
-                          onChange={(e) => setSelectedMaterial({
-                            ...selectedMaterial,
-                            type: parseInt(e.target.value)
-                          })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                        >
-                          <option value={0}>Thuốc thử</option>
-                          <option value={1}>Thiết bị</option>
-                          <option value={2}>Vật tư tiêu hao</option>
-                          <option value={3}>Hóa chất</option>
-                          <option value={4}>Khác</option>
-                        </select>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <Label>Ngày hết hạn</Label>
-                      <Input
-                        type="datetime-local"
-                        value={selectedMaterial.expiryTime ? new Date(selectedMaterial.expiryTime).toISOString().slice(0, 16) : ''}
-                        onChange={(e) => setSelectedMaterial({
-                          ...selectedMaterial,
-                          expiryTime: e.target.value ? new Date(e.target.value).toISOString() : undefined
-                        })}
-                      />
-                    </div>
-                    
-                    <div className="flex space-x-2">
-                      <Button onClick={handleSaveMaterial} disabled={submitting}>
-                        {submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Save size={14} className="mr-1" />}
-                        Lưu
-                      </Button>
-                      <Button variant="outline" onClick={() => setIsEditing(false)}>
-                        <X size={14} className="mr-1" />
-                        Hủy
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-600">Mã:</span>
-                        <p className="font-medium">{selectedMaterial.code}</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Tên:</span>
-                        <p className="font-medium">{selectedMaterial.name}</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Loại:</span>
-                        <p className="font-medium">{getMaterialTypeLabel(selectedMaterial.type)}</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Số lượng:</span>
-                        <p className="font-medium">{selectedMaterial.quantity}</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Đóng gói:</span>
-                        <p className="font-medium">{getPackagingName(selectedMaterial.packagingId)}</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Nhập kho:</span>
-                        <p className="font-medium">{formatDateTime(selectedMaterial.importTime)}</p>
-                      </div>
-                      {selectedMaterial.expiryTime && (
-                        <div className="col-span-2">
-                          <span className="text-gray-600">Hết hạn:</span>
-                          <p className="font-medium">{formatDateTime(selectedMaterial.expiryTime)}</p>
+                  
+                  {isEditing ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Mã vật tư</Label>
+                          <Input
+                            value={selectedMaterial.code}
+                            onChange={(e) => setSelectedMaterial({
+                              ...selectedMaterial,
+                              code: e.target.value
+                            })}
+                          />
                         </div>
-                      )}
-                    </div>
-
-                    {/* Quick Actions */}
-                    <div className="border-t pt-4">
-                      <h4 className="font-semibold mb-3">Thao tác nhanh</h4>
-                      <div className="space-y-3">
-                        <div className="flex space-x-2">
+                        <div>
+                          <Label>Tên vật tư</Label>
+                          <Input
+                            value={selectedMaterial.name}
+                            onChange={(e) => setSelectedMaterial({
+                              ...selectedMaterial,
+                              name: e.target.value
+                            })}
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Số lượng</Label>
                           <Input
                             type="number"
-                            placeholder="Số lượng"
-                            value={transactionForm.quantity || ''}
-                            onChange={(e) => setTransactionForm({
-                              ...transactionForm,
-                              quantity: parseInt(e.target.value) || 0,
-                              materialId: selectedMaterial.id || 0
+                            value={selectedMaterial.quantity}
+                            onChange={(e) => setSelectedMaterial({
+                              ...selectedMaterial,
+                              quantity: parseInt(e.target.value) || 0
                             })}
-                            className="flex-1"
                           />
-                          <Button
-                            onClick={handleImportMaterial}
-                            disabled={submitting}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            <Plus size={14} className="mr-1" />
-                            Nhập
-                          </Button>
-                          <Button
-                            onClick={handleExportMaterial}
-                            disabled={submitting}
-                            className="bg-red-600 hover:bg-red-700"
-                          >
-                            <Minus size={14} className="mr-1" />
-                            Xuất
-                          </Button>
                         </div>
+                        <div>
+                          <Label>Loại</Label>
+                          <select
+                            value={selectedMaterial.type}
+                            onChange={(e) => setSelectedMaterial({
+                              ...selectedMaterial,
+                              type: parseInt(e.target.value)
+                            })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          >
+                            {/* <option value={0}>Thuốc thử</option>
+                            <option value={1}>Thiết bị</option> */}
+                            <option value={1}>Hoá chất</option>
+                            <option value={2}>Vật tư</option>
+                            {/* <option value={4}>Khác</option> */}
+                          </select>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Label>Ngày hết hạn</Label>
                         <Input
-                          placeholder="Ghi chú..."
-                          value={transactionForm.note}
-                          onChange={(e) => setTransactionForm({
-                            ...transactionForm,
-                            note: e.target.value
+                          type="datetime-local"
+                          value={selectedMaterial.expiryTime ? new Date(selectedMaterial.expiryTime).toISOString().slice(0, 16) : ''}
+                          onChange={(e) => setSelectedMaterial({
+                            ...selectedMaterial,
+                            expiryTime: e.target.value ? new Date(e.target.value).toISOString() : undefined
                           })}
                         />
                       </div>
+                      
+                      <div className="flex space-x-2">
+                        <Button onClick={handleSaveMaterial} disabled={submitting}>
+                          {submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Save size={14} className="mr-1" />}
+                          Lưu
+                        </Button>
+                        <Button variant="outline" onClick={() => setIsEditing(false)}>
+                          <X size={14} className="mr-1" />
+                          Hủy
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="shadow-lg border-0">
-              <CardHeader>
-                <CardTitle>Chi tiết vật tư</CardTitle>
-              </CardHeader>
-              <CardContent>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600">Mã:</span>
+                          <p className="font-medium">{selectedMaterial.code}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Tên:</span>
+                          <p className="font-medium">{selectedMaterial.name}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Loại:</span>
+                          <p className="font-medium">{getMaterialTypeLabel(selectedMaterial.type)}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Số lượng:</span>
+                          <p className="font-medium">{selectedMaterial.quantity}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Đóng gói:</span>
+                          <p className="font-medium">{getPackagingName(selectedMaterial.packagingId)}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Nhập kho:</span>
+                          <p className="font-medium">{formatDateTime(selectedMaterial.importTime)}</p>
+                        </div>
+                        {selectedMaterial.expiryTime && (
+                          <div className="col-span-2">
+                            <span className="text-gray-600">Hết hạn:</span>
+                            <p className="font-medium">{formatDateTime(selectedMaterial.expiryTime)}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Quick Actions */}
+                      <div className="border-t pt-4">
+                        <h4 className="font-semibold mb-3">Thao tác nhanh</h4>
+                        <div className="space-y-3">
+                          <div className="flex space-x-2">
+                            <Input
+                              type="number"
+                              placeholder="Số lượng"
+                              value={transactionForm.quantity || ''}
+                              onChange={(e) => setTransactionForm({
+                                ...transactionForm,
+                                quantity: parseInt(e.target.value) || 0,
+                                materialId: selectedMaterial.id || 0
+                              })}
+                              className="flex-1"
+                            />
+                            <Button
+                              onClick={handleImportMaterial}
+                              disabled={submitting}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <Plus size={14} className="mr-1" />
+                              Nhập
+                            </Button>
+                            <Button
+                              onClick={handleExportMaterial}
+                              disabled={submitting}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              <Minus size={14} className="mr-1" />
+                              Xuất
+                            </Button>
+                          </div>
+                          <Input
+                            placeholder="Ghi chú..."
+                            value={transactionForm.note}
+                            onChange={(e) => setTransactionForm({
+                              ...transactionForm,
+                              note: e.target.value
+                            })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
                 <div className="text-center py-8 text-gray-500">
                   Chọn một vật tư để xem chi tiết
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
         </div>
-      </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2 text-red-600">
+                <AlertTriangle size={20} />
+                <span>Xác nhận xóa</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-4">
+                Bạn có chắc chắn muốn xóa vật tư <strong>{showDeleteConfirm.name}</strong>?
+              </p>
+              <p className="text-sm text-gray-600 mb-6">
+                Thao tác này không thể hoàn tác.
+              </p>
+              <div className="flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDeleteConfirm(null)}
+                  disabled={submitting}
+                >
+                  Hủy
+                </Button>
+                <Button
+                  onClick={() => handleDeleteMaterial(showDeleteConfirm)}
+                  disabled={submitting}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 size={14} className="mr-2 animate-spin" />
+                      Đang xóa...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={14} className="mr-2" />
+                      Xóa
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Add New Material Modal */}
       {isAddingNew && (
@@ -808,11 +1050,8 @@ const SupplyManagement: React.FC = () => {
                       onChange={(e) => setNewMaterial({ ...newMaterial, type: parseInt(e.target.value) })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     >
-                      <option value={0}>Thuốc thử</option>
-                      <option value={1}>Thiết bị</option>
-                      <option value={2}>Vật tư tiêu hao</option>
-                      <option value={3}>Hóa chất</option>
-                      <option value={4}>Khác</option>
+                      <option value={1}>Hóa chất</option>
+                      <option value={2}>Vật tư</option>
                     </select>
                   </div>
                   <div>

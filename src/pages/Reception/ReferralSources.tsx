@@ -13,15 +13,38 @@ import {
   Save,
   X,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  TestTube,
+  DollarSign,
+  Minus
 } from 'lucide-react'
-import { referralSourcesApi } from '@/services'
-import type { ReferralSourceAPI, PaginatedResponse } from '@/types/api'
+import { referralSourcesApi, testTypesApi } from '@/services'
+import type { 
+  ReferralSourceAPI, 
+  PaginatedResponse, 
+  TestType,
+  CreateReferralSourceRequest,
+  
+} from '@/types/api'
+
+interface TestPriceConfig {
+  quantityRangeId?: number
+  minQuantity: number
+  maxQuantity: number
+  price: number
+}
+
+interface ReferralSourceTestType {
+  testTypeId: number
+  testTypeName?: string
+  testPriceConfigs: TestPriceConfig[]
+}
 
 interface ReferralSourceForm {
   name: string
   code: string
   status: number
+  priceConfigs: ReferralSourceTestType[]
 }
 
 const ReferralSources: React.FC = () => {
@@ -31,16 +54,60 @@ const ReferralSources: React.FC = () => {
   const [formData, setFormData] = useState<ReferralSourceForm>({
     name: '',
     code: '',
-    status: 1
+    status: 1,
+    priceConfigs: []
   })
 
   // API state
   const [referralSourcesData, setReferralSourcesData] = useState<PaginatedResponse<ReferralSourceAPI> | null>(null)
+  const [testTypes, setTestTypes] = useState<TestType[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(0)
   const [pageSize] = useState(20)
+
+  // Fetch test types for selection
+  const fetchTestTypes = async () => {
+    try {
+      const testTypesData = await testTypesApi.getAllSimple()
+      console.log('Raw API response:', testTypesData)
+      
+      // Defensive programming - ensure we have an array
+      let dataArray: any[] = []
+      
+      if (Array.isArray(testTypesData)) {
+        dataArray = testTypesData
+      } else if (testTypesData && typeof testTypesData === 'object') {
+        // Try to extract data from wrapped response
+        const wrapped = testTypesData as any
+        if (wrapped.data && Array.isArray(wrapped.data)) {
+          dataArray = wrapped.data
+        } else {
+          console.error('Invalid test types data structure:', testTypesData)
+          toast.error('Dữ liệu xét nghiệm không hợp lệ')
+          setTestTypes([])
+          return
+        }
+      } else {
+        console.error('Invalid test types data structure:', testTypesData)
+        toast.error('Dữ liệu xét nghiệm không hợp lệ')
+        setTestTypes([])
+        return
+      }
+      
+      // Filter only active test types (status = 1)
+      const activeTestTypes = dataArray.filter((t: any) => t.status === 1)
+      console.log('Filtered active test types:', activeTestTypes)
+      setTestTypes(activeTestTypes)
+    } catch (err) {
+      console.error('Error fetching test types:', err)
+      toast.error('Không thể tải danh sách xét nghiệm')
+      setTestTypes([])
+    }
+  }
 
   // Fetch referral sources from API
   const fetchReferralSources = async () => {
@@ -63,12 +130,96 @@ const ReferralSources: React.FC = () => {
     }
   }
 
-  // Effect to fetch data when filters change
+  // Effect to fetch data when page changes or initial load
   useEffect(() => {
     fetchReferralSources()
-  }, [currentPage, searchQuery])
+  }, [currentPage])
 
-  const referralSources = referralSourcesData?.content || []
+  useEffect(() => {
+    fetchTestTypes()
+  }, [])
+
+  // Load test types when form opens if not already loaded
+  useEffect(() => {
+    if (isFormOpen && testTypes.length === 0) {
+      toast.loading('Đang tải danh sách xét nghiệm...', { id: 'loading-test-types' })
+      fetchTestTypes().finally(() => {
+        toast.dismiss('loading-test-types')
+      })
+    }
+  }, [isFormOpen])
+
+  // Extract and transform referral sources from flat API response
+  const referralSources = (() => {
+    if (!referralSourcesData) {
+      return []
+    }
+    
+    const responseData = referralSourcesData as any
+    let flatData: any[] = []
+    
+    // Get flat data array
+    if (responseData.content && Array.isArray(responseData.content.content)) {
+      flatData = responseData.content.content
+    } else if (Array.isArray(responseData.content)) {
+      flatData = responseData.content
+    } else if (Array.isArray(responseData.data)) {
+      flatData = responseData.data
+    } else if (Array.isArray(responseData)) {
+      flatData = responseData
+    } else if (responseData.status && responseData.data && Array.isArray(responseData.data)) {
+      flatData = responseData.data
+    } else {
+      console.warn('Unexpected referral sources data structure:', referralSourcesData)
+      return []
+    }
+
+    // Transform flat data to nested structure
+    const groupedMap = new Map()
+    
+    flatData.forEach((item: any) => {
+      const key = `${item.name}_${item.code}_${item.status}`
+      
+      if (!groupedMap.has(key)) {
+        groupedMap.set(key, {
+          id: item.id || Date.now() + Math.random(), // Generate ID if not present
+          name: item.name,
+          code: item.code,
+          status: item.status,
+          priceConfigs: new Map() // Temporary map for grouping test types
+        })
+      }
+      
+      const source = groupedMap.get(key)
+      
+      // Group by test type
+      if (item.testTypeId) {
+        if (!source.priceConfigs.has(item.testTypeId)) {
+          source.priceConfigs.set(item.testTypeId, {
+            testTypeId: item.testTypeId,
+            testTypeName: item.testTypeName,
+            testPriceConfigs: []
+          })
+        }
+        
+        // Add price config
+        source.priceConfigs.get(item.testTypeId).testPriceConfigs.push({
+          quantityRangeId: item.quantityRangeId,
+          minQuantity: item.minQuantity,
+          maxQuantity: item.maxQuantity,
+          price: item.price
+        })
+      }
+    })
+    
+         // Convert Maps to Arrays
+     const transformedSources = Array.from(groupedMap.values()).map(source => ({
+       ...source,
+       priceConfigs: Array.from(source.priceConfigs.values())
+     }))
+     
+           return transformedSources
+   })()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -78,13 +229,44 @@ const ReferralSources: React.FC = () => {
       return
     }
 
+    // Validate price configs
+    for (const config of formData.priceConfigs) {
+      if (config.testPriceConfigs.length === 0) {
+        toast.error('Vui lòng thêm ít nhất một cấu hình giá cho mỗi loại xét nghiệm')
+        return
+      }
+      
+      for (const priceConfig of config.testPriceConfigs) {
+        if (priceConfig.minQuantity <= 0 || priceConfig.maxQuantity <= 0) {
+          toast.error('Số lượng phải lớn hơn 0')
+          return
+        }
+        if (priceConfig.minQuantity > priceConfig.maxQuantity) {
+          toast.error('Số lượng tối thiểu không thể lớn hơn số lượng tối đa')
+          return
+        }
+        if (priceConfig.price <= 0) {
+          toast.error('Giá phải lớn hơn 0')
+          return
+        }
+      }
+    }
+
     try {
       setSubmitting(true)
       
-      const submitData = {
+      const submitData: CreateReferralSourceRequest = {
         name: formData.name,
         code: formData.code,
-        priceConfigs: [], // Empty array as per API structure
+        priceConfigs: formData.priceConfigs.map(config => ({
+          testTypeId: config.testTypeId,
+          testPriceConfigs: config.testPriceConfigs.map(priceConfig => ({
+            quantityRangeId: priceConfig.quantityRangeId,
+            minQuantity: priceConfig.minQuantity,
+            maxQuantity: priceConfig.maxQuantity,
+            price: priceConfig.price
+          }))
+        })),
         status: formData.status
       }
       
@@ -112,28 +294,60 @@ const ReferralSources: React.FC = () => {
     }
   }
 
-  const handleEdit = (source: ReferralSourceAPI) => {
+  const handleEdit = async (source: ReferralSourceAPI) => {
+    setEditingId(source.id!)
     setEditingSource(source)
-    setFormData({
-      name: source.name,
-      code: source.code,
-      status: source.status
-    })
-    setIsFormOpen(true)
+    
+    try {
+      // Ensure test types are loaded before setting form data
+      if (testTypes.length === 0) {
+        await fetchTestTypes()
+      }
+      
+      setFormData({
+        name: source.name,
+        code: source.code,
+        status: source.status,
+        priceConfigs: (source.priceConfigs || []).map(config => {
+          const configAny = config as any
+          const testTypeName = configAny.testTypeName || testTypes.find(t => t.id === config.testTypeId)?.name || 'Không tìm thấy'
+          
+          return {
+            testTypeId: config.testTypeId,
+            testTypeName: testTypeName,
+            testPriceConfigs: (config.testPriceConfigs || []).map(priceConfig => ({
+              quantityRangeId: priceConfig.quantityRangeId,
+              minQuantity: priceConfig.minQuantity,
+              maxQuantity: priceConfig.maxQuantity,
+              price: priceConfig.price
+            }))
+          }
+        })
+              })
+        
+        setIsFormOpen(true)
+    } finally {
+      setEditingId(null)
+    }
   }
 
   const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa nguồn gửi "${name}"?`)) {
+    if (!confirm(`Bạn có chắc chắn muốn xóa nguồn gửi "${name}"?\n\nHành động này không thể hoàn tác!`)) {
       return
     }
 
+    setDeletingId(id)
+    const toastId = toast.loading(`Đang xóa nguồn gửi "${name}"...`)
+    
     try {
       await referralSourcesApi.delete(id)
       await fetchReferralSources()
-      toast.success('Xóa nguồn gửi thành công!')
+      toast.success('Xóa nguồn gửi thành công!', { id: toastId })
     } catch (error) {
       console.error('Error deleting referral source:', error)
-      toast.error('Có lỗi xảy ra khi xóa nguồn gửi. Vui lòng thử lại!')
+      toast.error('Có lỗi xảy ra khi xóa nguồn gửi. Vui lòng thử lại!', { id: toastId })
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -141,10 +355,137 @@ const ReferralSources: React.FC = () => {
     setFormData({
       name: '',
       code: '',
-      status: 1
+      status: 1,
+      priceConfigs: []
     })
     setIsFormOpen(false)
     setEditingSource(null)
+    setEditingId(null)
+    setDeletingId(null)
+  }
+
+  // Test type management functions
+  const addTestType = () => {
+    // Defensive check: ensure testTypes is an array
+    if (!Array.isArray(testTypes)) {
+      console.error('testTypes is not an array:', testTypes)
+      toast.error('Dữ liệu xét nghiệm không hợp lệ')
+      setTestTypes([]) // Reset to empty array
+      return
+    }
+    
+    // Kiểm tra nếu chưa có test types, thử fetch lại
+    if (testTypes.length === 0) {
+      toast.loading('Đang tải danh sách xét nghiệm...', { id: 'reload-test-types' })
+      fetchTestTypes().then(() => {
+        toast.dismiss('reload-test-types')
+        if (!Array.isArray(testTypes) || testTypes.length === 0) {
+          toast.error('Không thể tải danh sách xét nghiệm. Vui lòng kiểm tra kết nối.')
+        }
+      }).catch(() => {
+        toast.dismiss('reload-test-types')
+        toast.error('Lỗi khi tải danh sách xét nghiệm')
+      })
+      return
+    }
+    
+    // Kiểm tra nếu đã thêm hết tất cả test types
+    if (formData.priceConfigs.length >= testTypes.length) {
+      toast.error('Đã thêm tất cả loại xét nghiệm có sẵn')
+      return
+    }
+    
+    const availableTestTypes = testTypes.filter(
+      t => !formData.priceConfigs.some(config => config.testTypeId === t.id)
+    )
+    
+    if (availableTestTypes.length === 0) {
+      toast.error('Không còn loại xét nghiệm nào để thêm')
+      return
+    }
+
+    const firstAvailable = availableTestTypes[0]
+    const newTestType: ReferralSourceTestType = {
+      testTypeId: firstAvailable.id!,
+      testTypeName: firstAvailable.name,
+      testPriceConfigs: [{
+        minQuantity: 1,
+        maxQuantity: 10,
+        price: 0
+      }]
+    }
+
+    setFormData({
+      ...formData,
+      priceConfigs: [...formData.priceConfigs, newTestType]
+    })
+    
+    toast.success(`Đã thêm xét nghiệm: ${firstAvailable.name}`)
+  }
+
+  const removeTestType = (index: number) => {
+    const newPriceConfigs = [...formData.priceConfigs]
+    newPriceConfigs.splice(index, 1)
+    setFormData({
+      ...formData,
+      priceConfigs: newPriceConfigs
+    })
+  }
+
+  const updateTestType = (index: number, testTypeId: number) => {
+    const testType = testTypes.find(t => t.id === testTypeId)
+    if (!testType) return
+
+    const newPriceConfigs = [...formData.priceConfigs]
+    newPriceConfigs[index] = {
+      ...newPriceConfigs[index],
+      testTypeId: testTypeId,
+      testTypeName: testType.name
+    }
+    setFormData({
+      ...formData,
+      priceConfigs: newPriceConfigs
+    })
+  }
+
+  // Price config management functions
+  const addPriceConfig = (testTypeIndex: number) => {
+    const newPriceConfigs = [...formData.priceConfigs]
+    newPriceConfigs[testTypeIndex].testPriceConfigs.push({
+      minQuantity: 1,
+      maxQuantity: 10,
+      price: 0
+    })
+    setFormData({
+      ...formData,
+      priceConfigs: newPriceConfigs
+    })
+  }
+
+  const removePriceConfig = (testTypeIndex: number, priceConfigIndex: number) => {
+    const newPriceConfigs = [...formData.priceConfigs]
+    newPriceConfigs[testTypeIndex].testPriceConfigs.splice(priceConfigIndex, 1)
+    setFormData({
+      ...formData,
+      priceConfigs: newPriceConfigs
+    })
+  }
+
+  const updatePriceConfig = (
+    testTypeIndex: number, 
+    priceConfigIndex: number, 
+    field: keyof TestPriceConfig, 
+    value: number
+  ) => {
+    const newPriceConfigs = [...formData.priceConfigs]
+    newPriceConfigs[testTypeIndex].testPriceConfigs[priceConfigIndex] = {
+      ...newPriceConfigs[testTypeIndex].testPriceConfigs[priceConfigIndex],
+      [field]: value
+    }
+    setFormData({
+      ...formData,
+      priceConfigs: newPriceConfigs
+    })
   }
 
   const getStatusLabel = (status: number) => {
@@ -160,6 +501,21 @@ const ReferralSources: React.FC = () => {
     fetchReferralSources()
   }
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount)
+  }
+
+  // Calculate pagination data
+  const paginationData = (referralSourcesData as any)?.content || referralSourcesData
+  const totalPages = paginationData?.totalPages || 0
+  const totalElements = paginationData?.totalElements || 0
+  const shouldShowPagination = referralSourcesData && (totalPages > 1 || totalElements > 0)
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -171,7 +527,7 @@ const ReferralSources: React.FC = () => {
             </div>
             <div>
               <h1 className="text-2xl font-bold">Quản lý nguồn gửi</h1>
-              <p className="text-purple-100">Danh sách các nguồn gửi bệnh nhân</p>
+              <p className="text-purple-100">Danh sách các nguồn gửi bệnh nhân với cấu hình giá</p>
             </div>
           </div>
           <Button
@@ -201,6 +557,19 @@ const ReferralSources: React.FC = () => {
             <Button onClick={handleSearch} disabled={loading}>
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
             </Button>
+            {searchQuery && (
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setSearchQuery('')
+                  setCurrentPage(0)
+                  fetchReferralSources()
+                }}
+                disabled={loading}
+              >
+                <X size={16} />
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -227,8 +596,8 @@ const ReferralSources: React.FC = () => {
           <p className="mt-4 text-gray-500">Đang tải danh sách nguồn gửi...</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {referralSources.map(source => (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {referralSources.map((source: any) => (
             <Card key={source.id} className="shadow-lg border-0 hover:shadow-xl transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
@@ -246,25 +615,69 @@ const ReferralSources: React.FC = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => handleEdit(source)}
+                      disabled={editingId === source.id || deletingId === source.id}
                     >
-                      <Edit3 size={14} />
+                      {editingId === source.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Edit3 size={14} />
+                      )}
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
                       className="text-red-500 hover:bg-red-50"
                       onClick={() => handleDelete(source.id!, source.name)}
+                      disabled={editingId === source.id || deletingId === source.id}
                     >
-                      <Trash2 size={14} />
+                      {deletingId === source.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={14} />
+                      )}
                     </Button>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {source.priceConfigs && source.priceConfigs.length > 0 && (
-                  <div className="text-sm text-gray-600">
-                    <p className="font-medium">Cấu hình giá:</p>
-                    <p>{source.priceConfigs.length} cấu hình</p>
+                {source.priceConfigs && source.priceConfigs.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2 text-sm font-medium text-gray-700">
+                      <TestTube size={16} />
+                      <span>Cấu hình xét nghiệm ({source.priceConfigs.length})</span>
+                    </div>
+                    {source.priceConfigs.slice(0, 3).map((config: any, index: number) => {
+                      const testType = testTypes.find(t => t.id === config.testTypeId)
+                      return (
+                        <div key={index} className="bg-gray-50 p-3 rounded-lg">
+                          <p className="font-medium text-sm text-gray-800">
+                            {testType?.name || `Xét nghiệm #${config.testTypeId}`}
+                          </p>
+                          <div className="mt-2 space-y-1">
+                            {config.testPriceConfigs.slice(0, 2).map((priceConfig: any, priceIndex: number) => (
+                              <div key={priceIndex} className="flex items-center justify-between text-xs text-gray-600">
+                                <span>{priceConfig.minQuantity} - {priceConfig.maxQuantity} mẫu</span>
+                                <span className="font-medium">{formatCurrency(priceConfig.price)}</span>
+                              </div>
+                            ))}
+                            {config.testPriceConfigs.length > 2 && (
+                              <p className="text-xs text-gray-500">
+                                +{config.testPriceConfigs.length - 2} cấu hình khác
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {source.priceConfigs.length > 3 && (
+                      <p className="text-sm text-gray-500">
+                        +{source.priceConfigs.length - 3} loại xét nghiệm khác
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500 text-center py-4">
+                    Chưa có cấu hình xét nghiệm
                   </div>
                 )}
               </CardContent>
@@ -280,32 +693,69 @@ const ReferralSources: React.FC = () => {
       )}
 
       {/* Pagination */}
-      {referralSourcesData && referralSourcesData.totalPages > 1 && (
-        <div className="flex justify-center items-center space-x-2">
-          <Button
-            variant="outline"
-            onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-            disabled={currentPage === 0 || loading}
-          >
-            Trước
-          </Button>
-          <span className="text-sm text-gray-600">
-            Trang {currentPage + 1} / {referralSourcesData.totalPages}
-          </span>
-          <Button
-            variant="outline"
-            onClick={() => setCurrentPage(Math.min(referralSourcesData.totalPages - 1, currentPage + 1))}
-            disabled={currentPage >= referralSourcesData.totalPages - 1 || loading}
-          >
-            Sau
-          </Button>
+      {shouldShowPagination && (
+        <div className="flex flex-col items-center space-y-4">
+          <div className="text-sm text-gray-600 text-center">
+            Hiển thị {referralSources.length} trên tổng {totalElements} nguồn gửi
+            {searchQuery && ` (tìm kiếm: "${searchQuery}")`}
+          </div>
+          
+          {totalPages > 1 && (
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                disabled={currentPage === 0 || loading}
+              >
+                {loading ? <Loader2 size={14} className="animate-spin" /> : '← Trước'}
+              </Button>
+              
+              <div className="flex items-center space-x-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum = i
+                  if (totalPages > 5) {
+                    if (currentPage < 3) {
+                      pageNum = i
+                    } else if (currentPage >= totalPages - 3) {
+                      pageNum = totalPages - 5 + i
+                    } else {
+                      pageNum = currentPage - 2 + i
+                    }
+                  }
+                  
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNum)}
+                      disabled={loading}
+                      className="w-8 h-8 p-0"
+                    >
+                      {pageNum + 1}
+                    </Button>
+                  )
+                })}
+              </div>
+              
+              <Button
+                variant="outline" 
+                size="sm"
+                onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
+                disabled={currentPage >= totalPages - 1 || loading}
+              >
+                {loading ? <Loader2 size={14} className="animate-spin" /> : 'Sau →'}
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
       {/* Add/Edit Form Modal */}
       {isFormOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <CardHeader className="border-b">
               <div className="flex justify-between items-center">
                 <CardTitle>
@@ -323,6 +773,7 @@ const ReferralSources: React.FC = () => {
             </CardHeader>
             <CardContent className="pt-6">
               <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Basic Info */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Tên nguồn gửi *</Label>
@@ -362,6 +813,178 @@ const ReferralSources: React.FC = () => {
                     <option value={1}>Hoạt động</option>
                     <option value={0}>Không hoạt động</option>
                   </select>
+                </div>
+
+                {/* Price Configurations */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-lg font-semibold">Cấu hình giá xét nghiệm</Label>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Có {testTypes.length} loại xét nghiệm, đã chọn {formData.priceConfigs.length}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addTestType}
+                      disabled={submitting}
+                    >
+                      {testTypes.length === 0 ? (
+                        <>
+                          <Loader2 size={16} className="mr-2 animate-spin" />
+                          Tải xét nghiệm
+                        </>
+                      ) : (
+                        <>
+                          <Plus size={16} className="mr-2" />
+                          Thêm xét nghiệm
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                                    {formData.priceConfigs.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                      <TestTube size={48} className="mx-auto mb-4 text-gray-300" />
+                      <p>Chưa có xét nghiệm nào được cấu hình</p>
+                      <p className="text-sm">Nhấn "Thêm xét nghiệm" để bắt đầu</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {formData.priceConfigs.map((testConfig, testIndex) => (
+                        <Card key={testIndex} className="border-2">
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <TestTube size={20} className="text-blue-600" />
+                                <div className="flex-1">
+                                  <select
+                                    value={testConfig.testTypeId}
+                                    onChange={(e) => updateTestType(testIndex, parseInt(e.target.value))}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                                    disabled={submitting}
+                                  >
+                                    {testTypes
+                                      .filter(t => 
+                                        t.id === testConfig.testTypeId || 
+                                        !formData.priceConfigs.some(config => config.testTypeId === t.id)
+                                      )
+                                      .map(testType => (
+                                        <option key={testType.id} value={testType.id}>
+                                          {testType.name}
+                                        </option>
+                                      ))
+                                    }
+                                  </select>
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => removeTestType(testIndex)}
+                                disabled={submitting}
+                                className="text-red-500 hover:bg-red-50"
+                              >
+                                <Trash2 size={16} />
+                              </Button>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <Label className="font-medium">Cấu hình giá theo số lượng</Label>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => addPriceConfig(testIndex)}
+                                disabled={submitting}
+                              >
+                                <Plus size={14} className="mr-1" />
+                                Thêm khoảng giá
+                              </Button>
+                            </div>
+                            
+                            {testConfig.testPriceConfigs.length === 0 ? (
+                              <div className="text-center py-4 text-gray-500 border border-dashed border-gray-200 rounded">
+                                <DollarSign size={24} className="mx-auto mb-2 text-gray-300" />
+                                <p className="text-sm">Chưa có cấu hình giá</p>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {testConfig.testPriceConfigs.map((priceConfig, priceIndex) => (
+                                  <div key={priceIndex} className="grid grid-cols-4 gap-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
+                                    <div className="space-y-1">
+                                      <Label className="text-xs">Số lượng tối thiểu</Label>
+                                      <Input
+                                        type="number"
+                                        min="1"
+                                        value={priceConfig.minQuantity}
+                                        onChange={(e) => updatePriceConfig(
+                                          testIndex, 
+                                          priceIndex, 
+                                          'minQuantity', 
+                                          parseInt(e.target.value) || 0
+                                        )}
+                                        disabled={submitting}
+                                        className="text-sm"
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label className="text-xs">Số lượng tối đa</Label>
+                                      <Input
+                                        type="number"
+                                        min="1"
+                                        value={priceConfig.maxQuantity}
+                                        onChange={(e) => updatePriceConfig(
+                                          testIndex, 
+                                          priceIndex, 
+                                          'maxQuantity', 
+                                          parseInt(e.target.value) || 0
+                                        )}
+                                        disabled={submitting}
+                                        className="text-sm"
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label className="text-xs">Giá (VNĐ)</Label>
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        value={priceConfig.price}
+                                        onChange={(e) => updatePriceConfig(
+                                          testIndex, 
+                                          priceIndex, 
+                                          'price', 
+                                          parseInt(e.target.value) || 0
+                                        )}
+                                        disabled={submitting}
+                                        className="text-sm"
+                                      />
+                                    </div>
+                                    <div className="flex items-end">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => removePriceConfig(testIndex, priceIndex)}
+                                        disabled={submitting}
+                                        className="text-red-500 hover:bg-red-50 w-full"
+                                      >
+                                        <Minus size={14} />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end space-x-4 pt-4 border-t">

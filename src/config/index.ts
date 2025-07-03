@@ -1,7 +1,7 @@
 // Application Configuration
 export const config = {
   // API Configuration
-  API_BASE_URL: import.meta.env.VITE_API_URL || 'http://pk.caduceus.vn/api/pk/v1',
+  API_BASE_URL: import.meta.env.VITE_API_URL || 'https://pk.caduceus.vn/api/pk/v1',
   API_TIMEOUT: 30000,
   
   // App Information

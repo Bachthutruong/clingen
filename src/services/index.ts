@@ -3,8 +3,10 @@ export {
   authApi,
   packagingApi,
   testTypesApi,
+  testSamplesApi,
   referralSourcesApi,
   patientsApi,
+  patientSamplesApi,
   registrationsApi,
   testServicesApi,
   testCategoriesApi,
@@ -27,6 +29,7 @@ import type {
 export type {
   Packaging,
   TestType,
+  TestSample,
   ReferralSourceAPI,
   PatientAPI,
   PaginatedResponse,

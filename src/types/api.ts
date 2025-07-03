@@ -44,6 +44,12 @@ export interface TestPriceConfigDTO {
   price: number // Giá theo cái khung này
 }
 
+// Test Sample in Test Type DTO
+export interface TestTypeTestSampleDTO {
+  id: number
+  sampleName: string
+}
+
 // Test Type DTO
 export interface TestTypeDTO {
   id?: number
@@ -53,12 +59,19 @@ export interface TestTypeDTO {
   price: number // Giá xét nghiệm (VNĐ)
   status: number // Trạng thái: 0 không hoạt động, 1 hoạt động
   testSampleIds: number[] // array<integer> Items integer int64
+  testSamples?: TestTypeTestSampleDTO[] // Danh sách mẫu xét nghiệm kèm theo
 }
 
 // Test Sample DTO
 export interface TestSampleDTO {
   id?: number
   name: string
+}
+
+// Test Sample DTO từ GET /test-sample endpoint 
+export interface TestSampleSimpleDTO {
+  id: number
+  sampleName: string
 }
 
 // Referral Source DTO

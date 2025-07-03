@@ -91,7 +91,7 @@ const InventoryManagement: React.FC = () => {
         status: statusFilter ? parseInt(statusFilter) : undefined,
         pageIndex: currentPage,
         pageSize: pageSize,
-        orderCol: 'name',
+        // orderCol: 'name',
         isDesc: false
       }
 
@@ -113,7 +113,7 @@ const InventoryManagement: React.FC = () => {
         status: 1,
         pageIndex: 0,
         pageSize: 50,
-        orderCol: 'createdAt',
+        // orderCol: 'createdAt',
         isDesc: true
       }
 

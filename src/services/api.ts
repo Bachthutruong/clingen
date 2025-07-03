@@ -105,36 +105,78 @@ export const authApi = {
 // Packaging API
 export const packagingApi = {
   getAll: async (params?: PackagingSearchParams): Promise<PaginatedResponse<Packaging>> => {
-    const searchParams: SearchDTO = {
-      keyword: params?.keyword,
-      status: params?.status,
-      pageIndex: params?.pageIndex || 0,
-      pageSize: params?.pageSize || 20,
-      orderCol: params?.orderCol,
-      isDesc: params?.isDesc
+    try {
+      const searchParams: SearchDTO = {
+        keyword: params?.keyword,
+        status: params?.status,
+        pageIndex: params?.pageIndex || 0,
+        pageSize: params?.pageSize || 20,
+        orderCol: params?.orderCol,
+        isDesc: params?.isDesc
+      }
+      
+      const response: AxiosResponse<MethodResult<any>> = await api.post('/packing/search', searchParams)
+      
+      // API trả về dữ liệu pagination trong response.data.data
+      const paginationData = response.data.data
+      
+      return {
+        content: paginationData.content || [],
+        totalElements: paginationData.totalElements || 0,
+        totalPages: paginationData.totalPages || 0,
+        size: paginationData.size || searchParams.pageSize,
+        number: paginationData.number || searchParams.pageIndex,
+        first: paginationData.first || false,
+        last: paginationData.last || false,
+        numberOfElements: paginationData.numberOfElements || 0
+      }
+    } catch (error) {
+      // Fallback to GET method if POST search fails
+      console.warn('POST /packing/search failed, trying GET /packing as fallback:', error)
+      try {
+        const response: AxiosResponse<MethodResult<Packaging[]>> = await api.get('/packing', {
+          params: {
+            keyword: params?.keyword,
+            page: params?.pageIndex || 0,
+            size: params?.pageSize || 20,
+            status: params?.status
+          }
+        })
+        return transformToPaginatedResponse(response.data, params?.pageIndex || 0, params?.pageSize || 20)
+      } catch (fallbackError) {
+        console.error('Both POST and GET packing endpoints failed:', fallbackError)
+        // Return empty result instead of throwing
+        return {
+          content: [],
+          totalElements: 0,
+          totalPages: 0,
+          size: params?.pageSize || 20,
+          number: params?.pageIndex || 0,
+          first: true,
+          last: true,
+          numberOfElements: 0
+        }
+      }
     }
-    
-    const response: AxiosResponse<MethodResult<Packaging[]>> = await api.post('/packaging/search', searchParams)
-    return transformToPaginatedResponse(response.data, searchParams.pageIndex, searchParams.pageSize)
   },
 
   getById: async (id: number): Promise<Packaging> => {
-    const response: AxiosResponse<MethodResult<Packaging>> = await api.get(`/packaging/${id}`)
+    const response: AxiosResponse<MethodResult<Packaging>> = await api.get(`/packing/${id}`)
     return response.data.data
   },
 
   create: async (data: CreatePackagingRequest): Promise<Packaging> => {
-    const response: AxiosResponse<MethodResult<Packaging>> = await api.post('/packaging', data)
+    const response: AxiosResponse<MethodResult<Packaging>> = await api.post('/packing', data)
     return response.data.data
   },
 
   update: async (id: number, data: Partial<CreatePackagingRequest>): Promise<Packaging> => {
-    const response: AxiosResponse<MethodResult<Packaging>> = await api.put(`/packaging/${id}`, data)
+    const response: AxiosResponse<MethodResult<Packaging>> = await api.put(`/packing/${id}`, data)
     return response.data.data
   },
 
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/packaging/${id}`)
+    await api.delete(`/packing/${id}`)
   },
 }
 
@@ -150,36 +192,42 @@ export const testTypesApi = {
       isDesc: params?.isDesc
     }
     
-    const response: AxiosResponse<MethodResult<TestType[]>> = await api.post('/test-types/search', searchParams)
+    const response: AxiosResponse<MethodResult<TestType[]>> = await api.post('/test-type/search', searchParams)
     return transformToPaginatedResponse(response.data, searchParams.pageIndex, searchParams.pageSize)
   },
 
+  // GET /test-type - Lấy tất cả test types đơn giản (không phân trang)
+  getAllSimple: async (): Promise<TestType[]> => {
+    const response: AxiosResponse<MethodResult<TestType[]>> = await api.get('/test-type')
+    return response.data.data || []
+  },
+
   getById: async (id: number): Promise<TestType> => {
-    const response: AxiosResponse<MethodResult<TestType>> = await api.get(`/test-types/${id}`)
+    const response: AxiosResponse<MethodResult<TestType>> = await api.get(`/test-type/${id}`)
     return response.data.data
   },
 
   create: async (data: CreateTestTypeRequest): Promise<TestType> => {
-    const response: AxiosResponse<MethodResult<TestType>> = await api.post('/test-types', data)
+    const response: AxiosResponse<MethodResult<TestType>> = await api.post('/test-type', data)
     return response.data.data
   },
 
   update: async (id: number, data: Partial<CreateTestTypeRequest>): Promise<TestType> => {
-    const response: AxiosResponse<MethodResult<TestType>> = await api.put(`/test-types/${id}`, data)
+    const response: AxiosResponse<MethodResult<TestType>> = await api.put(`/test-type/${id}`, data)
     return response.data.data
   },
 
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/test-types/${id}`)
+    await api.delete(`/test-type/${id}`)
   },
 
   // Quản lý mẫu xét nghiệm cho loại xét nghiệm
   addSampleToTestType: async (testTypeId: number, sampleId: number): Promise<void> => {
-    await api.post(`/test-types/${testTypeId}/samples/${sampleId}`)
+    await api.post(`/test-type/${testTypeId}/samples/${sampleId}`)
   },
 
   removeSampleFromTestType: async (testTypeId: number, sampleId: number): Promise<void> => {
-    await api.delete(`/test-types/${testTypeId}/samples/${sampleId}`)
+    await api.delete(`/test-type/${testTypeId}/samples/${sampleId}`)
   },
 }
 
@@ -195,27 +243,38 @@ export const testSamplesApi = {
       isDesc: params?.isDesc
     }
     
-    const response: AxiosResponse<MethodResult<TestSample[]>> = await api.post('/test-samples/search', searchParams)
+    const response: AxiosResponse<MethodResult<TestSample[]>> = await api.post('/test-sample/search', searchParams)
     return transformToPaginatedResponse(response.data, searchParams.pageIndex, searchParams.pageSize)
   },
 
+  // GET /test-sample - Lấy tất cả test samples đơn giản
+  getAllSimple: async (): Promise<TestSample[]> => {
+    const response: AxiosResponse<MethodResult<any[]>> = await api.get('/test-sample')
+    // Transform response từ { id, sampleName } sang { id, name } để tương thích
+    const transformedData = response.data.data.map((item: any) => ({
+      id: item.id,
+      name: item.sampleName
+    }))
+    return transformedData
+  },
+
   getById: async (id: number): Promise<TestSample> => {
-    const response: AxiosResponse<MethodResult<TestSample>> = await api.get(`/test-samples/${id}`)
+    const response: AxiosResponse<MethodResult<TestSample>> = await api.get(`/test-sample/${id}`)
     return response.data.data
   },
 
   create: async (data: CreateTestSampleRequest): Promise<TestSample> => {
-    const response: AxiosResponse<MethodResult<TestSample>> = await api.post('/test-samples', data)
+    const response: AxiosResponse<MethodResult<TestSample>> = await api.post('/test-sample', data)
     return response.data.data
   },
 
   update: async (id: number, data: Partial<CreateTestSampleRequest>): Promise<TestSample> => {
-    const response: AxiosResponse<MethodResult<TestSample>> = await api.put(`/test-samples/${id}`, data)
+    const response: AxiosResponse<MethodResult<TestSample>> = await api.put(`/test-sample/${id}`, data)
     return response.data.data
   },
 
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/test-samples/${id}`)
+    await api.delete(`/test-sample/${id}`)
   },
 }
 
@@ -231,27 +290,27 @@ export const referralSourcesApi = {
       isDesc: params?.isDesc
     }
     
-    const response: AxiosResponse<MethodResult<ReferralSourceAPI[]>> = await api.post('/referral-sources/search', searchParams)
+    const response: AxiosResponse<MethodResult<ReferralSourceAPI[]>> = await api.post('/referral-source/search', searchParams)
     return transformToPaginatedResponse(response.data, searchParams.pageIndex, searchParams.pageSize)
   },
 
   getById: async (id: number): Promise<ReferralSourceAPI> => {
-    const response: AxiosResponse<MethodResult<ReferralSourceAPI>> = await api.get(`/referral-sources/${id}`)
+    const response: AxiosResponse<MethodResult<ReferralSourceAPI>> = await api.get(`/referral-source/${id}`)
     return response.data.data
   },
 
   create: async (data: CreateReferralSourceRequest): Promise<ReferralSourceAPI> => {
-    const response: AxiosResponse<MethodResult<ReferralSourceAPI>> = await api.post('/referral-sources', data)
+    const response: AxiosResponse<MethodResult<ReferralSourceAPI>> = await api.post('/referral-source', data)
     return response.data.data
   },
 
   update: async (id: number, data: Partial<CreateReferralSourceRequest>): Promise<ReferralSourceAPI> => {
-    const response: AxiosResponse<MethodResult<ReferralSourceAPI>> = await api.put(`/referral-sources/${id}`, data)
+    const response: AxiosResponse<MethodResult<ReferralSourceAPI>> = await api.put(`/referral-source/${id}`, data)
     return response.data.data
   },
 
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/referral-sources/${id}`)
+    await api.delete(`/referral-source/${id}`)
   },
 }
 
@@ -268,14 +327,27 @@ export const patientsApi = {
       isDesc: params?.isDesc
     }
     
-    const response: AxiosResponse<MethodResult<PatientAPI[]>> = await api.post('/patient/search', searchParams)
-    return transformToPaginatedResponse(response.data, searchParams.pageIndex, searchParams.pageSize)
+    const response: AxiosResponse<MethodResult<any>> = await api.post('/patient/search', searchParams)
+    
+    // API trả về dữ liệu pagination trong response.data.data
+    const paginationData = response.data.data
+    
+    return {
+      content: paginationData.content || [],
+      totalElements: paginationData.totalElements || 0,
+      totalPages: paginationData.totalPages || 0,
+      size: paginationData.size || searchParams.pageSize,
+      number: paginationData.number || searchParams.pageIndex,
+      first: paginationData.first || false,
+      last: paginationData.last || false,
+      numberOfElements: paginationData.numberOfElements || 0
+    }
   },
 
   // GET /patient - Lấy tất cả bệnh nhân (không phân trang)
   getAllWithoutPaging: async (): Promise<PatientAPI[]> => {
     const response: AxiosResponse<MethodResult<PatientAPI[]>> = await api.get('/patient')
-    return response.data.data
+    return response.data.data || []
   },
 
   // GET /patient/{id} - Lấy thông tin bệnh nhân theo ID
@@ -323,33 +395,72 @@ export const patientsApi = {
 // Materials API (Vật tư / hoá chất)
 export const materialsApi = {
   getAll: async (params?: InventorySearchDTO): Promise<PaginatedResponse<Material>> => {
-    const response: AxiosResponse<MethodResult<Material[]>> = await api.post('/materials/search', params)
-    return transformToPaginatedResponse(response.data, params?.pageIndex || 0, params?.pageSize || 20)
+    try {
+      // Prepare search parameters with defaults
+      const searchParams: InventorySearchDTO = {
+        keyword: params?.keyword || '',
+        pageIndex: params?.pageIndex || 0,
+        pageSize: params?.pageSize || 20,
+        materialType: params?.materialType,
+        orderCol: params?.orderCol,
+        isDesc: params?.isDesc
+      }
+      
+      const response: AxiosResponse<MethodResult<Material[]>> = await api.post('/material/search', searchParams)
+      return transformToPaginatedResponse(response.data, searchParams.pageIndex, searchParams.pageSize)
+    } catch (error) {
+      // Fallback to GET method if POST search fails
+      console.warn('POST /material/search failed, trying GET /material as fallback:', error)
+      try {
+        const response: AxiosResponse<MethodResult<Material[]>> = await api.get('/material', {
+          params: {
+            keyword: params?.keyword,
+            page: params?.pageIndex || 0,
+            size: params?.pageSize || 20,
+            materialType: params?.materialType
+          }
+        })
+        return transformToPaginatedResponse(response.data, params?.pageIndex || 0, params?.pageSize || 20)
+      } catch (fallbackError) {
+        console.error('Both POST and GET material endpoints failed:', fallbackError)
+        // Return empty result instead of throwing
+        return {
+          content: [],
+          totalElements: 0,
+          totalPages: 0,
+          size: params?.pageSize || 20,
+          number: params?.pageIndex || 0,
+          first: true,
+          last: true,
+          numberOfElements: 0
+        }
+      }
+    }
   },
 
   getById: async (id: number): Promise<Material> => {
-    const response: AxiosResponse<MethodResult<Material>> = await api.get(`/materials/${id}`)
+    const response: AxiosResponse<MethodResult<Material>> = await api.get(`/material/${id}`)
     return response.data.data
   },
 
   create: async (data: CreateMaterialRequest): Promise<Material> => {
-    const response: AxiosResponse<MethodResult<Material>> = await api.post('/materials', data)
+    const response: AxiosResponse<MethodResult<Material>> = await api.post('/material', data)
     return response.data.data
   },
 
   update: async (id: number, data: Partial<CreateMaterialRequest>): Promise<Material> => {
-    const response: AxiosResponse<MethodResult<Material>> = await api.put(`/materials/${id}`, data)
+    const response: AxiosResponse<MethodResult<Material>> = await api.put(`/material/${id}`, data)
     return response.data.data
   },
 
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/materials/${id}`)
+    await api.delete(`/material/${id}`)
   },
 
   // Lấy vật tư theo type
   getByType: async (type: number, params?: InventorySearchDTO): Promise<PaginatedResponse<Material>> => {
     const searchParams = { ...params, materialType: type }
-    const response: AxiosResponse<MethodResult<Material[]>> = await api.post('/materials/search', searchParams)
+    const response: AxiosResponse<MethodResult<Material[]>> = await api.post('/material/search', searchParams)
     return transformToPaginatedResponse(response.data, searchParams.pageIndex, searchParams.pageSize)
   },
 }
@@ -441,18 +552,57 @@ export const inventoryApi = {
 // Patient Test Management API (Quản lý mẫu bệnh nhân)
 export const patientSamplesApi = {
   getAll: async (params?: PatientTestSearchDTO): Promise<PaginatedResponse<PatientAPI>> => {
-    const response: AxiosResponse<MethodResult<PatientAPI[]>> = await api.post('/patient-tests/search', params)
-    return transformToPaginatedResponse(response.data, params?.pageIndex, params?.pageSize)
+    try {
+      const searchParams: PatientTestSearchDTO = {
+        keyword: params?.keyword,
+        status: params?.status,
+        pageIndex: params?.pageIndex || 0,
+        pageSize: params?.pageSize || 20,
+        orderCol: params?.orderCol,
+        isDesc: params?.isDesc,
+        testSampleId: params?.testSampleId,
+        testTypeId: params?.testTypeId
+      }
+      
+      const response: AxiosResponse<MethodResult<any>> = await api.post('/patient-test/search', searchParams)
+      
+      // API trả về dữ liệu pagination trong response.data.data
+      const paginationData = response.data.data
+      
+      return {
+        content: paginationData.content || [],
+        totalElements: paginationData.totalElements || 0,
+        totalPages: paginationData.totalPages || 0,
+        size: paginationData.size || searchParams.pageSize,
+        number: paginationData.number || searchParams.pageIndex,
+        first: paginationData.first || false,
+        last: paginationData.last || false,
+        numberOfElements: paginationData.numberOfElements || 0
+      }
+    } catch (error) {
+      console.error('Error in patientSamplesApi.getAll:', error)
+      // Return empty result instead of throwing
+      return {
+        content: [],
+        totalElements: 0,
+        totalPages: 0,
+        size: params?.pageSize || 20,
+        number: params?.pageIndex || 0,
+        first: true,
+        last: true,
+        numberOfElements: 0
+      }
+    }
   },
 
   getById: async (id: number): Promise<PatientAPI> => {
-    const response: AxiosResponse<MethodResult<PatientAPI>> = await api.get(`/patient-tests/${id}`)
+    const response: AxiosResponse<MethodResult<PatientAPI>> = await api.get(`/patient-test/${id}`)
     return response.data.data
   },
 
   // Cập nhật trạng thái mẫu
   updateStatus: async (id: number, status: number): Promise<PatientAPI> => {
-    const response: AxiosResponse<MethodResult<PatientAPI>> = await api.put(`/patient-tests/${id}/status`, { status })
+    const response: AxiosResponse<MethodResult<PatientAPI>> = await api.put(`/patient-test/${id}/status`, { status })
     return response.data.data
   },
 
@@ -479,7 +629,7 @@ export const patientSamplesApi = {
       testSampleId: tt.selectedSampleId
     }))
 
-    const response: AxiosResponse<MethodResult<PatientAPI>> = await api.post('/patient-tests', {
+    const response: AxiosResponse<MethodResult<PatientAPI>> = await api.post('/patient-test', {
       patientId: data.patientId,
       typeTests
     })
@@ -495,7 +645,7 @@ export const patientSamplesApi = {
     completedSamples: number
     rejectedSamples: number
   }> => {
-    const response: AxiosResponse<MethodResult<any>> = await api.get('/patient-tests/dashboard/stats')
+    const response: AxiosResponse<MethodResult<any>> = await api.get('/patient-test/dashboard/stats')
     return response.data.data
   },
 }
