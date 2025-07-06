@@ -16,7 +16,11 @@ import {
   AlertCircle,
   TestTube,
   DollarSign,
-  Minus
+  Minus,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  RefreshCw
 } from 'lucide-react'
 import { referralSourcesApi, testTypesApi } from '@/services'
 import type { 
@@ -67,7 +71,9 @@ const ReferralSources: React.FC = () => {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(0)
-  const [pageSize] = useState(20)
+  const [pageSize, setPageSize] = useState(10)
+  const [showDetailDialog, setShowDetailDialog] = useState(false)
+  const [selectedSource, setSelectedSource] = useState<any>(null)
 
   // Fetch test types for selection
   const fetchTestTypes = async () => {
@@ -133,7 +139,7 @@ const ReferralSources: React.FC = () => {
   // Effect to fetch data when page changes or initial load
   useEffect(() => {
     fetchReferralSources()
-  }, [currentPage])
+  }, [currentPage, pageSize])
 
   useEffect(() => {
     fetchTestTypes()
@@ -501,6 +507,16 @@ const ReferralSources: React.FC = () => {
     fetchReferralSources()
   }
 
+  const handlePageSizeChange = (newPageSize: number) => {
+    setPageSize(newPageSize)
+    setCurrentPage(0) // Reset to first page
+  }
+
+  const handleViewDetail = (source: any) => {
+    setSelectedSource(source)
+    setShowDetailDialog(true)
+  }
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
@@ -589,115 +605,159 @@ const ReferralSources: React.FC = () => {
         </Card>
       )}
 
-      {/* Referral Sources List */}
-      {loading && referralSources.length === 0 ? (
-        <div className="text-center py-12">
-          <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
-          <p className="mt-4 text-gray-500">Đang tải danh sách nguồn gửi...</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {referralSources.map((source: any) => (
-            <Card key={source.id} className="shadow-lg border-0 hover:shadow-xl transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg">{source.name}</CardTitle>
-                    <p className="text-sm text-gray-600 font-medium">
-                      Mã: {source.code}
-                    </p>
-                    <span className={`inline-block px-2 py-1 text-xs rounded-full mt-2 ${getStatusColor(source.status)}`}>
-                      {getStatusLabel(source.status)}
-                    </span>
-                  </div>
-                  <div className="flex space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEdit(source)}
-                      disabled={editingId === source.id || deletingId === source.id}
-                    >
-                      {editingId === source.id ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <Edit3 size={14} />
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-red-500 hover:bg-red-50"
-                      onClick={() => handleDelete(source.id!, source.name)}
-                      disabled={editingId === source.id || deletingId === source.id}
-                    >
-                      {deletingId === source.id ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <Trash2 size={14} />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {source.priceConfigs && source.priceConfigs.length > 0 ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center space-x-2 text-sm font-medium text-gray-700">
-                      <TestTube size={16} />
-                      <span>Cấu hình xét nghiệm ({source.priceConfigs.length})</span>
-                    </div>
-                    {source.priceConfigs.slice(0, 3).map((config: any, index: number) => {
-                      const testType = testTypes.find(t => t.id === config.testTypeId)
-                      return (
-                        <div key={index} className="bg-gray-50 p-3 rounded-lg">
-                          <p className="font-medium text-sm text-gray-800">
-                            {testType?.name || `Xét nghiệm #${config.testTypeId}`}
-                          </p>
-                          <div className="mt-2 space-y-1">
-                            {config.testPriceConfigs.slice(0, 2).map((priceConfig: any, priceIndex: number) => (
-                              <div key={priceIndex} className="flex items-center justify-between text-xs text-gray-600">
-                                <span>{priceConfig.minQuantity} - {priceConfig.maxQuantity} mẫu</span>
-                                <span className="font-medium">{formatCurrency(priceConfig.price)}</span>
-                              </div>
-                            ))}
-                            {config.testPriceConfigs.length > 2 && (
-                              <p className="text-xs text-gray-500">
-                                +{config.testPriceConfigs.length - 2} cấu hình khác
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                    {source.priceConfigs.length > 3 && (
-                      <p className="text-sm text-gray-500">
-                        +{source.priceConfigs.length - 3} loại xét nghiệm khác
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-sm text-gray-500 text-center py-4">
-                    Chưa có cấu hình xét nghiệm
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-          
-          {!loading && referralSources.length === 0 && (
-            <div className="col-span-full text-center py-12 text-gray-500">
+      {/* Referral Sources Table */}
+      <Card className="shadow-lg border-0">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Danh sách nguồn gửi ({totalElements})</span>
+            <Button size="sm" onClick={fetchReferralSources}>
+              <RefreshCw size={14} className="mr-1" />
+              Làm mới
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading && referralSources.length === 0 ? (
+            <div className="text-center py-12">
+              <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
+              <p className="mt-4 text-gray-500">Đang tải danh sách nguồn gửi...</p>
+            </div>
+          ) : referralSources.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
               {searchQuery ? 'Không tìm thấy nguồn gửi phù hợp' : 'Chưa có nguồn gửi nào'}
             </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Nguồn gửi</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Mã</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Trạng thái</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Số loại XN</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Cấu hình giá</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {referralSources.map((source: any) => (
+                    <tr key={source.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-gray-900">{source.name}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-gray-700">{source.code}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className={`inline-block px-2 py-1 text-xs rounded-full ${getStatusColor(source.status)}`}>
+                          {getStatusLabel(source.status)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center">
+                          <TestTube size={14} className="text-purple-600 mr-1" />
+                          <span className="font-medium">{source.priceConfigs?.length || 0}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        {source.priceConfigs && source.priceConfigs.length > 0 ? (
+                          <div className="text-xs">
+                            {source.priceConfigs.slice(0, 2).map((config: any, index: number) => {
+                              const testType = testTypes.find(t => t.id === config.testTypeId)
+                              const minPrice = Math.min(...(config.testPriceConfigs || []).map((pc: any) => pc.price))
+                              const maxPrice = Math.max(...(config.testPriceConfigs || []).map((pc: any) => pc.price))
+                              return (
+                                <div key={index} className="mb-1">
+                                  <span className="font-medium">{testType?.name || 'N/A'}</span>
+                                  <br />
+                                  <span className="text-gray-600">
+                                    {minPrice === maxPrice 
+                                      ? formatCurrency(minPrice)
+                                      : `${formatCurrency(minPrice)} - ${formatCurrency(maxPrice)}`
+                                    }
+                                  </span>
+                                </div>
+                              )
+                            })}
+                            {source.priceConfigs.length > 2 && (
+                              <div className="text-gray-500">+{source.priceConfigs.length - 2} khác</div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-500 text-xs">Chưa cấu hình</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex space-x-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewDetail(source)}
+                            className="text-xs"
+                          >
+                            <Eye size={12} className="mr-1" />
+                            Chi tiết
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(source)}
+                            disabled={editingId === source.id || deletingId === source.id}
+                            className="text-xs"
+                          >
+                            {editingId === source.id ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <Edit3 size={12} />
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-500 hover:bg-red-50 text-xs"
+                            onClick={() => handleDelete(source.id!, source.name)}
+                            disabled={editingId === source.id || deletingId === source.id}
+                          >
+                            {deletingId === source.id ? (
+                              <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={12} />
+                            )}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
-        </div>
-      )}
+        </CardContent>
+      </Card>
 
       {/* Pagination */}
       {shouldShowPagination && (
-        <div className="flex flex-col items-center space-y-4">
-          <div className="text-sm text-gray-600 text-center">
-            Hiển thị {referralSources.length} trên tổng {totalElements} nguồn gửi
-            {searchQuery && ` (tìm kiếm: "${searchQuery}")`}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <div className="text-sm text-gray-700">
+              Hiển thị {currentPage * pageSize + 1} - {Math.min((currentPage + 1) * pageSize, totalElements)} của {totalElements} nguồn gửi
+              {searchQuery && ` (tìm kiếm: "${searchQuery}")`}
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-700">Hiển thị:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                className="border border-gray-300 rounded px-2 py-1 text-sm"
+                disabled={loading}
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="text-sm text-gray-700">/ trang</span>
+            </div>
           </div>
           
           {totalPages > 1 && (
@@ -708,7 +768,8 @@ const ReferralSources: React.FC = () => {
                 onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
                 disabled={currentPage === 0 || loading}
               >
-                {loading ? <Loader2 size={14} className="animate-spin" /> : '← Trước'}
+                <ChevronLeft size={16} />
+                Trước
               </Button>
               
               <div className="flex items-center space-x-1">
@@ -745,7 +806,8 @@ const ReferralSources: React.FC = () => {
                 onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
                 disabled={currentPage >= totalPages - 1 || loading}
               >
-                {loading ? <Loader2 size={14} className="animate-spin" /> : 'Sau →'}
+                Sau
+                <ChevronRight size={16} />
               </Button>
             </div>
           )}
@@ -1013,6 +1075,126 @@ const ReferralSources: React.FC = () => {
               </form>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* Detail Dialog */}
+      {showDetailDialog && selectedSource && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">Chi tiết nguồn gửi</h2>
+                <Button size="sm" variant="outline" onClick={() => setShowDetailDialog(false)}>
+                  <X size={14} />
+                </Button>
+              </div>
+              
+              <div className="space-y-6">
+                {/* Basic Info */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-semibold mb-2">Thông tin cơ bản</h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Tên:</span>
+                        <span className="font-medium">{selectedSource.name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Mã:</span>
+                        <span className="font-medium">{selectedSource.code}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Trạng thái:</span>
+                        <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(selectedSource.status)}`}>
+                          {getStatusLabel(selectedSource.status)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <h3 className="font-semibold mb-2">Thống kê</h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Số loại XN:</span>
+                        <span className="font-medium">{selectedSource.priceConfigs?.length || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Tổng cấu hình:</span>
+                        <span className="font-medium">
+                          {selectedSource.priceConfigs?.reduce((sum: number, config: any) => sum + (config.testPriceConfigs?.length || 0), 0) || 0}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Price Configurations */}
+                <div>
+                  <h3 className="font-semibold mb-3 flex items-center">
+                    <TestTube size={16} className="mr-2" />
+                    Cấu hình xét nghiệm
+                  </h3>
+                  {selectedSource.priceConfigs && selectedSource.priceConfigs.length > 0 ? (
+                    <div className="space-y-4">
+                      {selectedSource.priceConfigs.map((config: any, index: number) => {
+                        const testType = testTypes.find(t => t.id === config.testTypeId)
+                        return (
+                          <div key={index} className="border border-gray-200 rounded-lg p-4">
+                            <h4 className="font-medium text-lg mb-3">
+                              {testType?.name || `Xét nghiệm #${config.testTypeId}`}
+                            </h4>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-3 py-2 text-left font-medium">Số lượng tối thiểu</th>
+                                    <th className="px-3 py-2 text-left font-medium">Số lượng tối đa</th>
+                                    <th className="px-3 py-2 text-left font-medium">Giá</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {config.testPriceConfigs?.map((priceConfig: any, priceIndex: number) => (
+                                    <tr key={priceIndex} className="hover:bg-gray-50">
+                                      <td className="px-3 py-2">{priceConfig.minQuantity}</td>
+                                      <td className="px-3 py-2">{priceConfig.maxQuantity}</td>
+                                      <td className="px-3 py-2 font-medium text-emerald-600">
+                                        {formatCurrency(priceConfig.price)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500 border border-dashed border-gray-200 rounded-lg">
+                      <TestTube size={48} className="mx-auto mb-4 text-gray-300" />
+                      <p>Chưa có cấu hình xét nghiệm nào</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end space-x-2 mt-6 pt-4 border-t">
+                <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
+                  Đóng
+                </Button>
+                <Button onClick={() => {
+                  setShowDetailDialog(false)
+                  handleEdit(selectedSource)
+                }}>
+                  <Edit3 size={14} className="mr-1" />
+                  Chỉnh sửa
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
