@@ -72,11 +72,8 @@ const SupplyManagement: React.FC = () => {
   // Debug API connection
   const testApiConnection = async () => {
     try {
-      // console.log('Testing API connection...')
-      // toast.loading('Đang test kết nối API...', { id: 'api-test' })
-      
       // Try simple GET request first
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://pk.caduceus.vn/api/pkv1'}/material`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://pk.caduceus.vn/api/pk/v1'}/material`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -89,8 +86,17 @@ const SupplyManagement: React.FC = () => {
       if (response.ok) {
         const data = await response.json()
         console.log('GET /material response data:', data)
-        toast.success(`✅ API kết nối thành công! Status: ${response.status}`, { id: 'api-test' })
-        return data
+        
+        // Check if response has new structure: { status, message, data, totalRecord }
+        if (data && data.status && Array.isArray(data.data)) {
+          console.log('✅ New API structure detected:', data.data.length, 'materials found')
+          toast.success(`✅ API kết nối thành công! Tìm thấy ${data.data.length} vật tư`, { id: 'api-test' })
+          return data
+        } else {
+          console.log('⚠️ Unknown API response structure:', data)
+          toast.success(`✅ API kết nối thành công! Status: ${response.status}`, { id: 'api-test' })
+          return data
+        }
       } else {
         console.error('GET /material failed:', response.status, response.statusText)
         toast.error(`❌ API thất bại! Status: ${response.status} - ${response.statusText}`, { id: 'api-test' })
@@ -98,7 +104,6 @@ const SupplyManagement: React.FC = () => {
       }
     } catch (error) {
       console.error('API connection test failed:', error)
-      // toast.error(`🔥 Lỗi kết nối API: ${error instanceof Error ? error.message : 'Unknown error'}`, { id: 'api-test' })
       return null
     }
   }
@@ -131,6 +136,13 @@ const SupplyManagement: React.FC = () => {
             materialType: typeFilter ? parseInt(typeFilter) : undefined
           })
           console.log('Materials response:', materialsResponse)
+          
+          // Validate response structure
+          if (materialsResponse && Array.isArray(materialsResponse.content)) {
+            console.log(`✅ Successfully loaded ${materialsResponse.content.length} materials`)
+          } else {
+            console.warn('⚠️ Invalid materials response structure:', materialsResponse)
+          }
         } else {
           throw new Error('API connection test failed')
         }
@@ -176,13 +188,25 @@ const SupplyManagement: React.FC = () => {
         packagingResponse = { content: [], totalElements: 0, totalPages: 0, size: 100, number: 0, first: true, last: true, numberOfElements: 0 }
       }
       
-      setMaterialsData(materialsResponse)
+      // Ensure all data is properly structured
+      const safeMaterialsData = materialsResponse && typeof materialsResponse === 'object' ? materialsResponse : {
+        content: [],
+        totalElements: 0,
+        totalPages: 0,
+        size: pageSize,
+        number: currentPage,
+        first: true,
+        last: true,
+        numberOfElements: 0
+      }
+      
+      setMaterialsData(safeMaterialsData)
       setLogsData(logsResponse)
       setPackagingData(packagingResponse)
       
       // Show success message if we got some data
-      if (materialsResponse.content.length > 0) {
-        console.log(`Loaded ${materialsResponse.content.length} materials successfully`)
+      if (safeMaterialsData.content && safeMaterialsData.content.length > 0) {
+        console.log(`Loaded ${safeMaterialsData.content.length} materials successfully`)
       }
       
     } catch (err) {
@@ -199,9 +223,9 @@ const SupplyManagement: React.FC = () => {
     fetchMaterials()
   }, [currentPage, searchQuery, typeFilter])
 
-  const materials = materialsData?.content || []
-  const logs = logsData?.content || []
-  const packagings = packagingData?.content || []
+  const materials = Array.isArray(materialsData?.content) ? materialsData.content : []
+  const logs = Array.isArray(logsData?.content) ? logsData.content : []
+  const packagings = Array.isArray(packagingData?.content) ? packagingData.content : []
 
   const getStockStatus = (material: Material) => {
     const now = new Date()
@@ -406,16 +430,19 @@ const SupplyManagement: React.FC = () => {
   }
 
   const getPackagingName = (packagingId: number) => {
+    if (!Array.isArray(packagings)) {
+      return 'Không xác định'
+    }
     const packaging = packagings.find(p => p.id === packagingId)
     return packaging?.name || 'Không xác định'
   }
 
   const stats = {
-    total: materials.length,
-    normal: materials.filter((m: Material) => getStockStatus(m).status === 'NORMAL').length,
-    lowStock: materials.filter((m: Material) => getStockStatus(m).status === 'LOW_STOCK').length,
-    outOfStock: materials.filter((m: Material) => getStockStatus(m).status === 'OUT_OF_STOCK').length,
-    expiring: materials.filter((m: Material) => getStockStatus(m).status === 'EXPIRING').length,
+    total: Array.isArray(materials) ? materials.length : 0,
+    normal: Array.isArray(materials) ? materials.filter((m: Material) => getStockStatus(m).status === 'NORMAL').length : 0,
+    lowStock: Array.isArray(materials) ? materials.filter((m: Material) => getStockStatus(m).status === 'LOW_STOCK').length : 0,
+    outOfStock: Array.isArray(materials) ? materials.filter((m: Material) => getStockStatus(m).status === 'OUT_OF_STOCK').length : 0,
+    expiring: Array.isArray(materials) ? materials.filter((m: Material) => getStockStatus(m).status === 'EXPIRING').length : 0,
   }
 
   return (
@@ -440,11 +467,11 @@ const SupplyManagement: React.FC = () => {
               disabled={submitting}
             >
               🔧 Debug API
-            </Button>
+            </Button> */}
             <Button 
               onClick={() => {
                 setCurrentPage(0)
-                setSearchQuery('')
+                setSearchQuery('')  
                 setTypeFilter('')
                 fetchMaterials()
               }}
@@ -453,7 +480,7 @@ const SupplyManagement: React.FC = () => {
               disabled={loading}
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : '🔄'} Refresh
-            </Button> */}
+            </Button>
             <Button 
               onClick={() => setIsAddingNew(true)}
               className="bg-white text-orange-600 hover:bg-gray-100"
@@ -579,7 +606,7 @@ const SupplyManagement: React.FC = () => {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
-              <span>Danh sách vật tư ({materialsData?.totalElements || 0})</span>
+              <span>Danh sách vật tư ({materialsData?.totalElements || materials.length || 0})</span>
               {loading && <Loader2 size={16} className="animate-spin" />}
             </div>
             <div className="flex items-center space-x-2">
@@ -612,7 +639,7 @@ const SupplyManagement: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {materials.length === 0 ? (
+                    {!Array.isArray(materials) || materials.length === 0 ? (
                       <tr>
                         <td colSpan={8} className="text-center py-8 text-gray-500">
                           Không tìm thấy vật tư phù hợp
@@ -690,7 +717,7 @@ const SupplyManagement: React.FC = () => {
               {materialsData && materialsData.totalPages > 1 && (
                 <div className="flex items-center justify-between mt-4 pt-4 border-t">
                   <div className="text-sm text-gray-500">
-                    Hiển thị {materials.length} trên tổng số {materialsData.totalElements} vật tư
+                    Hiển thị {Array.isArray(materials) ? materials.length : 0} trên tổng số {materialsData.totalElements} vật tư
                   </div>
                   <div className="flex items-center space-x-2">
                     <Button
@@ -726,7 +753,7 @@ const SupplyManagement: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span>
-                  {showTransactions ? `Lịch sử giao dịch - ${selectedMaterial?.name}` : 'Chi tiết vật tư'}
+                  {showTransactions ? `Lịch sử giao dịch - ${selectedMaterial?.name || 'N/A'}` : 'Chi tiết vật tư'}
                 </span>
                 <Button
                   variant="outline"
@@ -744,7 +771,7 @@ const SupplyManagement: React.FC = () => {
             <CardContent>
               {showTransactions ? (
                 <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {logs.map(log => (
+                  {Array.isArray(logs) && logs.map(log => (
                     <Card key={log.logType} className="border">
                       <CardContent className="p-3">
                         <div className="flex justify-between items-start">
@@ -761,7 +788,7 @@ const SupplyManagement: React.FC = () => {
                     </Card>
                   ))}
                   
-                  {logs.length === 0 && (
+                  {(!Array.isArray(logs) || logs.length === 0) && (
                     <div className="text-center py-8 text-gray-500">
                       Chưa có giao dịch nào
                     </div>
@@ -904,7 +931,7 @@ const SupplyManagement: React.FC = () => {
                               onChange={(e) => setTransactionForm({
                                 ...transactionForm,
                                 quantity: parseInt(e.target.value) || 0,
-                                materialId: selectedMaterial.id || 0
+                                materialId: selectedMaterial?.id || 0
                               })}
                               className="flex-1"
                             />
@@ -1062,7 +1089,7 @@ const SupplyManagement: React.FC = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                     >
                       <option value="">Chọn đóng gói</option>
-                      {packagings.map(pkg => (
+                      {Array.isArray(packagings) && packagings.map(pkg => (
                         <option key={pkg.id} value={pkg.id}>
                           {pkg.name}
                         </option>

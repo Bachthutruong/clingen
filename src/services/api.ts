@@ -406,13 +406,108 @@ export const materialsApi = {
         isDesc: params?.isDesc
       }
       
-      const response: AxiosResponse<MethodResult<Material[]>> = await api.post('/material/search', searchParams)
+      const response: AxiosResponse<any> = await api.post('/material/search', searchParams)
+      
+      console.log('📥 Raw API response:', response.data)
+      console.log('📥 Response.data properties:', {
+        hasStatus: 'status' in response.data,
+        statusValue: response.data.status,
+        statusType: typeof response.data.status,
+        hasData: 'data' in response.data,
+        dataIsArray: Array.isArray(response.data.data),
+        dataLength: response.data.data?.length,
+        dataType: typeof response.data.data,
+        dataKeys: response.data.data ? Object.keys(response.data.data) : null
+      })
+      
+      // Handle new API response structure: { status, message, data, totalRecord }
+      if (response.data && response.data.status === true) {
+        console.log('✅ NEW API STRUCTURE DETECTED!')
+        
+        // Case 1: data is array (GET /material)
+        if (Array.isArray(response.data.data)) {
+          console.log('✅ Processing array data structure')
+          const materials = response.data.data
+          const totalRecord = response.data.totalRecord || materials.length
+          const pageSize = searchParams.pageSize || 20
+          const currentPage = searchParams.pageIndex || 0
+          
+          const result = {
+            content: materials,
+            totalElements: totalRecord,
+            totalPages: Math.ceil(totalRecord / pageSize),
+            size: pageSize,
+            number: currentPage,
+            first: currentPage === 0,
+            last: currentPage >= Math.ceil(totalRecord / pageSize) - 1,
+            numberOfElements: materials.length
+          }
+          
+          console.log('✅ Returning array result:', result)
+          return result
+        }
+        
+        // Case 2: data is object with pagination (POST /material/search)
+        if (response.data.data && typeof response.data.data === 'object' && response.data.data.content) {
+          console.log('✅ Processing paginated object data structure')
+          const paginationData = response.data.data
+          
+          console.log('📋 Pagination data details:', {
+            content: paginationData.content,
+            totalElements: paginationData.totalElements,
+            totalPages: paginationData.totalPages,
+            size: paginationData.size,
+            number: paginationData.number
+          })
+          
+          const result = {
+            content: paginationData.content || [],
+            totalElements: paginationData.totalElements || 0,
+            totalPages: paginationData.totalPages || 0,
+            size: paginationData.size || searchParams.pageSize || 20,
+            number: paginationData.number || searchParams.pageIndex || 0,
+            first: paginationData.first || false,
+            last: paginationData.last || false,
+            numberOfElements: paginationData.numberOfElements || (paginationData.content ? paginationData.content.length : 0)
+          }
+          
+          console.log('✅ Returning paginated result:', result)
+          return result
+        }
+        
+        // Case 3: data is object but not paginated - force to array
+        if (response.data.data && typeof response.data.data === 'object') {
+          console.log('✅ Processing single object data structure')
+          const materials = [response.data.data] // Convert single object to array
+          const totalRecord = response.data.totalRecord || 1
+          const pageSize = searchParams.pageSize || 20
+          const currentPage = searchParams.pageIndex || 0
+          
+          const result = {
+            content: materials,
+            totalElements: totalRecord,
+            totalPages: Math.ceil(totalRecord / pageSize),
+            size: pageSize,
+            number: currentPage,
+            first: currentPage === 0,
+            last: currentPage >= Math.ceil(totalRecord / pageSize) - 1,
+            numberOfElements: materials.length
+          }
+          
+          console.log('✅ Returning single object result:', result)
+          return result
+        }
+      }
+      
+      // Fallback to old structure if new structure not found
+      console.log('⚠️ Fallback to old structure transformation')
+      console.log('⚠️ Input to transformToPaginatedResponse:', response.data)
       return transformToPaginatedResponse(response.data, searchParams.pageIndex, searchParams.pageSize)
     } catch (error) {
       // Fallback to GET method if POST search fails
       console.warn('POST /material/search failed, trying GET /material as fallback:', error)
       try {
-        const response: AxiosResponse<MethodResult<Material[]>> = await api.get('/material', {
+        const response: AxiosResponse<any> = await api.get('/material', {
           params: {
             keyword: params?.keyword,
             page: params?.pageIndex || 0,
@@ -420,6 +515,30 @@ export const materialsApi = {
             materialType: params?.materialType
           }
         })
+        
+        console.log('📥 GET fallback response:', response.data)
+        
+        // Handle new API response structure for GET as well
+        if (response.data && 
+            (response.data.status === true || response.data.status === 'true') && 
+            Array.isArray(response.data.data)) {
+          const materials = response.data.data
+          const totalRecord = response.data.totalRecord || materials.length
+          const pageSize = params?.pageSize || 20
+          const currentPage = params?.pageIndex || 0
+          
+          return {
+            content: materials,
+            totalElements: totalRecord,
+            totalPages: Math.ceil(totalRecord / pageSize),
+            size: pageSize,
+            number: currentPage,
+            first: currentPage === 0,
+            last: currentPage >= Math.ceil(totalRecord / pageSize) - 1,
+            numberOfElements: materials.length
+          }
+        }
+        
         return transformToPaginatedResponse(response.data, params?.pageIndex || 0, params?.pageSize || 20)
       } catch (fallbackError) {
         console.error('Both POST and GET material endpoints failed:', fallbackError)
