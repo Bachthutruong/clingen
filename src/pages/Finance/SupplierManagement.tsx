@@ -25,6 +25,9 @@ import {
   Clock,
 //   RefreshCw,
 //   Filter
+  ChevronLeft,
+  ChevronRight,
+  X
 } from 'lucide-react'
 import { formatDate, formatDateTime, formatCurrency } from '@/lib/utils'
 
@@ -82,8 +85,11 @@ const SupplierManagement: React.FC = () => {
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isAddingNew, setIsAddingNew] = useState(false)
-  console.log(isAddingNew)
   const [showOrders, setShowOrders] = useState(false)
+  const [showDetailDialog, setShowDetailDialog] = useState(false)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [pageSize] = useState(10)
+  console.log(isAddingNew)
 
   // Mock data cho nhà cung cấp
   const [suppliers] = useState<Supplier[]>([
@@ -309,6 +315,7 @@ const SupplierManagement: React.FC = () => {
     setSelectedSupplier(supplier)
     setIsEditing(false)
     setShowOrders(false)
+    setShowDetailDialog(true)
   }
 
   const handleEditSupplier = () => {
@@ -329,6 +336,7 @@ const SupplierManagement: React.FC = () => {
   const handleViewOrders = (supplier: Supplier) => {
     setSelectedSupplier(supplier)
     setShowOrders(true)
+    setShowDetailDialog(true)
   }
 
   const handleCreateOrder = (supplier: Supplier) => {
@@ -383,63 +391,63 @@ const SupplierManagement: React.FC = () => {
       </div>
 
       {/* Statistics */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Tổng số NCC</p>
                 <p className="text-lg font-bold text-blue-600">{stats.total}</p>
               </div>
-              <Building className="h-6 w-6 text-blue-600" />
+              <Building className="h-5 w-5 text-blue-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Hoạt động</p>
                 <p className="text-lg font-bold text-green-600">{stats.active}</p>
               </div>
-              <CheckCircle className="h-6 w-6 text-green-600" />
+              <CheckCircle className="h-5 w-5 text-green-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Không HĐ</p>
                 <p className="text-lg font-bold text-gray-600">{stats.inactive}</p>
               </div>
-              <Clock className="h-6 w-6 text-gray-600" />
+              <Clock className="h-5 w-5 text-gray-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Tạm ngưng</p>
                 <p className="text-lg font-bold text-red-600">{stats.suspended}</p>
               </div>
-              <AlertTriangle className="h-6 w-6 text-red-600" />
+              <AlertTriangle className="h-5 w-5 text-red-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0 md:col-span-2">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Tổng giao dịch</p>
                 <p className="text-lg font-bold text-green-600">{formatCurrency(stats.totalValue)}</p>
               </div>
-              <DollarSign className="h-6 w-6 text-green-600" />
+              <DollarSign className="h-5 w-5 text-green-600" />
             </div>
           </CardContent>
         </Card>
@@ -488,99 +496,140 @@ const SupplierManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Supplier List and Details */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Supplier List */}
-        <Card className="shadow-lg border-0">
-          <CardHeader>
-            <CardTitle>Danh sách nhà cung cấp ({filteredSuppliers.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {filteredSuppliers.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                Không tìm thấy nhà cung cấp phù hợp
-              </div>
-            ) : (
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {filteredSuppliers.map(supplier => (
-                  <Card key={supplier.id} className="border hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => handleViewSupplier(supplier)}>
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <h3 className="font-semibold">{supplier.name}</h3>
-                            <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getCategoryColor(supplier.category)}`}>
-                              {getCategoryLabel(supplier.category)}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-600">Mã: {supplier.code}</p>
-                          <p className="text-sm text-gray-600">LH: {supplier.contactPerson}</p>
+      {/* Supplier List - Table */}
+      <Card className="shadow-lg border-0">
+        <CardHeader>
+          <CardTitle>Danh sách nhà cung cấp ({filteredSuppliers.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {filteredSuppliers.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              Không tìm thấy nhà cung cấp phù hợp
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Tên NCC</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Mã NCC</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Danh mục</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Liên hệ</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Tổng GD</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Công nợ</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Đánh giá</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Trạng thái</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredSuppliers.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(supplier => (
+                    <tr key={supplier.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-gray-900">{supplier.name}</div>
+                        <div className="text-xs text-gray-500">{supplier.website || 'Không có website'}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-gray-900">{supplier.code}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getCategoryColor(supplier.category)}`}>
+                          {getCategoryLabel(supplier.category)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-gray-900">{supplier.contactPerson}</div>
+                        <div className="text-xs text-gray-500">{supplier.phone}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-green-600">{formatCurrency(supplier.totalValue)}</div>
+                        <div className="text-xs text-gray-500">{supplier.totalOrders} đơn hàng</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className={`font-medium ${supplier.currentDebt > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {formatCurrency(supplier.currentDebt)}
                         </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center space-x-1">
+                          {renderStars(supplier.rating)}
+                          <span className={`text-xs font-medium ${getRatingColor(supplier.rating)}`}>
+                            {supplier.rating}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
                         <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getStatusColor(supplier.status)}`}>
                           {getStatusLabel(supplier.status)}
                         </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <p className="text-gray-600">Tổng giao dịch:</p>
-                          <p className="font-bold text-green-600">{formatCurrency(supplier.totalValue)}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Đánh giá:</p>
-                          <div className="flex items-center space-x-1">
-                            {renderStars(supplier.rating)}
-                            <span className={`font-medium ${getRatingColor(supplier.rating)}`}>
-                              {supplier.rating}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {supplier.currentDebt > 0 && (
-                        <div className="mt-2">
-                          <p className="text-sm text-red-600">
-                            Công nợ: {formatCurrency(supplier.currentDebt)}
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="mt-3 flex justify-between items-center">
-                        <div className="text-xs text-gray-500">
-                          <p>Đơn hàng gần nhất: {supplier.lastOrderDate ? formatDate(supplier.lastOrderDate) : 'Chưa có'}</p>
-                        </div>
+                      </td>
+                      <td className="px-4 py-4">
                         <div className="flex space-x-1">
-                          <Button size="sm" variant="outline" onClick={(e) => {
-                            e.stopPropagation()
-                            handleViewOrders(supplier)
-                          }}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewSupplier(supplier)}
+                            className="text-xs"
+                          >
+                            <Eye size={12} className="mr-1" />
+                            Chi tiết
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewOrders(supplier)}
+                            className="text-xs"
+                          >
                             <ShoppingCart size={12} />
                           </Button>
-                          <Button size="sm" variant="outline" onClick={(e) => {
-                            e.stopPropagation()
-                            handleEditSupplier()
-                            setSelectedSupplier(supplier)
-                          }}>
-                            <Edit size={12} />
-                          </Button>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* Supplier Details */}
-        <Card className="shadow-lg border-0">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>{showOrders ? 'Đơn hàng' : 'Chi tiết nhà cung cấp'}</span>
-              {selectedSupplier && (
-                <div className="flex space-x-2">
+      {/* Pagination */}
+      {filteredSuppliers.length > pageSize && (
+        <div className="flex justify-center items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+            disabled={currentPage === 0}
+          >
+            <ChevronLeft size={16} />
+            Trước
+          </Button>
+          <span className="text-sm text-gray-600">
+            Trang {currentPage + 1} / {Math.ceil(filteredSuppliers.length / pageSize)}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.min(Math.ceil(filteredSuppliers.length / pageSize) - 1, currentPage + 1))}
+            disabled={currentPage >= Math.ceil(filteredSuppliers.length / pageSize) - 1}
+          >
+            Sau
+            <ChevronRight size={16} />
+          </Button>
+        </div>
+      )}
+
+      {/* Detail Dialog */}
+      {showDetailDialog && selectedSupplier && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">
+                  {showOrders ? 'Đơn hàng' : 'Chi tiết nhà cung cấp'}
+                </h2>
+                <div className="flex items-center space-x-2">
                   {!showOrders ? (
                     <>
                       {!isEditing ? (
@@ -622,13 +671,13 @@ const SupplierManagement: React.FC = () => {
                       </Button>
                     </>
                   )}
+                  <Button size="sm" variant="outline" onClick={() => setShowDetailDialog(false)}>
+                    <X size={14} />
+                  </Button>
                 </div>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {selectedSupplier ? (
-              showOrders ? (
+              </div>
+
+              {showOrders ? (
                 <div className="space-y-4">
                   <div className="border-b pb-2">
                     <h3 className="font-semibold">{selectedSupplier.name}</h3>
@@ -839,15 +888,11 @@ const SupplierManagement: React.FC = () => {
                     <p>Cập nhật: {formatDateTime(selectedSupplier.updatedAt)}</p>
                   </div>
                 </div>
-              )
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                Chọn một nhà cung cấp để xem chi tiết
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

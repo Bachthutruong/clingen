@@ -25,9 +25,12 @@ import {
 //   Filter,
   RefreshCw,
   Lock,
-  Unlock
+  Unlock,
+  ChevronLeft,
+  ChevronRight,
+  X
 } from 'lucide-react'
-import { formatDate, formatDateTime } from '@/lib/utils'
+import { formatDateTime } from '@/lib/utils'
 
 interface User {
   id: string
@@ -64,8 +67,11 @@ const UserManagement: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isAddingNew, setIsAddingNew] = useState(false)
-  console.log(isAddingNew)
   const [showActivities, setShowActivities] = useState(false)
+  const [showDetailDialog, setShowDetailDialog] = useState(false)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [pageSize] = useState(10)
+  console.log(isAddingNew)
 
   // Mock data cho người dùng
   const [users] = useState<User[]>([
@@ -264,6 +270,7 @@ const UserManagement: React.FC = () => {
     setSelectedUser(user)
     setIsEditing(false)
     setShowActivities(false)
+    setShowDetailDialog(true)
   }
 
   const handleEditUser = () => {
@@ -295,6 +302,7 @@ const UserManagement: React.FC = () => {
   const handleViewActivities = (user: User) => {
     setSelectedUser(user)
     setShowActivities(true)
+    setShowDetailDialog(true)
   }
 
   const stats = {
@@ -343,75 +351,75 @@ const UserManagement: React.FC = () => {
       </div>
 
       {/* Statistics */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Tổng TK</p>
                 <p className="text-lg font-bold text-blue-600">{stats.total}</p>
               </div>
-              <Users className="h-6 w-6 text-blue-600" />
+              <Users className="h-5 w-5 text-blue-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Hoạt động</p>
                 <p className="text-lg font-bold text-green-600">{stats.active}</p>
               </div>
-              <UserCheck className="h-6 w-6 text-green-600" />
+              <UserCheck className="h-5 w-5 text-green-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Không HĐ</p>
                 <p className="text-lg font-bold text-gray-600">{stats.inactive}</p>
               </div>
-              <UserX className="h-6 w-6 text-gray-600" />
+              <UserX className="h-5 w-5 text-gray-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Tạm khóa</p>
                 <p className="text-lg font-bold text-red-600">{stats.suspended}</p>
               </div>
-              <Lock className="h-6 w-6 text-red-600" />
+              <Lock className="h-5 w-5 text-red-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">QTV</p>
                 <p className="text-lg font-bold text-red-600">{stats.admins}</p>
               </div>
-              <Shield className="h-6 w-6 text-red-600" />
+              <Shield className="h-5 w-5 text-red-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Online 24h</p>
                 <p className="text-lg font-bold text-green-600">{stats.recentLogin}</p>
               </div>
-              <Activity className="h-6 w-6 text-green-600" />
+              <Activity className="h-5 w-5 text-green-600" />
             </div>
           </CardContent>
         </Card>
@@ -459,101 +467,145 @@ const UserManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* User List and Details */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* User List */}
-        <Card className="shadow-lg border-0">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Danh sách tài khoản ({filteredUsers.length})</span>
-              <Button size="sm" onClick={() => window.location.reload()}>
-                <RefreshCw size={14} className="mr-1" />
-                Làm mới
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {filteredUsers.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                Không tìm thấy tài khoản phù hợp
-              </div>
-            ) : (
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {filteredUsers.map(user => (
-                  <Card key={user.id} className="border hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => handleViewUser(user)}>
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <h3 className="font-semibold">{user.fullName}</h3>
-                            <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getRoleColor(user.role)}`}>
-                              {getRoleLabel(user.role)}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-600">@{user.username}</p>
-                          <p className="text-sm text-gray-600">{user.email}</p>
+      {/* User List - Table */}
+      <Card className="shadow-lg border-0">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Danh sách tài khoản ({filteredUsers.length})</span>
+            <Button size="sm" onClick={() => window.location.reload()}>
+              <RefreshCw size={14} className="mr-1" />
+              Làm mới
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {filteredUsers.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              Không tìm thấy tài khoản phù hợp
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Tài khoản</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Họ tên</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Vai trò</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Phòng ban</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Liên hệ</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Đăng nhập cuối</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Trạng thái</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredUsers.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(user => (
+                    <tr key={user.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-gray-900">@{user.username}</div>
+                        <div className="text-xs text-gray-500">ID: {user.id}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-gray-900">{user.fullName}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getRoleColor(user.role)}`}>
+                          {getRoleLabel(user.role)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-900">{user.department}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-900">{user.email}</div>
+                        <div className="text-xs text-gray-500">{user.phone}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-900">
+                          {user.lastLogin ? formatDateTime(user.lastLogin) : 'Chưa đăng nhập'}
                         </div>
+                      </td>
+                      <td className="px-4 py-4">
                         <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getStatusColor(user.status)}`}>
                           {getStatusIcon(user.status)}
                           <span className="ml-1">{getStatusLabel(user.status)}</span>
                         </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <p className="text-gray-600">Phòng ban:</p>
-                          <p className="font-medium">{user.department}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Đăng nhập cuối:</p>
-                          <p className="font-medium">
-                            {user.lastLogin ? formatDateTime(user.lastLogin) : 'Chưa đăng nhập'}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 flex justify-between items-center">
-                        <div className="text-xs text-gray-500">
-                          <p>Tạo: {formatDate(user.createdAt)}</p>
-                        </div>
+                      </td>
+                      <td className="px-4 py-4">
                         <div className="flex space-x-1">
-                          <Button size="sm" variant="outline" onClick={(e) => {
-                            e.stopPropagation()
-                            handleViewActivities(user)
-                          }}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewUser(user)}
+                            className="text-xs"
+                          >
+                            <Eye size={12} className="mr-1" />
+                            Chi tiết
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewActivities(user)}
+                            className="text-xs"
+                          >
                             <Activity size={12} />
                           </Button>
-                          <Button size="sm" variant="outline" onClick={(e) => {
-                            e.stopPropagation()
-                            handleToggleStatus(user)
-                          }}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleToggleStatus(user)}
+                            className="text-xs"
+                          >
                             {user.status === 'active' ? <Lock size={12} /> : <Unlock size={12} />}
                           </Button>
-                          <Button size="sm" variant="outline" onClick={(e) => {
-                            e.stopPropagation()
-                            handleEditUser()
-                            setSelectedUser(user)
-                          }}>
-                            <Edit size={12} />
-                          </Button>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* User Details */}
-        <Card className="shadow-lg border-0">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>{showActivities ? 'Hoạt động người dùng' : 'Chi tiết tài khoản'}</span>
-              {selectedUser && (
-                <div className="flex space-x-2">
+      {/* Pagination */}
+      {filteredUsers.length > pageSize && (
+        <div className="flex justify-center items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+            disabled={currentPage === 0}
+          >
+            <ChevronLeft size={16} />
+            Trước
+          </Button>
+          <span className="text-sm text-gray-600">
+            Trang {currentPage + 1} / {Math.ceil(filteredUsers.length / pageSize)}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.min(Math.ceil(filteredUsers.length / pageSize) - 1, currentPage + 1))}
+            disabled={currentPage >= Math.ceil(filteredUsers.length / pageSize) - 1}
+          >
+            Sau
+            <ChevronRight size={16} />
+          </Button>
+        </div>
+      )}
+
+      {/* Detail Dialog */}
+      {showDetailDialog && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">
+                  {showActivities ? 'Hoạt động người dùng' : 'Chi tiết tài khoản'}
+                </h2>
+                <div className="flex items-center space-x-2">
                   {!showActivities ? (
                     <>
                       {!isEditing ? (
@@ -589,13 +641,13 @@ const UserManagement: React.FC = () => {
                       Chi tiết TK
                     </Button>
                   )}
+                  <Button size="sm" variant="outline" onClick={() => setShowDetailDialog(false)}>
+                    <X size={14} />
+                  </Button>
                 </div>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {selectedUser ? (
-              showActivities ? (
+              </div>
+
+              {showActivities ? (
                 <div className="space-y-4">
                   <div className="border-b pb-2">
                     <h3 className="font-semibold">{selectedUser.fullName}</h3>
@@ -776,15 +828,11 @@ const UserManagement: React.FC = () => {
                     <p>Cập nhật: {formatDateTime(selectedUser.updatedAt)}</p>
                   </div>
                 </div>
-              )
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                Chọn một tài khoản để xem chi tiết
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

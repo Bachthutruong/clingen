@@ -23,27 +23,33 @@ import {
   RefreshCw,
   Trash2,
   X,
-  Save
+  Save,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  FileCheck
 } from 'lucide-react'
-import { patientsApi } from '@/services'
+import { patientsApi, referralSourcesApi } from '@/services'
 import { getGenderLabel } from '@/types/api'
-import type { PatientAPI, PaginatedResponse, CreatePatientRequest } from '@/types/api'
+import type { PatientAPI, PaginatedResponse, CreatePatientRequest, ReferralSourceAPI } from '@/types/api'
 import { formatDate } from '@/lib/utils'
 
 const PatientList: React.FC = () => {
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
-  const [genderFilter, setGenderFilter] = useState<string>('')
+  const [referralSourceFilter, setReferralSourceFilter] = useState<string>('')
   const [ageFilter, setAgeFilter] = useState<string>('')
   const [sortBy, setSortBy] = useState<'name' | 'date' | 'age'>('date')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [currentPage, setCurrentPage] = useState(0)
-  const [pageSize] = useState(20)
+  const [pageSize, setPageSize] = useState(20)
 
   // API state
   const [patientsData, setPatientsData] = useState<PaginatedResponse<PatientAPI> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [referralSources, setReferralSources] = useState<ReferralSourceAPI[]>([])
+  const [loadingReferralSources, setLoadingReferralSources] = useState(true)
 
   // Modal states
   const [viewModalOpen, setViewModalOpen] = useState(false)
@@ -65,7 +71,7 @@ const PatientList: React.FC = () => {
         pageIndex: currentPage,
         pageSize: pageSize,
         keyword: searchQuery.trim() || undefined,
-        orderCol: sortBy === 'name' ? 'fullName' : sortBy === 'date' ? 'birthYear' : 'birthYear',
+        // orderCol: sortBy === 'name' ? 'fullName' : sortBy === 'date' ? 'birthYear' : 'birthYear',
         isDesc: sortOrder === 'desc'
       }
       
@@ -90,10 +96,54 @@ const PatientList: React.FC = () => {
     return () => clearTimeout(debounceTimer)
   }, [searchQuery, sortBy, sortOrder])
 
+  // Effect to fetch data when page size changes
+  useEffect(() => {
+    setCurrentPage(0) // Reset to first page when page size changes
+    fetchPatients()
+  }, [pageSize])
+
   // Effect to fetch data when page changes
   useEffect(() => {
     fetchPatients()
   }, [currentPage])
+
+  // Fetch referral sources
+  useEffect(() => {
+    const fetchReferralSources = async () => {
+      try {
+        setLoadingReferralSources(true)
+        const response = await referralSourcesApi.getAll({
+          keyword: '',
+          status: 1, // Active only
+          pageIndex: 0,
+          pageSize: 100,
+          isDesc: false
+        })
+        
+        // Handle nested structure
+        let actualArray = null
+        const responseAny = response as any
+        if (responseAny?.content?.content && Array.isArray(responseAny.content.content)) {
+          actualArray = responseAny.content.content
+        } else if (responseAny?.content && Array.isArray(responseAny.content)) {
+          actualArray = responseAny.content
+        }
+        
+        if (actualArray && Array.isArray(actualArray)) {
+          setReferralSources(actualArray)
+        } else {
+          setReferralSources([])
+        }
+      } catch (error) {
+        console.error('Error fetching referral sources:', error)
+        setReferralSources([])
+      } finally {
+        setLoadingReferralSources(false)
+      }
+    }
+
+    fetchReferralSources()
+  }, [])
 
   const calculateAge = (birthYear: string): number => {
     const today = new Date()
@@ -226,6 +276,7 @@ const PatientList: React.FC = () => {
         'Số điện thoại': patient.phoneNumber || '',
         'Địa chỉ': patient.address || '',
         'Email': patient.email || '',
+        'Trạng thái kết quả': getResultStatus(patient.id).label,
         'Người giám hộ': patient.guardianName || '',
         'Quan hệ với người giám hộ': patient.guardianRelationship || '',
         'SĐT người giám hộ': patient.guardianPhoneNumber || '',
@@ -246,6 +297,7 @@ const PatientList: React.FC = () => {
         { wch: 15 },  // Số điện thoại
         { wch: 30 },  // Địa chỉ
         { wch: 25 },  // Email
+        { wch: 18 },  // Trạng thái kết quả
         { wch: 20 },  // Người giám hộ
         { wch: 15 },  // Quan hệ
         { wch: 15 },  // SĐT người giám hộ
@@ -288,6 +340,21 @@ const PatientList: React.FC = () => {
     return { label: 'Người cao tuổi', color: 'bg-orange-100 text-orange-800' }
   }
 
+  // Mock function to generate test result status (for demo purposes)
+  const getResultStatus = (patientId: number | undefined) => {
+    if (!patientId) return { status: 'pending', label: 'Chưa có kết quả', color: 'bg-gray-100 text-gray-800', icon: Clock }
+    
+    // Generate pseudo-random status based on patient ID for demo
+    const statusIndex = patientId % 4
+    const statuses = [
+      { status: 'pending', label: 'Chưa có kết quả', color: 'bg-gray-100 text-gray-800', icon: Clock },
+      { status: 'processing', label: 'Đang xử lý', color: 'bg-yellow-100 text-yellow-800', icon: AlertCircle },
+      { status: 'completed', label: 'Có kết quả', color: 'bg-green-100 text-green-800', icon: CheckCircle },
+      { status: 'delivered', label: 'Đã giao kết quả', color: 'bg-blue-100 text-blue-800', icon: FileCheck }
+    ]
+    return statuses[statusIndex]
+  }
+
   const handleRefresh = () => {
     fetchPatients()
     toast.success('Đã làm mới dữ liệu')
@@ -297,17 +364,24 @@ const PatientList: React.FC = () => {
   const patients = patientsData?.content || []
   const totalPatients = patientsData?.totalElements || 0
 
-  // Apply client-side filters for gender and age
+  // Apply client-side filters for referral source and age
   const filteredPatients = patients.filter((patient: PatientAPI) => {
-    const matchesGender = !genderFilter || patient.gender.toString() === genderFilter
+    const matchesReferralSource = !referralSourceFilter || patient.referralSourceId?.toString() === referralSourceFilter
     const age = patient.birthYear ? calculateAge(patient.birthYear) : 0
     const matchesAge = !ageFilter || 
       (ageFilter === 'child' && age < 18) ||
       (ageFilter === 'adult' && age >= 18 && age < 60) ||
       (ageFilter === 'elderly' && age >= 60)
     
-    return matchesGender && matchesAge
+    return matchesReferralSource && matchesAge
   })
+
+  // Calculate result status statistics
+  const statusStats = filteredPatients.reduce((acc, patient) => {
+    const status = getResultStatus(patient.id).status
+    acc[status] = (acc[status] || 0) + 1
+    return acc
+  }, {} as Record<string, number>)
 
   return (
     <div className="space-y-6">
@@ -360,7 +434,7 @@ const PatientList: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
             <div className="lg:col-span-2">
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -374,14 +448,17 @@ const PatientList: React.FC = () => {
             </div>
 
             <select
-              value={genderFilter}
-              onChange={(e) => setGenderFilter(e.target.value)}
+              value={referralSourceFilter}
+              onChange={(e) => setReferralSourceFilter(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              disabled={loadingReferralSources}
             >
-              <option value="">Tất cả giới tính</option>
-              <option value="0">Nữ</option>
-              <option value="1">Nam</option>
-              <option value="2">Khác</option>
+              <option value="">Tất cả nguồn gửi</option>
+              {referralSources.map((source) => (
+                <option key={source.id} value={source.id}>
+                  {source.name} ({source.code})
+                </option>
+              ))}
             </select>
 
             <select
@@ -393,6 +470,20 @@ const PatientList: React.FC = () => {
               <option value="child">Trẻ em (&lt;18)</option>
               <option value="adult">Người lớn (18-59)</option>
               <option value="elderly">Cao tuổi (≥60)</option>
+            </select>
+
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value))
+                setCurrentPage(0) // Reset to first page when changing page size
+              }}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            >
+              <option value={5}>Hiển thị 5</option>
+              <option value={10}>Hiển thị 10</option>
+              <option value={20}>Hiển thị 20</option>
+              <option value={50}>Hiển thị 50</option>
             </select>
 
             <select
@@ -416,7 +507,7 @@ const PatientList: React.FC = () => {
       </Card>
 
       {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="shadow-lg border-0">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -425,18 +516,6 @@ const PatientList: React.FC = () => {
                 <p className="text-2xl font-bold text-gray-900">{totalPatients}</p>
               </div>
               <Users className="h-8 w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-lg border-0">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Trang hiện tại</p>
-                <p className="text-2xl font-bold text-gray-900">{currentPage + 1}</p>
-              </div>
-              <Search className="h-8 w-8 text-green-600" />
             </div>
           </CardContent>
         </Card>
@@ -457,10 +536,34 @@ const PatientList: React.FC = () => {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Tổng trang</p>
-                <p className="text-2xl font-bold text-gray-900">{patientsData?.totalPages || 0}</p>
+                <p className="text-sm text-gray-600">Có kết quả</p>
+                <p className="text-2xl font-bold text-green-700">{statusStats.completed + statusStats.delivered || 0}</p>
               </div>
-              <User className="h-8 w-8 text-pink-600" />
+              <CheckCircle className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-lg border-0">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Đang xử lý</p>
+                <p className="text-2xl font-bold text-yellow-700">{statusStats.processing || 0}</p>
+              </div>
+              <AlertCircle className="h-8 w-8 text-yellow-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-lg border-0">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Chưa có kết quả</p>
+                <p className="text-2xl font-bold text-gray-700">{statusStats.pending || 0}</p>
+              </div>
+              <Clock className="h-8 w-8 text-gray-600" />
             </div>
           </CardContent>
         </Card>
@@ -526,6 +629,7 @@ const PatientList: React.FC = () => {
                       <th className="text-left p-4 font-semibold text-gray-700">Số điện thoại</th>
                       <th className="text-left p-4 font-semibold text-gray-700">Địa chỉ</th>
                       <th className="text-left p-4 font-semibold text-gray-700">Lý do khám</th>
+                      <th className="text-left p-4 font-semibold text-gray-700">Trạng thái kết quả</th>
                       <th className="text-center p-4 font-semibold text-gray-700">Thao tác</th>
                     </tr>
                   </thead>
@@ -533,6 +637,8 @@ const PatientList: React.FC = () => {
                     {filteredPatients.map((patient: PatientAPI, index) => {
                       const age = patient.birthYear ? calculateAge(patient.birthYear) : 0
                       const ageGroup = getAgeGroup(age)
+                      const resultStatus = getResultStatus(patient.id)
+                      const StatusIcon = resultStatus.icon
                       const stt = currentPage * pageSize + index + 1
                       
                       return (
@@ -574,6 +680,14 @@ const PatientList: React.FC = () => {
                           <td className="p-4 text-sm text-gray-700 max-w-xs">
                             <div className="truncate" title={patient.reasonForVisit}>
                               {patient.reasonForVisit || '-'}
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center space-x-2">
+                              <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${resultStatus.color}`}>
+                                <StatusIcon size={12} className="mr-1" />
+                                {resultStatus.label}
+                              </span>
                             </div>
                           </td>
                                                      <td className="p-4">
@@ -620,6 +734,8 @@ const PatientList: React.FC = () => {
                 {filteredPatients.map((patient: PatientAPI, index) => {
                   const age = patient.birthYear ? calculateAge(patient.birthYear) : 0
                   const ageGroup = getAgeGroup(age)
+                  const resultStatus = getResultStatus(patient.id)
+                  const StatusIcon = resultStatus.icon
                   const stt = currentPage * pageSize + index + 1
                   
                   return (
@@ -640,6 +756,10 @@ const PatientList: React.FC = () => {
                                   {age} tuổi
                                 </span>
                               )}
+                              <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${resultStatus.color}`}>
+                                <StatusIcon size={12} className="mr-1" />
+                                {resultStatus.label}
+                              </span>
                             </div>
                           </div>
                           <div className="flex space-x-2">

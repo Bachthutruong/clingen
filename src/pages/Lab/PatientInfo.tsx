@@ -8,21 +8,38 @@ import {
   Search, 
   Eye, 
   TestTube,
-//   Calendar,
-//   Phone,
-//   MapPin,
-//   User,
   Clock,
   CheckCircle,
   AlertTriangle,
   Microscope,
   FileText,
-  Loader2
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  X
 } from 'lucide-react'
 import { patientsApi } from '@/services'
 import { getGenderLabel } from '@/types/api'
-import type { PatientAPI, PaginatedResponse, PatientTestDTO } from '@/types/api'
-import { formatDate, formatDateTime } from '@/lib/utils'
+import type { PatientAPI, PaginatedResponse } from '@/types/api'
+import { formatDate } from '@/lib/utils'
+
+// Updated interface to match API response
+interface PatientDetail {
+  id: number
+  testTypeName: string
+  testSampleName: string
+  price: number
+  status: number
+}
+
+interface PatientWithDetails extends PatientAPI {
+  details: PatientDetail[]
+  createdAt?: string
+  createdBy?: string
+  updatedAt?: string
+  updatedBy?: string
+  stringStatus?: string
+}
 
 interface RegistrationService {
   id: string
@@ -50,7 +67,7 @@ interface RegistrationService {
 interface Registration {
   id: string
   patientId: number
-  patient: PatientAPI
+  patient: PatientWithDetails
   registrationDate: string
   services: RegistrationService[]
   totalAmount: number
@@ -63,12 +80,13 @@ interface Registration {
 const PatientInfo: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
-  const [selectedPatient, setSelectedPatient] = useState<PatientAPI | null>(null)
+  const [selectedPatient, setSelectedPatient] = useState<PatientWithDetails | null>(null)
+  const [showDialog, setShowDialog] = useState(false)
   const [currentPage, setCurrentPage] = useState(0)
   const [pageSize] = useState(20)
 
   // API state
-  const [patientsData, setPatientsData] = useState<PaginatedResponse<PatientAPI> | null>(null)
+  const [patientsData, setPatientsData] = useState<PaginatedResponse<PatientWithDetails> | null>(null)
   const [registrations, setRegistrations] = useState<Registration[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -86,10 +104,21 @@ const PatientInfo: React.FC = () => {
         status: 1 // Active patients only
       })
       
-      setPatientsData(response)
+      // Type assertion to match our expected structure
+      const patientsWithDetails = response.content.map(patient => ({
+        ...patient,
+        details: (patient as any).details || []
+      })) as PatientWithDetails[]
+      
+      const updatedResponse = {
+        ...response,
+        content: patientsWithDetails
+      }
+      
+      setPatientsData(updatedResponse)
       
       // Fetch registrations for all patients
-      await fetchRegistrations(response.content)
+      await fetchRegistrations(patientsWithDetails)
       
     } catch (err) {
       console.error('Error fetching patients:', err)
@@ -100,67 +129,42 @@ const PatientInfo: React.FC = () => {
   }
 
   // Fetch registrations for patients
-  const fetchRegistrations = async (patients: PatientAPI[]) => {
+  const fetchRegistrations = async (patients: PatientWithDetails[]) => {
     try {
       const registrationsPromises = patients.map(async (patient) => {
         // Skip patients without ID
         if (!patient.id) return []
         
         try {
-          // Fetch registrations for each patient
-          const patientRegistrations = await patientsApi.getRegistrations(patient.id)
-          
-          // Transform to expected format
-          return patientRegistrations.map((reg: any) => ({
-            id: reg.id || `REG${patient.id}`,
-            patientId: patient.id!,
-            patient: patient,
-            registrationDate: reg.registrationDate || new Date().toISOString(),
-            services: patient.typeTests?.map((test, index) => ({
-              id: `${patient.id}_${test.testId}_${index}`,
-              serviceId: test.testId.toString(),
-              service: {
-                id: test.testId.toString(),
-                code: `TEST_${test.testId}`,
-                name: test.testSampleName || `Xét nghiệm ${test.testId}`,
-                category: 'Xét nghiệm'
-              },
-              price: 150000, // Default price
-              status: getTestStatus(test),
-              // No result data in PatientTestDTO, will be fetched separately if needed
-            })) || [],
-            totalAmount: (patient.typeTests?.length || 0) * 150000,
-            status: getPatientStatus(patient),
-            createdBy: 'system',
-            createdAt: reg.createdAt || new Date().toISOString(),
-            updatedAt: reg.updatedAt || new Date().toISOString()
+          // Use patient details directly since they're included in the response
+          const services: RegistrationService[] = patient.details.map((detail, index) => ({
+            id: `${patient.id}_${detail.id}_${index}`,
+            serviceId: detail.id.toString(),
+            service: {
+              id: detail.id.toString(),
+              code: `TEST_${detail.id}`,
+              name: detail.testTypeName,
+              category: 'Xét nghiệm'
+            },
+            price: detail.price,
+            status: getTestStatus(detail),
           }))
-        } catch (patientError) {
-          console.warn(`Could not fetch registrations for patient ${patient.id}:`, patientError)
-          // Return a default registration if API fails
+          
           return [{
             id: `REG${patient.id}`,
-            patientId: patient.id!,
+            patientId: patient.id,
             patient: patient,
-            registrationDate: new Date().toISOString(),
-            services: patient.typeTests?.map((test, index) => ({
-              id: `${patient.id}_${test.testId}_${index}`,
-              serviceId: test.testId.toString(),
-              service: {
-                id: test.testId.toString(),
-                code: `TEST_${test.testId}`,
-                name: test.testSampleName || `Xét nghiệm ${test.testId}`,
-                category: 'Xét nghiệm'
-              },
-              price: 150000,
-              status: getTestStatus(test),
-            })) || [],
-            totalAmount: (patient.typeTests?.length || 0) * 150000,
+            registrationDate: patient.createdAt || new Date().toISOString(),
+            services: services,
+            totalAmount: patient.details.reduce((sum, detail) => sum + detail.price, 0),
             status: getPatientStatus(patient),
-            createdBy: 'system',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            createdBy: patient.createdBy || 'system',
+            createdAt: patient.createdAt || new Date().toISOString(),
+            updatedAt: patient.updatedAt || new Date().toISOString()
           }]
+        } catch (patientError) {
+          console.warn(`Could not process patient ${patient.id}:`, patientError)
+          return []
         }
       })
 
@@ -168,7 +172,7 @@ const PatientInfo: React.FC = () => {
       setRegistrations(allRegistrations.flat())
       
     } catch (err) {
-      console.error('Error fetching registrations:', err)
+      console.error('Error processing registrations:', err)
       // Use patient data to create basic registrations
       const basicRegistrations: Registration[] = patients
         .filter(patient => patient.id) // Filter out patients without ID
@@ -176,46 +180,51 @@ const PatientInfo: React.FC = () => {
           id: `REG${patient.id}`,
           patientId: patient.id!,
           patient: patient,
-          registrationDate: new Date().toISOString(),
-          services: patient.typeTests?.map((test, index) => ({
-            id: `${patient.id}_${test.testId}_${index}`,
-            serviceId: test.testId.toString(),
+          registrationDate: patient.createdAt || new Date().toISOString(),
+          services: patient.details.map((detail, index) => ({
+            id: `${patient.id}_${detail.id}_${index}`,
+            serviceId: detail.id.toString(),
             service: {
-              id: test.testId.toString(),
-              code: `TEST_${test.testId}`,
-              name: test.testSampleName || `Xét nghiệm ${test.testId}`,
+              id: detail.id.toString(),
+              code: `TEST_${detail.id}`,
+              name: detail.testTypeName,
               category: 'Xét nghiệm'
             },
-            price: 150000,
-            status: getTestStatus(test),
-          })) || [],
-          totalAmount: (patient.typeTests?.length || 0) * 150000,
+            price: detail.price,
+            status: getTestStatus(detail),
+          })),
+          totalAmount: patient.details.reduce((sum, detail) => sum + detail.price, 0),
           status: getPatientStatus(patient),
-          createdBy: 'system',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          createdBy: patient.createdBy || 'system',
+          createdAt: patient.createdAt || new Date().toISOString(),
+          updatedAt: patient.updatedAt || new Date().toISOString()
         }))
       
       setRegistrations(basicRegistrations)
     }
   }
 
-  // Helper function to determine test status
-  const getTestStatus = (test: PatientTestDTO): 'pending' | 'collecting' | 'testing' | 'completed' => {
-    // Since PatientTestDTO doesn't have status or result fields,
-    // we'll use a simple logic based on testSampleId presence
-    if (test.testSampleId && test.testSampleName) return 'testing'
-    if (test.testSampleId) return 'collecting'
-    return 'pending'
+  // Helper function to determine test status from PatientDetail
+  const getTestStatus = (detail: PatientDetail): 'pending' | 'collecting' | 'testing' | 'completed' => {
+    // Simple logic based on status field
+    switch (detail.status) {
+      case 0: return 'pending'
+      case 1: return 'collecting'
+      case 2: return 'testing'
+      case 3: return 'completed'
+      default: return 'pending'
+    }
   }
 
   // Helper function to determine patient status
-  const getPatientStatus = (patient: PatientAPI): 'pending' | 'in_progress' | 'completed' | 'cancelled' => {
-    if (!patient.typeTests || patient.typeTests.length === 0) return 'pending'
+  const getPatientStatus = (patient: PatientWithDetails): 'pending' | 'in_progress' | 'completed' | 'cancelled' => {
+    if (!patient.details || patient.details.length === 0) return 'pending'
     
-    // Simple logic: if patient has tests, they're in progress
-    const hasTestsWithSamples = patient.typeTests.some(test => test.testSampleId)
-    if (hasTestsWithSamples) return 'in_progress'
+    const hasCompletedTests = patient.details.some(detail => detail.status === 3)
+    const hasInProgressTests = patient.details.some(detail => detail.status === 1 || detail.status === 2)
+    
+    if (hasCompletedTests && !hasInProgressTests) return 'completed'
+    if (hasInProgressTests) return 'in_progress'
     
     return 'pending'
   }
@@ -224,8 +233,6 @@ const PatientInfo: React.FC = () => {
   useEffect(() => {
     fetchPatients()
   }, [currentPage, searchQuery])
-
-  // const patients = patientsData?.content || []
 
   // Filter registrations based on search and status
   const filteredRegistrations = registrations.filter(reg => {
@@ -269,10 +276,9 @@ const PatientInfo: React.FC = () => {
     }
   }
 
-
-
   const handleViewDetails = (registration: Registration) => {
     setSelectedPatient(registration.patient)
+    setShowDialog(true)
   }
 
   const handleUpdateStatus = async (serviceId: string, newStatus: string) => {
@@ -308,6 +314,15 @@ const PatientInfo: React.FC = () => {
 
   const allServices = registrations.flatMap(r => r.services)
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount)
+  }
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -323,56 +338,10 @@ const PatientInfo: React.FC = () => {
         </div>
       </div>
 
-      {/* Search and Filter */}
-      <Card className="shadow-lg border-0">
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Tìm theo tên bệnh nhân, mã đăng ký..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md"
-            >
-              <option value="">Tất cả trạng thái</option>
-              <option value="pending">Chờ lấy mẫu</option>
-              <option value="collecting">Đang lấy mẫu</option>
-              <option value="testing">Đang xét nghiệm</option>
-              <option value="completed">Hoàn thành</option>
-            </select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Error Message */}
-      {error && (
-        <Card className="shadow-lg border-red-200 bg-red-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center space-x-2 text-red-600">
-              <AlertTriangle size={20} />
-              <span>{error}</span>
-              <Button variant="outline" size="sm" onClick={fetchPatients}>
-                Thử lại
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="shadow-lg border-0">
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Chờ lấy mẫu</p>
@@ -386,7 +355,7 @@ const PatientInfo: React.FC = () => {
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Đang xét nghiệm</p>
@@ -400,7 +369,7 @@ const PatientInfo: React.FC = () => {
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Hoàn thành</p>
@@ -414,7 +383,7 @@ const PatientInfo: React.FC = () => {
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Tổng ca xét nghiệm</p>
@@ -428,193 +397,153 @@ const PatientInfo: React.FC = () => {
         </Card>
       </div>
 
-      {/* Registration List */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>
-          <Card className="shadow-lg border-0">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <span>Danh sách đăng ký ({filteredRegistrations.length})</span>
-                {loading && <Loader2 size={16} className="animate-spin" />}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading && filteredRegistrations.length === 0 ? (
-                <div className="text-center py-8">
-                  <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
-                  <p className="mt-4 text-gray-500">Đang tải dữ liệu...</p>
-                </div>
-              ) : filteredRegistrations.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  Không tìm thấy đăng ký phù hợp
-                </div>
-              ) : (
-                <div className="space-y-4 max-h-96 overflow-y-auto">
+      {/* Search and Filter - Compact */}
+      <Card className="shadow-lg border-0">
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row gap-4 items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Tìm theo tên bệnh nhân, mã đăng ký..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                className="pl-10"
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md w-full sm:w-auto"
+            >
+              <option value="">Tất cả trạng thái</option>
+              <option value="pending">Chờ lấy mẫu</option>
+              <option value="collecting">Đang lấy mẫu</option>
+              <option value="testing">Đang xét nghiệm</option>
+              <option value="completed">Hoàn thành</option>
+            </select>
+            <Button onClick={handleSearch} disabled={loading}>
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Error Message */}
+      {error && (
+        <Card className="shadow-lg border-red-200 bg-red-50">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2 text-red-600">
+              <AlertTriangle size={20} />
+              <span>{error}</span>
+              <Button variant="outline" size="sm" onClick={fetchPatients}>
+                Thử lại
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Patient List - Full Width Table */}
+      <Card className="shadow-lg border-0">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Danh sách bệnh nhân ({filteredRegistrations.length})</span>
+            {loading && <Loader2 size={16} className="animate-spin" />}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading && filteredRegistrations.length === 0 ? (
+            <div className="text-center py-8">
+              <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
+              <p className="mt-4 text-gray-500">Đang tải dữ liệu...</p>
+            </div>
+          ) : filteredRegistrations.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              Không tìm thấy bệnh nhân phù hợp
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Bệnh nhân</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Số lượng dịch vụ</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Tổng tiền</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Trạng thái</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Ngày đăng ký</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
                   {filteredRegistrations.map(registration => (
-                    <Card key={registration.id} className="border hover:shadow-md transition-shadow">
-                      <CardContent className="p-4">
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <h3 className="font-semibold text-lg">{registration.patient.fullName}</h3>
-                            <p className="text-sm text-gray-600">
-                              Mã ĐK: {registration.id}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              Đăng ký: {formatDateTime(registration.registrationDate)}
-                            </p>
+                    <tr key={registration.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-4">
+                        <div>
+                          <div className="font-medium text-gray-900">{registration.patient.fullName}</div>
+                          <div className="text-gray-600">{registration.patient.phoneNumber}</div>
+                          <div className="text-xs text-gray-500">
+                            {getGenderLabel(registration.patient.gender)} • {formatDate(registration.patient.birthYear)}
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleViewDetails(registration)}
-                          >
-                            <Eye size={14} className="mr-1" />
-                            Xem
-                          </Button>
                         </div>
-                        
-                        <div className="space-y-2">
-                          {registration.services.map(service => (
-                            <div key={service.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                              <div className="flex-1">
-                                <p className="font-medium text-sm">{service.service.name}</p>
-                                <p className="text-xs text-gray-600">{service.service.code}</p>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getStatusColor(service.status)}`}>
-                                  {getStatusIcon(service.status)}
-                                  <span className="ml-1">{getStatusLabel(service.status)}</span>
-                                </span>
-                              </div>
-                            </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-center">
+                          <div className="font-medium text-gray-900">{registration.services.length}</div>
+                          <div className="text-xs text-gray-500">dịch vụ</div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-gray-900">{formatCurrency(registration.totalAmount)}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="space-y-1">
+                          {registration.services.slice(0, 3).map(service => (
+                            <span key={service.id} className={`inline-flex items-center px-2 py-1 text-xs rounded-full mr-1 ${getStatusColor(service.status)}`}>
+                              {getStatusIcon(service.status)}
+                              <span className="ml-1">{getStatusLabel(service.status)}</span>
+                            </span>
                           ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Patient Details */}
-        <div>
-          <Card className="shadow-lg border-0">
-            <CardHeader>
-              <CardTitle>Chi tiết bệnh nhân</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {selectedPatient ? (
-                <div className="space-y-4">
-                  <div className="border-b pb-4">
-                    <h3 className="text-xl font-semibold">{selectedPatient.fullName}</h3>
-                    <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
-                      <div>
-                        <span className="text-gray-600">Giới tính:</span>
-                        <p className="font-medium">
-                          {getGenderLabel(selectedPatient.gender)}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Ngày sinh:</span>
-                        <p className="font-medium">{formatDate(selectedPatient.birthYear)}</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Số điện thoại:</span>
-                        <p className="font-medium">{selectedPatient.phoneNumber}</p>
-                      </div>
-                    </div>
-                    {selectedPatient.address && (
-                      <div className="mt-3">
-                        <span className="text-gray-600 text-sm">Địa chỉ:</span>
-                        <p className="font-medium">{selectedPatient.address}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Test Services for selected patient */}
-                  <div>
-                    <h4 className="font-semibold mb-3">Dịch vụ xét nghiệm</h4>
-                    {filteredRegistrations
-                      .filter(reg => reg.patient.id === selectedPatient.id)
-                      .flatMap(reg => reg.services)
-                      .map(service => (
-                      <div key={service.id} className="p-3 border rounded-lg mb-3">
-                        <div className="flex justify-between items-start mb-2">
-                          <div>
-                            <p className="font-medium">{service.service.name}</p>
-                            <p className="text-sm text-gray-600">{service.service.code}</p>
-                          </div>
-                          <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getStatusColor(service.status)}`}>
-                            {getStatusIcon(service.status)}
-                            <span className="ml-1">{getStatusLabel(service.status)}</span>
-                          </span>
-                        </div>
-
-                        {service.result && (
-                          <div className="mt-3 p-2 bg-green-50 rounded">
-                            <h5 className="font-medium text-sm text-green-800 mb-1">Kết quả:</h5>
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              <div>
-                                <span className="text-gray-600">Giá trị:</span>
-                                <span className="ml-1 font-medium">{service.result.value} {service.result.unit}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-600">Bình thường:</span>
-                                <span className="ml-1">{service.result.normalRange}</span>
-                              </div>
+                          {registration.services.length > 3 && (
+                            <div className="text-xs text-gray-500">
+                              +{registration.services.length - 3} khác
                             </div>
-                            {service.result.notes && (
-                              <p className="text-sm text-gray-600 mt-1">
-                                <span className="font-medium">Ghi chú:</span> {service.result.notes}
-                              </p>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="flex space-x-2 mt-3">
-                          {service.status !== 'completed' && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleUpdateStatus(service.id, 'testing')}
-                              >
-                                Bắt đầu XN
-                              </Button>
-                              <Button
-                                size="sm"
-                                onClick={() => handleInputResult(service)}
-                              >
-                                <FileText size={14} className="mr-1" />
-                                Nhập KQ
-                              </Button>
-                            </>
                           )}
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  Chọn một bệnh nhân để xem chi tiết
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-900">{formatDate(registration.registrationDate)}</div>
+                        <div className="text-xs text-gray-500">bởi {registration.createdBy}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewDetails(registration)}
+                        >
+                          <Eye size={14} className="mr-1" />
+                          Chi tiết
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Pagination */}
       {patientsData && patientsData.totalPages > 1 && (
         <div className="flex justify-center items-center space-x-2">
           <Button
             variant="outline"
+            size="sm"
             onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
             disabled={currentPage === 0 || loading}
           >
+            <ChevronLeft size={16} />
             Trước
           </Button>
           <span className="text-sm text-gray-600">
@@ -622,11 +551,152 @@ const PatientInfo: React.FC = () => {
           </span>
           <Button
             variant="outline"
+            size="sm"
             onClick={() => setCurrentPage(Math.min(patientsData.totalPages - 1, currentPage + 1))}
             disabled={currentPage >= patientsData.totalPages - 1 || loading}
           >
             Sau
+            <ChevronRight size={16} />
           </Button>
+        </div>
+      )}
+
+      {/* Patient Details Dialog */}
+      {showDialog && selectedPatient && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h2 className="text-xl font-bold text-gray-900">Chi tiết bệnh nhân</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowDialog(false)}
+              >
+                <X size={20} />
+              </Button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {/* Patient Info */}
+              <div className="border-b pb-4">
+                <h3 className="text-xl font-semibold">{selectedPatient.fullName}</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 text-sm">
+                  <div>
+                    <span className="text-gray-600">Giới tính:</span>
+                    <span className="ml-2 font-medium">
+                      {getGenderLabel(selectedPatient.gender)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Ngày sinh:</span>
+                    <span className="ml-2 font-medium">{formatDate(selectedPatient.birthYear)}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Số điện thoại:</span>
+                    <span className="ml-2 font-medium">{selectedPatient.phoneNumber}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Email:</span>
+                    <span className="ml-2 font-medium">{selectedPatient.email || 'Chưa có'}</span>
+                  </div>
+                  {selectedPatient.address && (
+                    <div className="col-span-2">
+                      <span className="text-gray-600">Địa chỉ:</span>
+                      <span className="ml-2 font-medium">{selectedPatient.address}</span>
+                    </div>
+                  )}
+                  {selectedPatient.reasonForVisit && (
+                    <div className="col-span-2">
+                      <span className="text-gray-600">Lý do khám:</span>
+                      <span className="ml-2 font-medium">{selectedPatient.reasonForVisit}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Test Services */}
+              <div>
+                <h4 className="font-semibold mb-3">Dịch vụ xét nghiệm ({selectedPatient.details.length})</h4>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border border-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left font-medium text-gray-900 border-b">Tên dịch vụ</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-900 border-b">Mẫu xét nghiệm</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-900 border-b">Giá</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-900 border-b">Trạng thái</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-900 border-b">Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {selectedPatient.details.map((detail, index) => {
+                        const serviceStatus = getTestStatus(detail)
+                        return (
+                          <tr key={detail.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-4 border-b">
+                              <div className="font-medium text-gray-900">{detail.testTypeName}</div>
+                            </td>
+                            <td className="px-4 py-4 border-b">
+                              <div className="text-gray-900">{detail.testSampleName}</div>
+                            </td>
+                            <td className="px-4 py-4 border-b">
+                              <div className="font-medium text-gray-900">{formatCurrency(detail.price)}</div>
+                            </td>
+                            <td className="px-4 py-4 border-b">
+                              <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getStatusColor(serviceStatus)}`}>
+                                {getStatusIcon(serviceStatus)}
+                                <span className="ml-1">{getStatusLabel(serviceStatus)}</span>
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 border-b">
+                              <div className="flex space-x-2">
+                                {serviceStatus !== 'completed' && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleUpdateStatus(`${selectedPatient.id}_${detail.id}_${index}`, 'testing')}
+                                    >
+                                      Bắt đầu XN
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleInputResult({
+                                        id: `${selectedPatient.id}_${detail.id}_${index}`,
+                                        serviceId: detail.id.toString(),
+                                        service: {
+                                          id: detail.id.toString(),
+                                          code: `TEST_${detail.id}`,
+                                          name: detail.testTypeName,
+                                          category: 'Xét nghiệm'
+                                        },
+                                        price: detail.price,
+                                        status: serviceStatus,
+                                      })}
+                                    >
+                                      <FileText size={14} className="mr-1" />
+                                      Nhập KQ
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {/* Total */}
+                <div className="mt-4 text-right">
+                  <div className="text-lg font-semibold text-gray-900">
+                    Tổng cộng: {formatCurrency(selectedPatient.details.reduce((sum, detail) => sum + detail.price, 0))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

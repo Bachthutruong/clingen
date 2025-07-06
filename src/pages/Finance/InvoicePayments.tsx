@@ -23,7 +23,10 @@ import {
 //   Calendar,
 //   User,
 //   FileText,
-  Banknote
+  Banknote,
+  ChevronLeft,
+  ChevronRight,
+  X
 } from 'lucide-react'
 import { formatDate, formatDateTime, formatCurrency } from '@/lib/utils'
 
@@ -75,8 +78,11 @@ const InvoicePayments: React.FC = () => {
   const [dateFilter, setDateFilter] = useState<string>('')
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false)
-  console.log(isCreatingInvoice)
   const [showPayments, setShowPayments] = useState(false)
+  const [showDetailDialog, setShowDetailDialog] = useState(false)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [pageSize] = useState(10)
+  console.log(isCreatingInvoice)
 
   // Mock data cho hóa đơn
   const [invoices] = useState<Invoice[]>([
@@ -294,6 +300,7 @@ const InvoicePayments: React.FC = () => {
   const handleViewInvoice = (invoice: Invoice) => {
     setSelectedInvoice(invoice)
     setShowPayments(false)
+    setShowDetailDialog(true)
   }
 
   const handlePrintInvoice = (invoice: Invoice) => {
@@ -314,6 +321,7 @@ const InvoicePayments: React.FC = () => {
   const handleViewPayments = (invoice: Invoice) => {
     setSelectedInvoice(invoice)
     setShowPayments(true)
+    setShowDetailDialog(true)
   }
 
   const stats = {
@@ -359,75 +367,75 @@ const InvoicePayments: React.FC = () => {
       </div>
 
       {/* Statistics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Tổng HĐ</p>
                 <p className="text-lg font-bold text-blue-600">{stats.total}</p>
               </div>
-              <Receipt className="h-6 w-6 text-blue-600" />
+              <Receipt className="h-5 w-5 text-blue-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Bản thảo</p>
                 <p className="text-lg font-bold text-gray-600">{stats.draft}</p>
               </div>
-              <Edit className="h-6 w-6 text-gray-600" />
+              <Edit className="h-5 w-5 text-gray-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Đã gửi</p>
                 <p className="text-lg font-bold text-blue-600">{stats.sent}</p>
               </div>
-              <Send className="h-6 w-6 text-blue-600" />
+              <Send className="h-5 w-5 text-blue-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Đã TT</p>
                 <p className="text-lg font-bold text-green-600">{stats.paid}</p>
               </div>
-              <CheckCircle className="h-6 w-6 text-green-600" />
+              <CheckCircle className="h-5 w-5 text-green-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Quá hạn</p>
                 <p className="text-lg font-bold text-red-600">{stats.overdue}</p>
               </div>
-              <AlertTriangle className="h-6 w-6 text-red-600" />
+              <AlertTriangle className="h-5 w-5 text-red-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0 md:col-span-2">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Tổng thu</p>
                 <p className="text-lg font-bold text-green-600">{formatCurrency(stats.totalRevenue)}</p>
               </div>
-              <DollarSign className="h-6 w-6 text-green-600" />
+              <DollarSign className="h-5 w-5 text-green-600" />
             </div>
           </CardContent>
         </Card>
@@ -484,89 +492,152 @@ const InvoicePayments: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Invoice List and Details */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Invoice List */}
-        <Card className="shadow-lg border-0">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Danh sách hóa đơn ({filteredInvoices.length})</span>
-              <Button size="sm" onClick={() => window.location.reload()}>
-                <RefreshCw size={14} className="mr-1" />
-                Làm mới
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {filteredInvoices.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                Không tìm thấy hóa đơn phù hợp
-              </div>
-            ) : (
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {filteredInvoices.map(invoice => (
-                  <Card key={invoice.id} className="border hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => handleViewInvoice(invoice)}>
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <h3 className="font-semibold text-lg">{invoice.invoiceNumber}</h3>
-                          <p className="text-sm text-gray-600">{invoice.patientName}</p>
-                          <p className="text-sm text-gray-600">{invoice.patientPhone}</p>
-                        </div>
-                        <div className="text-right">
-                          <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getStatusColor(invoice.status)}`}>
-                            {getStatusIcon(invoice.status)}
-                            <span className="ml-1">{getStatusLabel(invoice.status)}</span>
-                          </span>
-                          {invoice.status === 'overdue' && isOverdue(invoice.dueDate) && (
-                            <div className="mt-1">
-                              <span className="text-xs text-red-600 font-medium">
-                                Quá hạn {Math.ceil((new Date().getTime() - new Date(invoice.dueDate).getTime()) / (1000 * 3600 * 24))} ngày
-                              </span>
-                            </div>
+      {/* Invoice List - Table */}
+      <Card className="shadow-lg border-0">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Danh sách hóa đơn ({filteredInvoices.length})</span>
+            <Button size="sm" onClick={() => window.location.reload()}>
+              <RefreshCw size={14} className="mr-1" />
+              Làm mới
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {filteredInvoices.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              Không tìm thấy hóa đơn phù hợp
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Mã hóa đơn</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Bệnh nhân</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Ngày tạo</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Hạn thanh toán</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Tổng tiền</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Đã thanh toán</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Trạng thái</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredInvoices.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(invoice => (
+                    <tr key={invoice.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-gray-900">{invoice.invoiceNumber}</div>
+                        <div className="text-xs text-gray-500">{invoice.createdBy}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-gray-900">{invoice.patientName}</div>
+                        <div className="text-xs text-gray-500">{invoice.patientPhone}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-900">{formatDate(invoice.issueDate)}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-900">{formatDate(invoice.dueDate)}</div>
+                        {invoice.status === 'overdue' && isOverdue(invoice.dueDate) && (
+                          <div className="text-xs text-red-600">
+                            Quá hạn {Math.ceil((new Date().getTime() - new Date(invoice.dueDate).getTime()) / (1000 * 3600 * 24))} ngày
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-teal-600">{formatCurrency(invoice.total)}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-green-600">{formatCurrency(invoice.paidAmount)}</div>
+                        {invoice.total > invoice.paidAmount && (
+                          <div className="text-xs text-red-600">
+                            Còn lại: {formatCurrency(invoice.total - invoice.paidAmount)}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getStatusColor(invoice.status)}`}>
+                          {getStatusIcon(invoice.status)}
+                          <span className="ml-1">{getStatusLabel(invoice.status)}</span>
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex space-x-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewInvoice(invoice)}
+                            className="text-xs"
+                          >
+                            <Eye size={12} className="mr-1" />
+                            Chi tiết
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handlePrintInvoice(invoice)}
+                            className="text-xs"
+                          >
+                            <Printer size={12} />
+                          </Button>
+                          {invoice.status === 'draft' && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleSendInvoice(invoice)}
+                              className="text-xs"
+                            >
+                              <Send size={12} />
+                            </Button>
                           )}
                         </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <p className="text-gray-600">Tổng tiền:</p>
-                          <p className="font-bold text-lg text-teal-600">{formatCurrency(invoice.total)}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Đã thanh toán:</p>
-                          <p className="font-bold text-green-600">{formatCurrency(invoice.paidAmount)}</p>
-                        </div>
-                      </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-                      {invoice.total > invoice.paidAmount && (
-                        <div className="mt-2">
-                          <p className="text-sm text-red-600">
-                            Còn lại: {formatCurrency(invoice.total - invoice.paidAmount)}
-                          </p>
-                        </div>
-                      )}
+      {/* Pagination */}
+      {filteredInvoices.length > pageSize && (
+        <div className="flex justify-center items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+            disabled={currentPage === 0}
+          >
+            <ChevronLeft size={16} />
+            Trước
+          </Button>
+          <span className="text-sm text-gray-600">
+            Trang {currentPage + 1} / {Math.ceil(filteredInvoices.length / pageSize)}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.min(Math.ceil(filteredInvoices.length / pageSize) - 1, currentPage + 1))}
+            disabled={currentPage >= Math.ceil(filteredInvoices.length / pageSize) - 1}
+          >
+            Sau
+            <ChevronRight size={16} />
+          </Button>
+        </div>
+      )}
 
-                      <div className="mt-3 text-xs text-gray-500">
-                        <p>Tạo: {formatDateTime(invoice.issueDate)}</p>
-                        <p>Hạn: {formatDate(invoice.dueDate)}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Invoice Details */}
-        <Card className="shadow-lg border-0">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>{showPayments ? 'Lịch sử thanh toán' : 'Chi tiết hóa đơn'}</span>
-              {selectedInvoice && (
-                <div className="flex space-x-2">
+      {/* Detail Dialog */}
+      {showDetailDialog && selectedInvoice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">
+                  {showPayments ? 'Lịch sử thanh toán' : 'Chi tiết hóa đơn'}
+                </h2>
+                <div className="flex items-center space-x-2">
                   {!showPayments ? (
                     <>
                       <Button size="sm" variant="outline" onClick={() => handlePrintInvoice(selectedInvoice)}>
@@ -598,13 +669,13 @@ const InvoicePayments: React.FC = () => {
                       )}
                     </>
                   )}
+                  <Button size="sm" variant="outline" onClick={() => setShowDetailDialog(false)}>
+                    <X size={14} />
+                  </Button>
                 </div>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {selectedInvoice ? (
-              showPayments ? (
+              </div>
+              
+              {showPayments ? (
                 <div className="space-y-4">
                   {/* Payment Summary */}
                   <div className="border-b pb-4">
@@ -769,15 +840,11 @@ const InvoicePayments: React.FC = () => {
                     <p>Ngày tạo: {formatDateTime(selectedInvoice.issueDate)}</p>
                   </div>
                 </div>
-              )
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                Chọn một hóa đơn để xem chi tiết
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

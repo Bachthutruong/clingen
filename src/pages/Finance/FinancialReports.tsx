@@ -270,81 +270,100 @@ const FinancialReports: React.FC = () => {
       </Card>
 
       {/* Key Financial Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <Card className="shadow-lg border-0">
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Doanh thu tháng</p>
-                <p className="text-3xl font-bold text-emerald-600">
+                <p className="text-xs text-gray-600">Doanh thu tháng</p>
+                <p className="text-xl font-bold text-emerald-600">
                   {formatCurrency(currentMonth.revenue)}
                 </p>
                 <div className={`flex items-center mt-1 ${getGrowthColor(revenueGrowth)}`}>
                   {getGrowthIcon(revenueGrowth)}
-                  <span className="text-sm ml-1">
-                    {revenueGrowth > 0 ? '+' : ''}{revenueGrowth.toFixed(1)}% so với tháng trước
+                  <span className="text-xs ml-1">
+                    {revenueGrowth > 0 ? '+' : ''}{revenueGrowth.toFixed(1)}%
                   </span>
                 </div>
               </div>
-              <DollarSign className="h-12 w-12 text-emerald-600" />
+              <DollarSign className="h-8 w-8 text-emerald-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Chi phí tháng</p>
-                <p className="text-3xl font-bold text-red-600">
+                <p className="text-xs text-gray-600">Chi phí tháng</p>
+                <p className="text-xl font-bold text-red-600">
                   {formatCurrency(currentMonth.expenses)}
                 </p>
                 <div className="flex items-center mt-1 text-gray-600">
-                  <span className="text-sm">
-                    {((currentMonth.expenses / currentMonth.revenue) * 100).toFixed(1)}% doanh thu
+                  <span className="text-xs">
+                    {((currentMonth.expenses / currentMonth.revenue) * 100).toFixed(1)}%
                   </span>
                 </div>
               </div>
-              <CreditCard className="h-12 w-12 text-red-600" />
+              <CreditCard className="h-8 w-8 text-red-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Lợi nhuận tháng</p>
-                <p className="text-3xl font-bold text-blue-600">
+                <p className="text-xs text-gray-600">Lợi nhuận tháng</p>
+                <p className="text-xl font-bold text-blue-600">
                   {formatCurrency(currentMonth.profit)}
                 </p>
                 <div className={`flex items-center mt-1 ${getGrowthColor(profitGrowth)}`}>
                   {getGrowthIcon(profitGrowth)}
-                  <span className="text-sm ml-1">
-                    {profitGrowth > 0 ? '+' : ''}{profitGrowth.toFixed(1)}% so với tháng trước
+                  <span className="text-xs ml-1">
+                    {profitGrowth > 0 ? '+' : ''}{profitGrowth.toFixed(1)}%
                   </span>
                 </div>
               </div>
-              <TrendingUp className="h-12 w-12 text-blue-600" />
+              <TrendingUp className="h-8 w-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-6">
+          <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Biên lợi nhuận</p>
-                <p className="text-3xl font-bold text-purple-600">
+                <p className="text-xs text-gray-600">Lãi ròng</p>
+                <p className="text-xl font-bold text-indigo-600">
+                  {formatCurrency(currentMonth.profit * 0.8)}
+                </p>
+                <div className="flex items-center mt-1 text-gray-600">
+                  <span className="text-xs">
+                    {((currentMonth.profit * 0.8 / currentMonth.revenue) * 100).toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+              <Activity className="h-8 w-8 text-indigo-600" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-lg border-0">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-gray-600">Biên lợi nhuận</p>
+                <p className="text-xl font-bold text-purple-600">
                   {((currentMonth.profit / currentMonth.revenue) * 100).toFixed(1)}%
                 </p>
                 <div className="flex items-center mt-1 text-gray-600">
-                  <span className="text-sm">
+                  <span className="text-xs">
                     Mục tiêu: 65%
                   </span>
                 </div>
               </div>
-              <PieChart className="h-12 w-12 text-purple-600" />
+              <PieChart className="h-8 w-8 text-purple-600" />
             </div>
           </CardContent>
         </Card>
@@ -363,51 +382,139 @@ const FinancialReports: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {financialData.map((data) => (
-                <div 
-                  key={data.period} 
-                  className="border-b pb-3 last:border-b-0 cursor-pointer hover:bg-gray-50 p-2 rounded"
-                  onClick={() => handleViewDetails(data)}
-                >
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-medium">Tháng {data.period.split('-')[1]}/2024</span>
-                    <div className="text-right">
-                      <p className="font-bold text-emerald-600">{formatCurrency(data.revenue)}</p>
-                      <p className="text-sm text-gray-600">{data.testCount} XN</p>
-                    </div>
-                  </div>
+              {/* Line Chart */}
+              <div className="h-64 w-full">
+                <svg viewBox="0 0 400 200" className="w-full h-full">
+                  {/* Grid lines */}
+                  <defs>
+                    <pattern id="grid" width="40" height="20" patternUnits="userSpaceOnUse">
+                      <path d="M 40 0 L 0 0 0 20" fill="none" stroke="#f0f0f0" strokeWidth="1"/>
+                    </pattern>
+                  </defs>
+                  <rect width="400" height="200" fill="url(#grid)" />
                   
-                  {/* Revenue vs Expense Bar */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-xs text-gray-600">
-                      <span>Doanh thu</span>
-                      <span>{formatCurrency(data.revenue)}</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-emerald-500 h-2 rounded-full" 
-                        style={{ width: '100%' }}
-                      ></div>
-                    </div>
+                  {/* Chart data */}
+                  {(() => {
+                    const maxRevenue = Math.max(...financialData.map(d => d.revenue))
+                    const maxProfit = Math.max(...financialData.map(d => d.profit))
+                    const maxValue = Math.max(maxRevenue, maxProfit)
                     
-                    <div className="flex justify-between text-xs text-gray-600">
-                      <span>Chi phí</span>
-                      <span>{formatCurrency(data.expenses)}</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-red-500 h-2 rounded-full" 
-                        style={{ width: `${(data.expenses / data.revenue) * 100}%` }}
-                      ></div>
-                    </div>
+                    const revenuePoints = financialData.map((data, index) => {
+                      const x = 50 + (index * 80)
+                      const y = 180 - (data.revenue / maxValue * 150)
+                      return { x, y, value: data.revenue }
+                    }).reverse()
                     
-                    <div className="flex justify-between text-xs font-medium">
-                      <span className="text-blue-600">Lợi nhuận</span>
-                      <span className="text-blue-600">{formatCurrency(data.profit)}</span>
+                    const profitPoints = financialData.map((data, index) => {
+                      const x = 50 + (index * 80)
+                      const y = 180 - (data.profit / maxValue * 150)
+                      return { x, y, value: data.profit }
+                    }).reverse()
+                    
+                    return (
+                      <>
+                        {/* Revenue line */}
+                        <polyline
+                          points={revenuePoints.map(p => `${p.x},${p.y}`).join(' ')}
+                          fill="none"
+                          stroke="#10b981"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        
+                        {/* Profit line */}
+                        <polyline
+                          points={profitPoints.map(p => `${p.x},${p.y}`).join(' ')}
+                          fill="none"
+                          stroke="#3b82f6"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        
+                        {/* Revenue dots */}
+                        {revenuePoints.map((point, index) => (
+                          <circle
+                            key={`revenue-${index}`}
+                            cx={point.x}
+                            cy={point.y}
+                            r="4"
+                            fill="#10b981"
+                            stroke="#fff"
+                            strokeWidth="2"
+                          />
+                        ))}
+                        
+                        {/* Profit dots */}
+                        {profitPoints.map((point, index) => (
+                          <circle
+                            key={`profit-${index}`}
+                            cx={point.x}
+                            cy={point.y}
+                            r="4"
+                            fill="#3b82f6"
+                            stroke="#fff"
+                            strokeWidth="2"
+                          />
+                        ))}
+                        
+                        {/* X-axis labels */}
+                        {financialData.map((data, index) => (
+                          <text
+                            key={`label-${index}`}
+                            x={50 + (index * 80)}
+                            y={195}
+                            textAnchor="middle"
+                            fontSize="12"
+                            fill="#6b7280"
+                          >
+                            T{data.period.split('-')[1]}
+                          </text>
+                        )).reverse()}
+                      </>
+                    )
+                  })()}
+                </svg>
+              </div>
+              
+              {/* Legend */}
+              <div className="flex justify-center space-x-6 text-sm">
+                <div className="flex items-center">
+                  <div className="w-4 h-0.5 bg-emerald-500 mr-2"></div>
+                  <span className="text-gray-600">Doanh thu</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-4 h-0.5 bg-blue-500 mr-2"></div>
+                  <span className="text-gray-600">Lợi nhuận</span>
+                </div>
+              </div>
+              
+              {/* Summary data */}
+              <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                {financialData.slice(0, 2).map((data) => (
+                  <div 
+                    key={data.period} 
+                    className="p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
+                    onClick={() => handleViewDetails(data)}
+                  >
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-medium text-sm">Tháng {data.period.split('-')[1]}/2024</span>
+                      <span className="text-xs text-gray-500">{data.testCount} XN</span>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-emerald-600">Doanh thu:</span>
+                        <span className="font-medium text-emerald-600">{formatCurrency(data.revenue)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-blue-600">Lợi nhuận:</span>
+                        <span className="font-medium text-blue-600">{formatCurrency(data.profit)}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>

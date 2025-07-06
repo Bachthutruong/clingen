@@ -551,7 +551,7 @@ export const inventoryApi = {
 
 // Patient Test Management API (Quản lý mẫu bệnh nhân)
 export const patientSamplesApi = {
-  getAll: async (params?: PatientTestSearchDTO): Promise<PaginatedResponse<PatientAPI>> => {
+  getAll: async (params?: PatientTestSearchDTO): Promise<any> => {
     try {
       const searchParams: PatientTestSearchDTO = {
         keyword: params?.keyword,
@@ -564,33 +564,61 @@ export const patientSamplesApi = {
         testTypeId: params?.testTypeId
       }
       
-      const response: AxiosResponse<MethodResult<any>> = await api.post('/patient-test/search', searchParams)
+      console.log('API call to /patient-test/search with params:', searchParams)
       
-      // API trả về dữ liệu pagination trong response.data.data
-      const paginationData = response.data.data
-      
-      return {
-        content: paginationData.content || [],
-        totalElements: paginationData.totalElements || 0,
-        totalPages: paginationData.totalPages || 0,
-        size: paginationData.size || searchParams.pageSize,
-        number: paginationData.number || searchParams.pageIndex,
-        first: paginationData.first || false,
-        last: paginationData.last || false,
-        numberOfElements: paginationData.numberOfElements || 0
+      // Try POST /patient-test/search first
+      try {
+        const response: AxiosResponse<any> = await api.post('/patient-test/search', searchParams)
+        console.log('POST /patient-test/search response:', response.data)
+        
+        // Check if response has the custom structure {status: true, data: [...]}
+        if (response.data && response.data.status && Array.isArray(response.data.data)) {
+          console.log('Found custom API structure with data array')
+          return response.data // Return the custom structure directly
+        }
+        
+        // Check if response has pagination structure
+        if (response.data && response.data.data) {
+          const paginationData = response.data.data
+          return {
+            content: paginationData.content || [],
+            totalElements: paginationData.totalElements || 0,
+            totalPages: paginationData.totalPages || 0,
+            size: paginationData.size || searchParams.pageSize,
+            number: paginationData.number || searchParams.pageIndex,
+            first: paginationData.first || false,
+            last: paginationData.last || false,
+            numberOfElements: paginationData.numberOfElements || 0
+          }
+        }
+        
+        return response.data
+      } catch (postError) {
+        console.warn('POST /patient-test/search failed, trying GET /patient-test:', postError)
+        
+        // Fallback to GET /patient-test
+        const getResponse: AxiosResponse<any> = await api.get('/patient-test', {
+          params: {
+            keyword: searchParams.keyword,
+            status: searchParams.status,
+            page: searchParams.pageIndex,
+            size: searchParams.pageSize,
+            testSampleId: searchParams.testSampleId,
+            testTypeId: searchParams.testTypeId
+          }
+        })
+        
+        console.log('GET /patient-test response:', getResponse.data)
+        return getResponse.data
       }
     } catch (error) {
       console.error('Error in patientSamplesApi.getAll:', error)
-      // Return empty result instead of throwing
+      // Return empty result in custom format
       return {
-        content: [],
-        totalElements: 0,
-        totalPages: 0,
-        size: params?.pageSize || 20,
-        number: params?.pageIndex || 0,
-        first: true,
-        last: true,
-        numberOfElements: 0
+        status: false,
+        message: 'Failed to fetch data',
+        data: [],
+        totalRecord: 0
       }
     }
   },

@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input'
 import { 
   FileText, 
   Search, 
-  // Download,
   Printer,
   CheckCircle,
   AlertTriangle,
@@ -15,13 +14,11 @@ import {
   Edit,
   Save,
   X,
-//   Calendar,
-//   User,
-//   TestTube,
-//   BarChart3,
   TrendingUp,
   TrendingDown,
-  // Plus
+  Loader2,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 
@@ -61,7 +58,11 @@ const TestResults: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [dateFilter, setDateFilter] = useState<string>('')
   const [selectedResult, setSelectedResult] = useState<TestResult | null>(null)
+  const [showDialog, setShowDialog] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [pageSize] = useState(20)
+  const [loading] = useState(false)
 
   // Mock data cho kết quả xét nghiệm
   const [testResults] = useState<TestResult[]>([
@@ -189,6 +190,74 @@ const TestResults: React.FC = () => {
       testedBy: 'Nguyễn Thu Thảo',
       testedAt: '2024-01-25T16:20:00',
       notes: 'Cần xem xét lại kết quả HDL-C'
+    },
+    // Add more mock data to test pagination
+    {
+      id: 'TR004',
+      sampleCode: 'SM240126001',
+      patientName: 'Phạm Thị D',
+      patientCode: 'BN004',
+      patientAge: 28,
+      patientGender: 0,
+      testService: 'Hormone TSH',
+      serviceCode: 'TSH',
+      parameters: [
+        {
+          id: 'P009',
+          name: 'TSH',
+          value: '8.5',
+          unit: 'mIU/L',
+          normalRange: '0.4-4.0',
+          status: 'high',
+          flag: 'H'
+        }
+      ],
+      status: 'reviewed',
+      testedBy: 'Trần Văn Đức',
+      testedAt: '2024-01-26T08:30:00',
+      reviewedBy: 'BS. Lê Thị Hương',
+      reviewedAt: '2024-01-26T10:15:00',
+      interpretation: 'TSH tăng cao, nghi ngờ suy giáp.',
+      notes: 'Cần xét nghiệm thêm T3, T4'
+    },
+    {
+      id: 'TR005',
+      sampleCode: 'SM240126002',
+      patientName: 'Nguyễn Văn E',
+      patientCode: 'BN005',
+      patientAge: 52,
+      patientGender: 1,
+      testService: 'Chức năng gan',
+      serviceCode: 'LFT',
+      parameters: [
+        {
+          id: 'P010',
+          name: 'ALT',
+          value: '85',
+          unit: 'U/L',
+          normalRange: '<40',
+          status: 'high',
+          flag: 'H'
+        },
+        {
+          id: 'P011',
+          name: 'AST',
+          value: '95',
+          unit: 'U/L',
+          normalRange: '<40',
+          status: 'high',
+          flag: 'H'
+        }
+      ],
+      status: 'printed',
+      testedBy: 'Lê Văn Hùng',
+      testedAt: '2024-01-26T14:00:00',
+      reviewedBy: 'BS. Trần Thị Mai',
+      reviewedAt: '2024-01-26T15:30:00',
+      approvedBy: 'PGS.TS. Lê Thị Hoa',
+      approvedAt: '2024-01-26T16:00:00',
+      interpretation: 'Tăng men gan, cần kiểm tra nguyên nhân.',
+      notes: 'Khuyến cáo kiêng rượu bia, tái khám sau 2 tuần'
     }
   ])
 
@@ -210,6 +279,13 @@ const TestResults: React.FC = () => {
 
     return matchesSearch && matchesStatus && matchesDate
   })
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredResults.length / pageSize)
+  const paginatedResults = filteredResults.slice(
+    currentPage * pageSize,
+    (currentPage + 1) * pageSize
+  )
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -253,6 +329,7 @@ const TestResults: React.FC = () => {
   const handleViewResult = (result: TestResult) => {
     setSelectedResult(result)
     setIsEditing(false)
+    setShowDialog(true)
   }
 
   const handleEditResult = () => {
@@ -270,6 +347,10 @@ const TestResults: React.FC = () => {
 
   const handleApproveResult = (result: TestResult) => {
     toast.success(`Phê duyệt kết quả: ${result.sampleCode}`)
+  }
+
+  const handleSearch = () => {
+    setCurrentPage(0)
   }
 
   const stats = {
@@ -291,7 +372,7 @@ const TestResults: React.FC = () => {
             <FileText size={24} />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">Mẫu kết quả xét nghiệm</h1>
+            <h1 className="text-2xl font-bold">Kết quả xét nghiệm</h1>
             <p className="text-green-100">Quản lý và xem kết quả xét nghiệm</p>
           </div>
         </div>
@@ -360,26 +441,25 @@ const TestResults: React.FC = () => {
         </Card>
       </div>
 
-      {/* Search and Filter */}
+      {/* Search and Filter - Compact */}
       <Card className="shadow-lg border-0">
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="md:col-span-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Tìm theo mã mẫu, tên BN, dịch vụ..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row gap-4 items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Tìm theo mã mẫu, tên BN, dịch vụ..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                className="pl-10"
+              />
             </div>
             
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md"
+              className="px-3 py-2 border border-gray-300 rounded-md w-full sm:w-auto"
             >
               <option value="">Tất cả trạng thái</option>
               <option value="draft">Bản thảo</option>
@@ -393,240 +473,339 @@ const TestResults: React.FC = () => {
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
               placeholder="Ngày xét nghiệm"
+              className="w-full sm:w-auto"
             />
+
+            <Button onClick={handleSearch} disabled={loading}>
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Results List and Details */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Results List */}
-        <Card className="shadow-lg border-0">
-          <CardHeader>
-            <CardTitle>Danh sách kết quả ({filteredResults.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {filteredResults.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                Không tìm thấy kết quả phù hợp
-              </div>
-            ) : (
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {filteredResults.map(result => (
-                  <Card key={result.id} className="border hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => handleViewResult(result)}>
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h3 className="font-semibold">{result.sampleCode}</h3>
-                          <p className="text-sm text-gray-600">
-                            {result.patientName} ({result.patientCode})
-                          </p>
-                          <p className="text-sm text-gray-600">{result.testService}</p>
+      {/* Results Table */}
+      <Card className="shadow-lg border-0">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>Danh sách kết quả ({filteredResults.length})</span>
+            {loading && <Loader2 size={16} className="animate-spin" />}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {paginatedResults.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              Không tìm thấy kết quả phù hợp
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Mã mẫu</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Bệnh nhân</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Xét nghiệm</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Trạng thái</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Bất thường</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Thời gian</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {paginatedResults.map(result => (
+                    <tr key={result.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-gray-900">{result.sampleCode}</div>
+                        <div className="text-xs text-gray-500">{result.serviceCode}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-gray-900">{result.patientName}</div>
+                        <div className="text-xs text-gray-500">
+                          {result.patientCode} • {result.patientAge} tuổi • {result.patientGender === 1 ? 'Nam' : 'Nữ'}
                         </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-gray-900">{result.testService}</div>
+                        <div className="text-xs text-gray-500">{result.parameters.length} chỉ số</div>
+                      </td>
+                      <td className="px-4 py-4">
                         <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getStatusColor(result.status)}`}>
                           {getStatusLabel(result.status)}
                         </span>
-                      </div>
-                      
-                      <div className="text-xs text-gray-500">
-                        <p>Xét nghiệm: {formatDateTime(result.testedAt)}</p>
-                        <p>Người thực hiện: {result.testedBy}</p>
-                      </div>
-
-                      {/* Abnormal parameters preview */}
-                      {result.parameters.some(p => p.status !== 'normal') && (
-                        <div className="mt-2 flex items-center text-xs text-red-600">
-                          <AlertTriangle size={12} className="mr-1" />
-                          Có {result.parameters.filter(p => p.status !== 'normal').length} chỉ số bất thường
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-center">
+                          {result.parameters.filter(p => p.status !== 'normal').length > 0 ? (
+                            <div className="flex items-center justify-center text-red-600">
+                              <AlertTriangle size={14} className="mr-1" />
+                              <span className="font-medium">{result.parameters.filter(p => p.status !== 'normal').length}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center text-green-600">
+                              <CheckCircle size={14} className="mr-1" />
+                              <span>0</span>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-xs text-gray-900">{formatDateTime(result.testedAt)}</div>
+                        <div className="text-xs text-gray-500">{result.testedBy}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex space-x-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleViewResult(result)}
+                          >
+                            <Eye size={14} className="mr-1" />
+                            Chi tiết
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handlePrintResult(result)}
+                          >
+                            <Printer size={14} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* Result Details */}
-        <Card className="shadow-lg border-0">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Chi tiết kết quả</span>
-              {selectedResult && (
-                <div className="flex space-x-2">
-                  {!isEditing ? (
-                    <>
-                      <Button size="sm" variant="outline" onClick={handleEditResult}>
-                        <Edit size={14} className="mr-1" />
-                        Sửa
-                      </Button>
-                      <Button size="sm" onClick={() => handlePrintResult(selectedResult)}>
-                        <Printer size={14} className="mr-1" />
-                        In
-                      </Button>
-                    </>
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+            disabled={currentPage === 0 || loading}
+          >
+            <ChevronLeft size={16} />
+            Trước
+          </Button>
+          <span className="text-sm text-gray-600">
+            Trang {currentPage + 1} / {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
+            disabled={currentPage >= totalPages - 1 || loading}
+          >
+            Sau
+            <ChevronRight size={16} />
+          </Button>
+        </div>
+      )}
+
+      {/* Result Details Dialog */}
+      {showDialog && selectedResult && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h2 className="text-xl font-bold text-gray-900">Chi tiết kết quả xét nghiệm</h2>
+              <div className="flex items-center space-x-2">
+                {!isEditing ? (
+                  <>
+                    <Button size="sm" variant="outline" onClick={handleEditResult}>
+                      <Edit size={14} className="mr-1" />
+                      Sửa
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => handlePrintResult(selectedResult)}>
+                      <Printer size={14} className="mr-1" />
+                      In
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button size="sm" onClick={handleSaveResult}>
+                      <Save size={14} className="mr-1" />
+                      Lưu
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>
+                      <X size={14} className="mr-1" />
+                      Hủy
+                    </Button>
+                  </>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDialog(false)}
+                >
+                  <X size={20} />
+                </Button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {/* Patient Info */}
+              <div className="border-b pb-4">
+                <h3 className="font-semibold text-lg">{selectedResult.patientName}</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2 text-sm">
+                  <div>
+                    <span className="text-gray-600">Mã BN:</span>
+                    <span className="ml-2 font-medium">{selectedResult.patientCode}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Tuổi:</span>
+                    <span className="ml-2 font-medium">{selectedResult.patientAge}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Giới tính:</span>
+                    <span className="ml-2 font-medium">
+                      {selectedResult.patientGender === 1 ? 'Nam' : selectedResult.patientGender === 0 ? 'Nữ' : 'Khác'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Mã mẫu:</span>
+                    <span className="ml-2 font-medium">{selectedResult.sampleCode}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Test Service */}
+              <div className="border-b pb-4">
+                <h4 className="font-semibold mb-2">Dịch vụ xét nghiệm</h4>
+                <p className="font-medium">{selectedResult.testService} ({selectedResult.serviceCode})</p>
+              </div>
+
+              {/* Parameters */}
+              <div className="border-b pb-4">
+                <h4 className="font-semibold mb-3">Kết quả xét nghiệm</h4>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border border-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left font-medium text-gray-900 border-b">Chỉ số</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-900 border-b">Kết quả</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-900 border-b">Đơn vị</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-900 border-b">Giá trị bình thường</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-900 border-b">Trạng thái</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {selectedResult.parameters.map(param => (
+                        <tr key={param.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-4 border-b">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium">{param.name}</span>
+                              {param.flag && (
+                                <span className={`text-xs px-1 py-0.5 rounded ${
+                                  param.flag === 'H' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {param.flag}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 border-b">
+                            {isEditing ? (
+                              <Input
+                                className="w-20 text-sm"
+                                defaultValue={param.value}
+                              />
+                            ) : (
+                              <span className={`font-bold ${getParameterStatusColor(param.status)}`}>
+                                {param.value}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 border-b">{param.unit}</td>
+                          <td className="px-4 py-4 border-b">{param.normalRange}</td>
+                          <td className="px-4 py-4 border-b">
+                            <div className="flex items-center space-x-1">
+                              {getParameterIcon(param.status)}
+                              <span className={getParameterStatusColor(param.status)}>
+                                {param.status === 'normal' ? 'Bình thường' : 
+                                 param.status === 'high' ? 'Cao' :
+                                 param.status === 'low' ? 'Thấp' : 'Bất thường'}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Interpretation */}
+              {selectedResult.interpretation && (
+                <div className="border-b pb-4">
+                  <h4 className="font-semibold mb-2">Nhận xét</h4>
+                  {isEditing ? (
+                    <textarea
+                      className="w-full p-2 border rounded"
+                      rows={3}
+                      defaultValue={selectedResult.interpretation}
+                    />
                   ) : (
-                    <>
-                      <Button size="sm" onClick={handleSaveResult}>
-                        <Save size={14} className="mr-1" />
-                        Lưu
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>
-                        <X size={14} className="mr-1" />
-                        Hủy
-                      </Button>
-                    </>
+                    <p className="text-sm">{selectedResult.interpretation}</p>
                   )}
                 </div>
               )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {selectedResult ? (
-              <div className="space-y-4">
-                {/* Patient Info */}
+
+              {/* Notes */}
+              {selectedResult.notes && (
                 <div className="border-b pb-4">
-                  <h3 className="font-semibold text-lg">{selectedResult.patientName}</h3>
-                  <div className="grid grid-cols-2 gap-4 mt-2 text-sm">
-                    <div>
-                      <span className="text-gray-600">Mã BN:</span>
-                      <span className="ml-2 font-medium">{selectedResult.patientCode}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Tuổi:</span>
-                      <span className="ml-2 font-medium">{selectedResult.patientAge}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Giới tính:</span>
-                      <span className="ml-2 font-medium">
-                        {selectedResult.patientGender === 1 ? 'Nam' : selectedResult.patientGender === 0 ? 'Nữ' : 'Khác'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Mã mẫu:</span>
-                      <span className="ml-2 font-medium">{selectedResult.sampleCode}</span>
-                    </div>
-                  </div>
+                  <h4 className="font-semibold mb-2">Ghi chú</h4>
+                  {isEditing ? (
+                    <textarea
+                      className="w-full p-2 border rounded"
+                      rows={2}
+                      defaultValue={selectedResult.notes}
+                    />
+                  ) : (
+                    <p className="text-sm">{selectedResult.notes}</p>
+                  )}
                 </div>
+              )}
 
-                {/* Test Service */}
-                <div className="border-b pb-4">
-                  <h4 className="font-semibold mb-2">Dịch vụ xét nghiệm</h4>
-                  <p className="font-medium">{selectedResult.testService} ({selectedResult.serviceCode})</p>
-                </div>
-
-                {/* Parameters */}
-                <div className="border-b pb-4">
-                  <h4 className="font-semibold mb-3">Kết quả xét nghiệm</h4>
-                  <div className="space-y-3">
-                    {selectedResult.parameters.map(param => (
-                      <div key={param.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="font-medium">{param.name}</span>
-                            {param.flag && (
-                              <span className={`text-xs px-1 py-0.5 rounded ${
-                                param.flag === 'H' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
-                              }`}>
-                                {param.flag}
-                              </span>
-                            )}
-                            {getParameterIcon(param.status)}
-                          </div>
-                          <p className="text-sm text-gray-600">Bình thường: {param.normalRange}</p>
-                        </div>
-                        <div className="text-right">
-                                                     <p className={`font-bold ${getParameterStatusColor(param.status)}`}>
-                             {isEditing ? (
-                               <Input
-                                 className="w-20 text-right text-sm"
-                                 defaultValue={param.value}
-                               />
-                             ) : (
-                               param.value
-                             )} {param.unit}
-                           </p>
-                        </div>
-                      </div>
-                    ))}
+              {/* Status History */}
+              <div>
+                <h4 className="font-semibold mb-3">Lịch sử xử lý</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Thực hiện xét nghiệm:</span>
+                    <span>{selectedResult.testedBy} - {formatDateTime(selectedResult.testedAt)}</span>
                   </div>
-                </div>
-
-                {/* Interpretation */}
-                {selectedResult.interpretation && (
-                  <div className="border-b pb-4">
-                    <h4 className="font-semibold mb-2">Nhận xét</h4>
-                    {isEditing ? (
-                      <textarea
-                        className="w-full p-2 border rounded"
-                        rows={3}
-                        defaultValue={selectedResult.interpretation}
-                      />
-                    ) : (
-                      <p className="text-sm">{selectedResult.interpretation}</p>
-                    )}
-                  </div>
-                )}
-
-                {/* Notes */}
-                {selectedResult.notes && (
-                  <div className="border-b pb-4">
-                    <h4 className="font-semibold mb-2">Ghi chú</h4>
-                    {isEditing ? (
-                      <textarea
-                        className="w-full p-2 border rounded"
-                        rows={2}
-                        defaultValue={selectedResult.notes}
-                      />
-                    ) : (
-                      <p className="text-sm">{selectedResult.notes}</p>
-                    )}
-                  </div>
-                )}
-
-                {/* Status History */}
-                <div>
-                  <h4 className="font-semibold mb-3">Lịch sử xử lý</h4>
-                  <div className="space-y-2 text-sm">
+                  {selectedResult.reviewedBy && (
                     <div className="flex justify-between">
-                      <span>Thực hiện xét nghiệm:</span>
-                      <span>{selectedResult.testedBy} - {formatDateTime(selectedResult.testedAt)}</span>
+                      <span>Duyệt kết quả:</span>
+                      <span>{selectedResult.reviewedBy} - {formatDateTime(selectedResult.reviewedAt!)}</span>
                     </div>
-                    {selectedResult.reviewedBy && (
-                      <div className="flex justify-between">
-                        <span>Duyệt kết quả:</span>
-                        <span>{selectedResult.reviewedBy} - {formatDateTime(selectedResult.reviewedAt!)}</span>
-                      </div>
-                    )}
-                    {selectedResult.approvedBy && (
-                      <div className="flex justify-between">
-                        <span>Phê duyệt:</span>
-                        <span>{selectedResult.approvedBy} - {formatDateTime(selectedResult.approvedAt!)}</span>
-                      </div>
-                    )}
-                  </div>
+                  )}
+                  {selectedResult.approvedBy && (
+                    <div className="flex justify-between">
+                      <span>Phê duyệt:</span>
+                      <span>{selectedResult.approvedBy} - {formatDateTime(selectedResult.approvedAt!)}</span>
+                    </div>
+                  )}
                 </div>
+              </div>
 
-                {/* Actions */}
-                {selectedResult.status === 'reviewed' && (
-                  <div className="pt-4 border-t">
-                    <Button onClick={() => handleApproveResult(selectedResult)} className="w-full">
-                      <CheckCircle size={16} className="mr-2" />
-                      Phê duyệt kết quả
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                Chọn một kết quả để xem chi tiết
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              {/* Actions */}
+              {selectedResult.status === 'reviewed' && (
+                <div className="pt-4 border-t">
+                  <Button onClick={() => handleApproveResult(selectedResult)} className="w-full">
+                    <CheckCircle size={16} className="mr-2" />
+                    Phê duyệt kết quả
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

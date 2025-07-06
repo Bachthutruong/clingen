@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { 
   Users, 
@@ -24,6 +25,7 @@ interface DashboardStats {
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [stats, setStats] = useState<DashboardStats>({
     todayRegistrations: 0,
     todayRevenue: 0,
@@ -202,7 +204,11 @@ const Dashboard: React.FC = () => {
         <h2 className="text-2xl font-bold text-gray-900 mb-6">Thao tác nhanh</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {getQuickActions().map((action, index) => (
-            <Card key={index} className="bg-white shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group border-0">
+            <Card 
+              key={index} 
+              className="bg-white shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group border-0"
+              onClick={() => navigate(action.href)}
+            >
               <CardHeader className="pb-4">
                 <div className="flex items-center space-x-4">
                   <div className="p-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl text-white group-hover:shadow-lg transition-shadow">

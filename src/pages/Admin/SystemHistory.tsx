@@ -23,8 +23,11 @@ import {
   Clock,
   TrendingUp,
   BarChart3,
-  // Eye,
-  Trash2
+  Eye,
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  X
 } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 
@@ -60,6 +63,9 @@ const SystemHistory: React.FC = () => {
   const [dateFrom, setDateFrom] = useState('2024-01-01')
   const [dateTo, setDateTo] = useState('2024-01-31')
   const [selectedLog, setSelectedLog] = useState<SystemLog | null>(null)
+  const [showDetailDialog, setShowDetailDialog] = useState(false)
+  const [currentPage, setCurrentPage] = useState(0)
+  const [pageSize] = useState(10)
 
   // Mock data cho system logs
   const [systemLogs] = useState<SystemLog[]>([
@@ -292,6 +298,7 @@ const SystemHistory: React.FC = () => {
 
   const handleViewLog = (log: SystemLog) => {
     setSelectedLog(log)
+    setShowDetailDialog(true)
   }
 
   const handleExportLogs = () => {
@@ -338,59 +345,59 @@ const SystemHistory: React.FC = () => {
       </div>
 
       {/* System Health and Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <Card className="shadow-lg border-0">
-          <CardContent className="p-6">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Tổng logs</p>
-                <p className="text-2xl font-bold text-blue-600">{systemStats.totalLogs}</p>
+                <p className="text-xs text-gray-600">Tổng logs</p>
+                <p className="text-lg font-bold text-blue-600">{systemStats.totalLogs}</p>
                 <p className="text-xs text-gray-500">Hôm nay: {systemStats.todayLogs}</p>
               </div>
-              <Database className="h-8 w-8 text-blue-600" />
+              <Database className="h-5 w-5 text-blue-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-6">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Tỷ lệ lỗi</p>
-                <p className="text-2xl font-bold text-red-600">{systemStats.errorRate}%</p>
+                <p className="text-xs text-gray-600">Tỷ lệ lỗi</p>
+                <p className="text-lg font-bold text-red-600">{systemStats.errorRate}%</p>
                 <p className="text-xs text-gray-500">24h qua</p>
               </div>
-              <XCircle className="h-8 w-8 text-red-600" />
+              <XCircle className="h-5 w-5 text-red-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0">
-          <CardContent className="p-6">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Sức khỏe HT</p>
-                <p className={`text-2xl font-bold ${getHealthColor(systemStats.systemHealth)}`}>
+                <p className="text-xs text-gray-600">Sức khỏe HT</p>
+                <p className={`text-lg font-bold ${getHealthColor(systemStats.systemHealth)}`}>
                   {getHealthLabel(systemStats.systemHealth)}
                 </p>
                 <p className="text-xs text-gray-500">Hiện tại</p>
               </div>
-              <Activity className={`h-8 w-8 ${getHealthColor(systemStats.systemHealth)}`} />
+              <Activity className={`h-5 w-5 ${getHealthColor(systemStats.systemHealth)}`} />
             </div>
           </CardContent>
         </Card>
 
         <Card className="shadow-lg border-0 md:col-span-2">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold">Người dùng hoạt động nhiều nhất</h3>
-              <TrendingUp className="h-5 w-5 text-gray-400" />
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-semibold text-sm">Người dùng hoạt động nhiều</h4>
+              <TrendingUp className="h-4 w-4 text-gray-400" />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1">
               {systemStats.topUsers.slice(0, 3).map((user, index) => (
-                <div key={user.userId} className="flex justify-between items-center text-sm">
+                <div key={user.userId} className="flex justify-between items-center text-xs">
                   <span className="flex items-center">
-                    <span className="w-4 h-4 bg-blue-100 text-blue-600 rounded-full text-xs flex items-center justify-center mr-2">
+                    <span className="w-3 h-3 bg-blue-100 text-blue-600 rounded-full text-xs flex items-center justify-center mr-1">
                       {index + 1}
                     </span>
                     {user.userName}
@@ -462,90 +469,144 @@ const SystemHistory: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Logs List and Details */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Logs List */}
-        <Card className="shadow-lg border-0">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>System Logs ({filteredLogs.length})</span>
+      {/* Logs List - Table */}
+      <Card className="shadow-lg border-0">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span>System Logs ({filteredLogs.length})</span>
+            <div className="flex space-x-2">
               <Button size="sm" variant="outline" onClick={handleClearLogs}>
                 <Trash2 size={14} className="mr-1" />
                 Xóa cũ
               </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {filteredLogs.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                Không tìm thấy log phù hợp
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {filteredLogs.map(log => (
-                  <Card key={log.id} className="border hover:shadow-md transition-shadow cursor-pointer"
-                        onClick={() => handleViewLog(log)}>
-                    <CardContent className="p-3">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center space-x-2">
-                          <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getLevelColor(log.level)}`}>
-                            {getLevelIcon(log.level)}
-                            <span className="ml-1 uppercase">{log.level}</span>
-                          </span>
-                          <div className="flex items-center text-xs text-gray-500">
-                            {getCategoryIcon(log.category)}
-                            <span className="ml-1">{getCategoryLabel(log.category)}</span>
+              <Button size="sm" onClick={() => window.location.reload()}>
+                <RefreshCw size={14} className="mr-1" />
+                Làm mới
+              </Button>
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {filteredLogs.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              Không tìm thấy log phù hợp
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Thời gian</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Mức độ</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Danh mục</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Hành động</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Mô tả</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Người dùng</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Trạng thái</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {filteredLogs.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(log => (
+                    <tr key={log.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-900">{formatDateTime(log.timestamp)}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getLevelColor(log.level)}`}>
+                          {getLevelIcon(log.level)}
+                          <span className="ml-1 uppercase">{log.level}</span>
+                        </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center">
+                          {getCategoryIcon(log.category)}
+                          <span className="ml-1 text-sm">{getCategoryLabel(log.category)}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="font-medium text-gray-900">{log.action}</div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-600 max-w-xs truncate" title={log.description}>
+                          {log.description}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        {log.userName ? (
+                          <div>
+                            <div className="font-medium text-sm">{log.userName}</div>
+                            <div className="text-xs text-gray-500">{log.ipAddress}</div>
                           </div>
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {formatDateTime(log.timestamp)}
-                        </div>
-                      </div>
-                      
-                      <div className="mb-2">
-                        <p className="font-medium text-sm">{log.action}</p>
-                        <p className="text-sm text-gray-600 line-clamp-2">{log.description}</p>
-                      </div>
-
-                      <div className="flex justify-between items-center text-xs text-gray-500">
-                        <div className="flex items-center space-x-3">
-                          {log.userName && (
-                            <span className="flex items-center">
-                              <User size={12} className="mr-1" />
-                              {log.userName}
-                            </span>
-                          )}
-                          {log.ipAddress && (
-                            <span>{log.ipAddress}</span>
-                          )}
-                        </div>
+                        ) : (
+                          <div className="text-xs text-gray-500">{log.ipAddress || 'System'}</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-4">
                         <div className={`flex items-center ${log.success ? 'text-green-600' : 'text-red-600'}`}>
                           {log.success ? <CheckCircle size={12} /> : <XCircle size={12} />}
-                          <span className="ml-1">{log.success ? 'Success' : 'Failed'}</span>
+                          <span className="ml-1 text-xs">{log.success ? 'Success' : 'Failed'}</span>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                      </td>
+                      <td className="px-4 py-4">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleViewLog(log)}
+                          className="text-xs"
+                        >
+                          <Eye size={12} className="mr-1" />
+                          Chi tiết
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        {/* Log Details */}
-        <Card className="shadow-lg border-0">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Chi tiết Log</span>
-              {selectedLog && (
-                <Button size="sm" variant="outline" onClick={() => setSelectedLog(null)}>
-                  Đóng
+      {/* Pagination */}
+      {filteredLogs.length > pageSize && (
+        <div className="flex justify-center items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+            disabled={currentPage === 0}
+          >
+            <ChevronLeft size={16} />
+            Trước
+          </Button>
+          <span className="text-sm text-gray-600">
+            Trang {currentPage + 1} / {Math.ceil(filteredLogs.length / pageSize)}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(Math.min(Math.ceil(filteredLogs.length / pageSize) - 1, currentPage + 1))}
+            disabled={currentPage >= Math.ceil(filteredLogs.length / pageSize) - 1}
+          >
+            Sau
+            <ChevronRight size={16} />
+          </Button>
+        </div>
+      )}
+
+      {/* Detail Dialog */}
+      {showDetailDialog && selectedLog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">Chi tiết Log</h2>
+                <Button size="sm" variant="outline" onClick={() => setShowDetailDialog(false)}>
+                  <X size={14} />
                 </Button>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {selectedLog ? (
+              </div>
+              
               <div className="space-y-4">
                 {/* Basic Info */}
                 <div className="border-b pb-4">
@@ -640,15 +701,10 @@ const SystemHistory: React.FC = () => {
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="text-center py-8 text-gray-500">
-                <History size={48} className="mx-auto mb-4 text-gray-300" />
-                <p>Chọn một log để xem chi tiết</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Top Actions Chart */}
       <Card className="shadow-lg border-0">
