@@ -27,11 +27,12 @@ import { inventoryApi, inventoryLogsApi } from '@/services'
 import { getMaterialTypeLabel } from '@/types/api'
 import type { 
   InventoryItem, 
-  InventoryLog, 
+  InventoryLogsDTO,
   InventorySearchRequest,
   InventoryLogSearchRequest,
   InventoryCreateRequest,
   InventoryLogCreateRequest,
+  CreateInventoryLogRequest,
   PaginatedResponse 
 } from '@/types/api'
 
@@ -49,7 +50,7 @@ const InventoryManagement: React.FC = () => {
 
   // API State
   const [inventoryData, setInventoryData] = useState<PaginatedResponse<InventoryItem> | null>(null)
-  const [inventoryLogs, setInventoryLogs] = useState<PaginatedResponse<InventoryLog> | null>(null)
+  const [inventoryLogs, setInventoryLogs] = useState<PaginatedResponse<InventoryLogsDTO> | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -173,24 +174,8 @@ const InventoryManagement: React.FC = () => {
     try {
       setSubmitting(true)
       
-      const updateData: Partial<InventoryCreateRequest> = {
-        name: selectedItem.name,
-        code: selectedItem.code,
-        description: selectedItem.description,
-        unit: selectedItem.unit,
-        currentStock: selectedItem.currentStock,
-        minStock: selectedItem.minStock,
-        maxStock: selectedItem.maxStock,
-        unitPrice: selectedItem.unitPrice,
-        location: selectedItem.location,
-        materialType: selectedItem.materialType,
-        status: selectedItem.status,
-        importDate: selectedItem.importDate,
-        expiryDate: selectedItem.expiryDate
-      }
-      
-      await inventoryApi.update(selectedItem.id!, updateData)
-      toast.success('Cập nhật vật tư thành công!')
+      // Note: Inventory items are read-only, updates should be done through inventory logs
+      toast.success('Vật tư kho chỉ có thể xem, không thể chỉnh sửa trực tiếp. Sử dụng nhập/xuất kho để cập nhật.')
       setIsEditing(false)
       await fetchInventoryItems()
     } catch (error) {
@@ -210,8 +195,8 @@ const InventoryManagement: React.FC = () => {
         return
       }
       
-      await inventoryApi.create(newItem)
-      toast.success('Thêm vật tư mới thành công!')
+      // Note: Inventory items are read-only, new items should be added through inventory logs
+      toast.success('Vật tư kho chỉ có thể xem, không thể thêm mới trực tiếp. Sử dụng nhập kho để thêm vật tư.')
       setNewItem({
         name: '',
         code: '',
@@ -246,12 +231,20 @@ const InventoryManagement: React.FC = () => {
     try {
       setSubmitting(true)
       
-      const logData: InventoryLogCreateRequest = {
-        inventoryId: selectedItem.id!,
+      const logData: CreateInventoryLogRequest = {
         logType: type === 'import' ? 1 : 2, // 1 - nhập kho, 2 - xuất kho
-        quantity: logForm.quantity,
-        reason: logForm.reason,
-        note: logForm.note
+        exportType: 0, // Default export type
+        exportId: 0, // Default export ID
+        items: [{
+          type: 0, // Default type
+          materialId: selectedItem.id!,
+          quantity: logForm.quantity,
+          expiryDate: '', // Default expiry date
+          unitPrice: 0, // Default unit price
+          amount: 0, // Default amount
+          note: logForm.note || ''
+        }],
+        note: logForm.note || ''
       }
       
       await inventoryLogsApi.create(logData)
@@ -284,16 +277,31 @@ const InventoryManagement: React.FC = () => {
     fetchInventoryItems()
   }
 
-  const inventoryItems = inventoryData?.content || []
-  const logs = inventoryLogs?.content || []
+  // Ensure inventoryItems is always an array
+  const inventoryItems = Array.isArray(inventoryData?.content) 
+    ? inventoryData.content 
+    : Array.isArray(inventoryData) 
+      ? inventoryData 
+      : []
+  
+  const logs = Array.isArray(inventoryLogs?.content) 
+    ? inventoryLogs.content 
+    : Array.isArray(inventoryLogs) 
+      ? inventoryLogs 
+      : []
 
-  // Calculate statistics
+  // Calculate statistics - with additional safety checks
   const stats = {
     total: inventoryItems.length,
-    lowStock: inventoryItems.filter(item => getStockStatus(item).status === 'LOW_STOCK').length,
-    outOfStock: inventoryItems.filter(item => getStockStatus(item).status === 'OUT_OF_STOCK').length,
-    normal: inventoryItems.filter(item => getStockStatus(item).status === 'NORMAL').length,
-    totalValue: inventoryItems.reduce((sum, item) => sum + (item.currentStock * item.unitPrice), 0)
+    lowStock: inventoryItems.filter(item => item && getStockStatus(item).status === 'LOW_STOCK').length,
+    outOfStock: inventoryItems.filter(item => item && getStockStatus(item).status === 'OUT_OF_STOCK').length,
+    normal: inventoryItems.filter(item => item && getStockStatus(item).status === 'NORMAL').length,
+    totalValue: inventoryItems.reduce((sum, item) => {
+      if (!item || typeof item.currentStock !== 'number' || typeof item.unitPrice !== 'number') {
+        return sum
+      }
+      return sum + (item.currentStock * item.unitPrice)
+    }, 0)
   }
 
   return (
@@ -490,6 +498,7 @@ const InventoryManagement: React.FC = () => {
                   ) : (
                     <div className="space-y-4 max-h-96 overflow-y-auto">
                       {inventoryItems.map(item => {
+                        if (!item) return null
                         const stockStatus = getStockStatus(item)
                         
                         return (

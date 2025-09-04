@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 
 const loginSchema = z.object({
-  email: z.string().email('Email không hợp lệ'),
+  username: z.string().min(1, 'Tên đăng nhập không được để trống'),
   password: z.string().min(6, 'Mật khẩu phải có ít nhất 6 ký tự'),
 })
 
@@ -68,16 +68,16 @@ const Login: React.FC = () => {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="username">Tên đăng nhập</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                {...register('email')}
-                className={errors.email ? 'border-destructive' : ''}
+                id="username"
+                type="text"
+                placeholder="Nhập tên đăng nhập"
+                {...register('username')}
+                className={errors.username ? 'border-destructive' : ''}
               />
-              {errors.email && (
-                <p className="text-sm text-destructive">{errors.email.message}</p>
+              {errors.username && (
+                <p className="text-sm text-destructive">{errors.username.message}</p>
               )}
             </div>
 
@@ -125,7 +125,7 @@ const Login: React.FC = () => {
             </div>
           </form>
 
-          <div className="mt-6 p-4 bg-muted rounded-lg">
+          {/* <div className="mt-6 p-4 bg-muted rounded-lg">
             <h4 className="text-sm font-medium mb-2">Tài khoản demo:</h4>
             <div className="text-xs space-y-1 text-muted-foreground">
               <div>Admin: admin@clinic.com / admin123</div>
@@ -133,7 +133,7 @@ const Login: React.FC = () => {
               <div>Xét nghiệm: lab@clinic.com / lab123</div>
               <div>Kế toán: accountant@clinic.com / accountant123</div>
             </div>
-          </div>
+          </div> */}
         </CardContent>
       </Card>
     </div>

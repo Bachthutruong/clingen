@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/contexts/AuthContext'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
+import { NotificationManager } from '@/components/NotificationToast'
 import Login from '@/pages/Login'
 import Dashboard from '@/pages/Dashboard'
 
@@ -26,10 +27,12 @@ import PackagingManagement from '@/pages/Lab/PackagingManagement'
 import FinancialReports from '@/pages/Finance/FinancialReports'
 import InvoicePayments from '@/pages/Finance/InvoicePayments'
 import SupplierManagement from '@/pages/Finance/SupplierManagement'
+import { MonthlyCostsManagement } from '@/pages/Finance/MonthlyCostsManagement'
 
 // Admin pages
 import UserManagement from '@/pages/Admin/UserManagement'
 import SystemHistory from '@/pages/Admin/SystemHistory'
+import { NotificationManagement } from '@/pages/Admin/NotificationManagement'
 
 // Other pages (placeholder for now)
 // import Lab from '@/pages/Lab'
@@ -214,6 +217,14 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
+              <Route 
+                path="monthly-costs"
+                element={
+                  <ProtectedRoute allowedRoles={['admin', 'accountant']}>
+                    <MonthlyCostsManagement />
+                  </ProtectedRoute>
+                } 
+              />
             </Route>
             
             {/* Services routes */}
@@ -268,6 +279,14 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
+              <Route 
+                path="notification-management"
+                element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <NotificationManagement />
+                  </ProtectedRoute>
+                } 
+              />
             </Route>
           </Route>
           
@@ -296,6 +315,7 @@ function App() {
             },
           }}
         />
+        <NotificationManager />
       </Router>
     </AuthProvider>
   )

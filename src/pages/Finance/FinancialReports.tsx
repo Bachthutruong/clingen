@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -20,152 +20,108 @@ import {
   Filter,
 //   RefreshCw,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Loader2
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
-
-interface FinancialData {
-  period: string
-  revenue: number
-  expenses: number
-  profit: number
-  testCount: number
-  patientCount: number
-  averageOrderValue: number
-}
-
-interface RevenueByService {
-  serviceName: string
-  serviceCode: string
-  revenue: number
-  testCount: number
-  percentage: number
-}
-
-interface ExpenseCategory {
-  category: string
-  amount: number
-  percentage: number
-  description: string
-}
+import { financialReportsApi } from '@/services/api'
+import type { 
+  FinancialReport, 
+  RevenueByService, 
+  ExpenseBreakdown 
+} from '@/types/api'
 
 const FinancialReports: React.FC = () => {
   const [dateFrom, setDateFrom] = useState('2024-01-01')
   const [dateTo, setDateTo] = useState('2024-01-31')
   const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly'>('monthly')
-  const [selectedPeriod, setSelectedPeriod] = useState<FinancialData | null>(null)
+  const [selectedPeriod, setSelectedPeriod] = useState<FinancialReport | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [financialData, setFinancialData] = useState<FinancialReport[]>([])
+  const [revenueByService, setRevenueByService] = useState<RevenueByService[]>([])
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseBreakdown[]>([])
 
-  // Mock data cho báo cáo tài chính
-  const [financialData] = useState<FinancialData[]>([
-    {
-      period: '2024-01',
-      revenue: 892500000,
-      expenses: 245600000,
-      profit: 646900000,
-      testCount: 2840,
-      patientCount: 1250,
-      averageOrderValue: 314300
-    },
-    {
-      period: '2023-12',
-      revenue: 756800000,
-      expenses: 232100000,
-      profit: 524700000,
-      testCount: 2456,
-      patientCount: 1120,
-      averageOrderValue: 308200
-    },
-    {
-      period: '2023-11',
-      revenue: 698400000,
-      expenses: 228500000,
-      profit: 469900000,
-      testCount: 2234,
-      patientCount: 1035,
-      averageOrderValue: 312600
-    },
-    {
-      period: '2023-10',
-      revenue: 712300000,
-      expenses: 241200000,
-      profit: 471100000,
-      testCount: 2367,
-      patientCount: 1089,
-      averageOrderValue: 300800
+  // Load financial data from API
+  const loadFinancialData = async () => {
+    setLoading(true)
+    try {
+      // Load financial reports for the selected period
+      const period = `${dateFrom.split('-')[0]}-${dateFrom.split('-')[1]}`
+      console.log('Loading financial data for period:', period)
+      console.log('Date from:', dateFrom, 'Date to:', dateTo)
+      
+      const report = await financialReportsApi.getReport(period)
+      console.log('Financial report loaded:', report)
+      
+      // Load revenue by service
+      const revenueByServiceData = await financialReportsApi.getRevenueByService(period)
+      console.log('Revenue by service loaded:', revenueByServiceData)
+      
+      // Load expense breakdown
+      const expenseBreakdownData = await financialReportsApi.getExpenseBreakdown(period)
+      console.log('Expense breakdown loaded:', expenseBreakdownData)
+      
+      // Load trend data for multiple periods
+      const trendData = await financialReportsApi.getTrend(period)
+      console.log('Trend data loaded:', trendData)
+      
+      setFinancialData(trendData)
+      setRevenueByService(revenueByServiceData)
+      setExpenseCategories(expenseBreakdownData)
+      
+      toast.success('Dữ liệu tài chính đã được tải thành công')
+    } catch (error: any) {
+      console.error('Error loading financial data:', error)
+      console.error('Error details:', error.response?.data)
+      console.error('Error status:', error.response?.status)
+      toast.error('Không thể tải dữ liệu tài chính')
+      
+      // Fallback to empty data
+      setFinancialData([])
+      setRevenueByService([])
+      setExpenseCategories([])
+    } finally {
+      setLoading(false)
     }
-  ])
+  }
 
-  const [revenueByService] = useState<RevenueByService[]>([
-    {
-      serviceName: 'Công thức máu toàn phần',
-      serviceCode: 'CBC',
-      revenue: 127500000,
-      testCount: 850,
-      percentage: 14.3
-    },
-    {
-      serviceName: 'Sinh hóa máu cơ bản',
-      serviceCode: 'CHEM',
-      revenue: 178400000,
-      testCount: 672,
-      percentage: 20.0
-    },
-    {
-      serviceName: 'Xét nghiệm hormone',
-      serviceCode: 'HORMONE',
-      revenue: 156700000,
-      testCount: 423,
-      percentage: 17.6
-    },
-    {
-      serviceName: 'Vi sinh vật',
-      serviceCode: 'MICRO',
-      revenue: 89200000,
-      testCount: 298,
-      percentage: 10.0
-    },
-    {
-      serviceName: 'Huyết học',
-      serviceCode: 'HEMA',
-      revenue: 98600000,
-      testCount: 387,
-      percentage: 11.0
-    }
-  ])
+  useEffect(() => {
+    loadFinancialData()
+  }, [dateFrom, dateTo, reportType])
 
-  const [expenseCategories] = useState<ExpenseCategory[]>([
-    {
-      category: 'Vật tư y tế',
-      amount: 125400000,
-      percentage: 51.1,
-      description: 'Thuốc thử, ống nghiệm, vật tư tiêu hao'
-    },
-    {
-      category: 'Nhân sự',
-      amount: 78200000,
-      percentage: 31.8,
-      description: 'Lương, thưởng, BHXH'
-    },
-    {
-      category: 'Thiết bị',
-      amount: 24600000,
-      percentage: 10.0,
-      description: 'Bảo trì, khấu hao thiết bị'
-    },
-    {
-      category: 'Vận hành',
-      amount: 17400000,
-      percentage: 7.1,
-      description: 'Điện, nước, internet, văn phòng phẩm'
-    }
-  ])
+  const handleApplyFilter = () => {
+    loadFinancialData()
+  }
 
-  const currentMonth = financialData[0]
-  const previousMonth = financialData[1]
-  
-  const revenueGrowth = ((currentMonth.revenue - previousMonth.revenue) / previousMonth.revenue) * 100
-  const profitGrowth = ((currentMonth.profit - previousMonth.profit) / previousMonth.profit) * 100
-  const testCountGrowth = ((currentMonth.testCount - previousMonth.testCount) / previousMonth.testCount) * 100
+  // Test API endpoint directly
+  // const testAPIEndpoint = async () => {
+  //   try {
+  //     console.log('Testing API endpoint directly...')
+  //     const period = `${dateFrom.split('-')[0]}-${dateFrom.split('-')[1]}`
+  //     console.log('Testing period:', period)
+      
+  //     // Test with fetch to see raw response
+  //     const token = localStorage.getItem('token')
+  //     const response = await fetch(`https://pk.caduceus.vn/api/pk/v1/financial-reports/${period}`, {
+  //       headers: {
+  //         'Authorization': `Bearer ${token}`,
+  //         'Accept': 'application/json'
+  //       }
+  //     })
+      
+  //     console.log('Raw fetch response status:', response.status)
+  //     console.log('Raw fetch response headers:', response.headers)
+      
+  //     if (response.ok) {
+  //       const data = await response.json()
+  //       console.log('Raw fetch response data:', data)
+  //     } else {
+  //       console.error('Raw fetch response error:', response.statusText)
+  //     }
+  //   } catch (error) {
+  //     console.error('Error testing API endpoint:', error)
+  //   }
+  // }
 
   const handleExportReport = (format: 'pdf' | 'excel') => {
     toast.success(`Xuất báo cáo ${format.toUpperCase()} thành công!`)
@@ -175,7 +131,7 @@ const FinancialReports: React.FC = () => {
     toast.success('In báo cáo thành công!')
   }
 
-  const handleViewDetails = (data: FinancialData) => {
+  const handleViewDetails = (data: FinancialReport) => {
     setSelectedPeriod(data)
   }
 
@@ -259,30 +215,49 @@ const FinancialReports: React.FC = () => {
                 <option value="monthly">Theo tháng</option>
               </select>
             </div>
-            <div className="flex items-end">
-              <Button className="w-full">
-                <Filter size={16} className="mr-2" />
-                Áp dụng
-              </Button>
-            </div>
+                          <div className="flex items-end">
+                <Button 
+                  className="w-full" 
+                  onClick={handleApplyFilter}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <Loader2 size={16} className="mr-2 animate-spin" />
+                  ) : (
+                    <Filter size={16} className="mr-2" />
+                  )}
+                  {loading ? 'Đang tải...' : 'Áp dụng'}
+                </Button>
+              </div>
           </div>
         </CardContent>
       </Card>
 
+      {/* Loading State */}
+      {loading && (
+        <Card className="shadow-lg border-0">
+          <CardContent className="p-12 text-center">
+            <Loader2 size={48} className="mx-auto mb-4 animate-spin text-emerald-600" />
+            <p className="text-lg text-gray-600">Đang tải dữ liệu tài chính...</p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Key Financial Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      {!loading && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <Card className="shadow-lg border-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Doanh thu tháng</p>
                 <p className="text-xl font-bold text-emerald-600">
-                  {formatCurrency(currentMonth.revenue)}
+                  {formatCurrency(financialData[0]?.revenue || 0)}
                 </p>
-                <div className={`flex items-center mt-1 ${getGrowthColor(revenueGrowth)}`}>
-                  {getGrowthIcon(revenueGrowth)}
+                <div className={`flex items-center mt-1 ${getGrowthColor(financialData[1]?.revenue ? ((financialData[0]?.revenue - financialData[1]?.revenue) / financialData[1]?.revenue) * 100 : 0)}`}>
+                  {getGrowthIcon(financialData[1]?.revenue ? ((financialData[0]?.revenue - financialData[1]?.revenue) / financialData[1]?.revenue) * 100 : 0)}
                   <span className="text-xs ml-1">
-                    {revenueGrowth > 0 ? '+' : ''}{revenueGrowth.toFixed(1)}%
+                    {financialData[1]?.revenue ? ((financialData[0]?.revenue - financialData[1]?.revenue) / financialData[1]?.revenue * 100).toFixed(1) : 0}%
                   </span>
                 </div>
               </div>
@@ -297,11 +272,11 @@ const FinancialReports: React.FC = () => {
               <div>
                 <p className="text-xs text-gray-600">Chi phí tháng</p>
                 <p className="text-xl font-bold text-red-600">
-                  {formatCurrency(currentMonth.expenses)}
+                  {formatCurrency(financialData[0]?.expenses || 0)}
                 </p>
                 <div className="flex items-center mt-1 text-gray-600">
                   <span className="text-xs">
-                    {((currentMonth.expenses / currentMonth.revenue) * 100).toFixed(1)}%
+                    {financialData[0]?.revenue ? ((financialData[0]?.expenses / financialData[0]?.revenue) * 100).toFixed(1) : 0}%
                   </span>
                 </div>
               </div>
@@ -316,12 +291,12 @@ const FinancialReports: React.FC = () => {
               <div>
                 <p className="text-xs text-gray-600">Lợi nhuận tháng</p>
                 <p className="text-xl font-bold text-blue-600">
-                  {formatCurrency(currentMonth.profit)}
+                  {formatCurrency(financialData[0]?.profit || 0)}
                 </p>
-                <div className={`flex items-center mt-1 ${getGrowthColor(profitGrowth)}`}>
-                  {getGrowthIcon(profitGrowth)}
+                <div className={`flex items-center mt-1 ${getGrowthColor(financialData[1]?.profit ? ((financialData[0]?.profit - financialData[1]?.profit) / financialData[1]?.profit) * 100 : 0)}`}>
+                  {getGrowthIcon(financialData[1]?.profit ? ((financialData[0]?.profit - financialData[1]?.profit) / financialData[1]?.profit) * 100 : 0)}
                   <span className="text-xs ml-1">
-                    {profitGrowth > 0 ? '+' : ''}{profitGrowth.toFixed(1)}%
+                    {financialData[1]?.profit ? ((financialData[0]?.profit - financialData[1]?.profit) / financialData[1]?.profit * 100).toFixed(1) : 0}%
                   </span>
                 </div>
               </div>
@@ -336,11 +311,11 @@ const FinancialReports: React.FC = () => {
               <div>
                 <p className="text-xs text-gray-600">Lãi ròng</p>
                 <p className="text-xl font-bold text-indigo-600">
-                  {formatCurrency(currentMonth.profit * 0.8)}
+                  {formatCurrency(financialData[0]?.profit * 0.8 || 0)}
                 </p>
                 <div className="flex items-center mt-1 text-gray-600">
                   <span className="text-xs">
-                    {((currentMonth.profit * 0.8 / currentMonth.revenue) * 100).toFixed(1)}%
+                    {financialData[0]?.revenue ? ((financialData[0]?.profit * 0.8 / financialData[0]?.revenue) * 100).toFixed(1) : 0}%
                   </span>
                 </div>
               </div>
@@ -355,7 +330,7 @@ const FinancialReports: React.FC = () => {
               <div>
                 <p className="text-xs text-gray-600">Biên lợi nhuận</p>
                 <p className="text-xl font-bold text-purple-600">
-                  {((currentMonth.profit / currentMonth.revenue) * 100).toFixed(1)}%
+                  {financialData[0]?.revenue ? ((financialData[0]?.profit / financialData[0]?.revenue) * 100).toFixed(1) : 0}%
                 </p>
                 <div className="flex items-center mt-1 text-gray-600">
                   <span className="text-xs">
@@ -368,6 +343,7 @@ const FinancialReports: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+      )}
 
       {/* Charts and Analysis */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -619,20 +595,20 @@ const FinancialReports: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 bg-emerald-50 rounded-lg">
                   <p className="text-sm text-gray-600">Số bệnh nhân</p>
-                  <p className="text-xl font-bold text-emerald-600">{currentMonth.patientCount}</p>
-                  <div className={`flex items-center mt-1 ${getGrowthColor(((currentMonth.patientCount - previousMonth.patientCount) / previousMonth.patientCount) * 100)}`}>
+                  <p className="text-xl font-bold text-emerald-600">{financialData[0]?.patientCount || 0}</p>
+                  <div className={`flex items-center mt-1 ${getGrowthColor(financialData[1]?.patientCount ? ((financialData[0]?.patientCount - financialData[1]?.patientCount) / financialData[1]?.patientCount) * 100 : 0)}`}>
                     <span className="text-xs">
-                      {((currentMonth.patientCount - previousMonth.patientCount) / previousMonth.patientCount * 100).toFixed(1)}% vs tháng trước
+                      {financialData[1]?.patientCount ? ((financialData[0]?.patientCount - financialData[1]?.patientCount) / financialData[1]?.patientCount * 100).toFixed(1) : 0}% vs tháng trước
                     </span>
                   </div>
                 </div>
                 
                 <div className="p-4 bg-blue-50 rounded-lg">
                   <p className="text-sm text-gray-600">Số xét nghiệm</p>
-                  <p className="text-xl font-bold text-blue-600">{currentMonth.testCount}</p>
-                  <div className={`flex items-center mt-1 ${getGrowthColor(testCountGrowth)}`}>
+                  <p className="text-xl font-bold text-blue-600">{financialData[0]?.testCount || 0}</p>
+                  <div className={`flex items-center mt-1 ${getGrowthColor(financialData[1]?.testCount ? ((financialData[0]?.testCount - financialData[1]?.testCount) / financialData[1]?.testCount) * 100 : 0)}`}>
                     <span className="text-xs">
-                      {testCountGrowth > 0 ? '+' : ''}{testCountGrowth.toFixed(1)}% vs tháng trước
+                      {financialData[1]?.testCount ? ((financialData[0]?.testCount - financialData[1]?.testCount) / financialData[1]?.testCount * 100).toFixed(1) : 0}% vs tháng trước
                     </span>
                   </div>
                 </div>
@@ -642,17 +618,17 @@ const FinancialReports: React.FC = () => {
               <div className="space-y-3">
                 <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
                   <span className="text-sm text-gray-600">Giá trị đơn hàng TB</span>
-                  <span className="font-bold">{formatCurrency(currentMonth.averageOrderValue)}</span>
+                  <span className="font-bold">{formatCurrency(financialData[0]?.averageOrderValue || 0)}</span>
                 </div>
                 
                 <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
                   <span className="text-sm text-gray-600">XN/Bệnh nhân TB</span>
-                  <span className="font-bold">{(currentMonth.testCount / currentMonth.patientCount).toFixed(1)}</span>
+                                      <span className="font-bold">{financialData[0]?.patientCount ? (financialData[0]?.testCount / financialData[0]?.patientCount).toFixed(1) : 0}</span>
                 </div>
                 
                 <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
                   <span className="text-sm text-gray-600">Doanh thu/XN TB</span>
-                  <span className="font-bold">{formatCurrency(currentMonth.revenue / currentMonth.testCount)}</span>
+                                      <span className="font-bold">{formatCurrency(financialData[0]?.testCount ? financialData[0]?.revenue / financialData[0]?.testCount : 0)}</span>
                 </div>
               </div>
 
@@ -662,20 +638,20 @@ const FinancialReports: React.FC = () => {
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span>Doanh thu:</span>
-                    <span className={getGrowthColor(revenueGrowth)}>
-                      {revenueGrowth > 0 ? '+' : ''}{revenueGrowth.toFixed(1)}%
+                    <span className={getGrowthColor(financialData[1]?.revenue ? ((financialData[0]?.revenue - financialData[1]?.revenue) / financialData[1]?.revenue) * 100 : 0)}>
+                      {financialData[1]?.revenue ? ((financialData[0]?.revenue - financialData[1]?.revenue) / financialData[1]?.revenue * 100).toFixed(1) : 0}%
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Lợi nhuận:</span>
-                    <span className={getGrowthColor(profitGrowth)}>
-                      {profitGrowth > 0 ? '+' : ''}{profitGrowth.toFixed(1)}%
+                    <span className={getGrowthColor(financialData[1]?.profit ? ((financialData[0]?.profit - financialData[1]?.profit) / financialData[1]?.profit) * 100 : 0)}>
+                      {financialData[1]?.profit ? ((financialData[0]?.profit - financialData[1]?.profit) / financialData[1]?.profit * 100).toFixed(1) : 0}%
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span>Số XN:</span>
-                    <span className={getGrowthColor(testCountGrowth)}>
-                      {testCountGrowth > 0 ? '+' : ''}{testCountGrowth.toFixed(1)}%
+                    <span className={getGrowthColor(financialData[1]?.testCount ? ((financialData[0]?.testCount - financialData[1]?.testCount) / financialData[1]?.testCount) * 100 : 0)}>
+                      {financialData[1]?.testCount ? ((financialData[0]?.testCount - financialData[1]?.testCount) / financialData[1]?.testCount * 100).toFixed(1) : 0}%
                     </span>
                   </div>
                 </div>
@@ -711,7 +687,7 @@ const FinancialReports: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Doanh thu/XN TB:</span>
-                    <span className="font-medium">{formatCurrency(selectedPeriod.revenue / selectedPeriod.testCount)}</span>
+                    <span className="font-medium">{formatCurrency(selectedPeriod.testCount ? selectedPeriod.revenue / selectedPeriod.testCount : 0)}</span>
                   </div>
                 </div>
               </div>
@@ -729,7 +705,7 @@ const FinancialReports: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Chi phí/XN TB:</span>
-                    <span className="font-medium">{formatCurrency(selectedPeriod.expenses / selectedPeriod.testCount)}</span>
+                    <span className="font-medium">{formatCurrency(selectedPeriod.testCount ? selectedPeriod.expenses / selectedPeriod.testCount : 0)}</span>
                   </div>
                 </div>
               </div>
@@ -747,7 +723,7 @@ const FinancialReports: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Lợi nhuận/XN TB:</span>
-                    <span className="font-medium">{formatCurrency(selectedPeriod.profit / selectedPeriod.testCount)}</span>
+                    <span className="font-medium">{formatCurrency(selectedPeriod.testCount ? selectedPeriod.profit / selectedPeriod.testCount : 0)}</span>
                   </div>
                 </div>
               </div>

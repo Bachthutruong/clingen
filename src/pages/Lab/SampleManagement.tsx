@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { testSamplesApi, testTypesApi, patientsApi } from '@/services/api'
+import { testSamplesApi, testTypesApi, patientsApi, patientSamplesApi } from '@/services/api'
 import type { TestSample, TestType, PatientAPI } from '@/types/api'
 
 interface PatientTestSelection {
@@ -116,17 +116,25 @@ const SampleManagement: React.FC = () => {
       setTestSamples(samplesData)
       setPatients(patientsData.content)
       
-      // Tạo một số mock patient samples ban đầu nếu có patients
-      if (patientsData.content.length > 0) {
-        const initialMockSamples = patientsData.content.slice(0, 3).map((patient, index) => ({
-          ...patient,
-          status: index % 3, // Phân bố trạng thái khác nhau
-          typeTests: [
-            { testId: 1, testSampleId: 1, testSampleName: 'Nước tiểu' },
-            { testId: 2, testSampleId: 2, testSampleName: 'Máu' }
-          ]
-        }))
-        setPatientSamples(initialMockSamples as any)
+      // Load patient samples from API
+      try {
+        const patientSamplesData = await patientSamplesApi.getAll({
+          pageIndex: 0,
+          pageSize: 100,
+          keyword: '',
+          status: undefined
+        })
+        
+        if (patientSamplesData && Array.isArray(patientSamplesData.content)) {
+          setPatientSamples(patientSamplesData.content)
+        } else if (patientSamplesData && Array.isArray(patientSamplesData)) {
+          setPatientSamples(patientSamplesData)
+        } else {
+          setPatientSamples([])
+        }
+      } catch (error) {
+        console.error('Error loading patient samples:', error)
+        setPatientSamples([])
       }
     } catch (error) {
       console.error('Error loading initial data:', error)

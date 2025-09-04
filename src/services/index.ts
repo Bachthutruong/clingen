@@ -11,19 +11,29 @@ export {
   testServicesApi,
   testCategoriesApi,
   reportsApi,
+  usersApi,
+  notificationApi,
+  revenueApi,
+  monthlyCostsApi,
+  financialReportsApi,
+  patientTestApi,
+  materialsApi,
+  inventoryApi,
+  inventoryLogsApi,
+  quantityRangeApi,
   default as api
 } from './api'
 
-import api from './api'
-import type { 
-  InventoryItem,
-  InventoryLog,
-  InventorySearchRequest,
-  InventoryLogSearchRequest,
-  InventoryCreateRequest,
-  InventoryLogCreateRequest,
-  PaginatedResponse
-} from '@/types/api'
+// import api from './api'
+// import type { 
+//   InventoryItem,
+//   // InventoryLog,
+//   InventorySearchRequest,
+//   // InventoryLogSearchRequest,
+//   InventoryCreateRequest,
+//   // InventoryLogCreateRequest,
+//   PaginatedResponse
+// } from '@/types/api'
 
 // Re-export types for convenience
 export type {
@@ -42,7 +52,19 @@ export type {
   InventorySearchRequest,
   InventoryLogSearchRequest,
   InventoryCreateRequest,
-  InventoryLogCreateRequest
+  InventoryLogCreateRequest,
+  Notification,
+  NotificationConfig,
+  CreateNotificationRequest,
+  CreateNotificationConfigRequest,
+  NotificationSearchParams,
+  MonthlyCost,
+  CreateMonthlyCostRequest,
+  UpdateMonthlyCostRequest,
+  MonthlyCostSearchParams,
+  MonthlyCostSummary,
+  MonthlyCostTrend,
+  MonthlyCostBreakdown
 } from '@/types/api'
 
 export type {
@@ -56,62 +78,62 @@ export type {
 
 export type {
   User,
-  AuthResponse,
+  // AuthResponse,
   LoginCredentials,
   RegisterData,
   UserRole
 } from '@/types/auth'
 
 // Inventory API
-export const inventoryApi = {
-  // Get all inventory items
-  getAll: (params?: InventorySearchRequest): Promise<PaginatedResponse<InventoryItem>> =>
-    api.get('/inventory', { params }),
+// export const inventoryApi = {
+//   // Get all inventory items
+//   getAll: (params?: InventorySearchRequest): Promise<PaginatedResponse<InventoryItem>> =>
+//     api.get('/inventory', { params }),
 
-  // Get inventory item by ID
-  getById: (id: number): Promise<InventoryItem> =>
-    api.get(`/inventory/${id}`),
+//   // Get inventory item by ID
+//   getById: (id: number): Promise<InventoryItem> =>
+//     api.get(`/inventory/${id}`),
 
-  // Search inventory items
-  search: (searchRequest: InventorySearchRequest): Promise<PaginatedResponse<InventoryItem>> =>
-    api.post('/inventory/search', searchRequest),
+//   // Search inventory items
+//   search: (searchRequest: InventorySearchRequest): Promise<PaginatedResponse<InventoryItem>> =>
+//     api.post('/inventory/search', searchRequest),
 
-  // Create new inventory item
-  create: (data: InventoryCreateRequest): Promise<InventoryItem> =>
-    api.post('/inventory', data),
+//   // Create new inventory item
+//   create: (data: InventoryCreateRequest): Promise<InventoryItem> =>
+//     api.post('/inventory', data),
 
-  // Update inventory item
-  update: (id: number, data: Partial<InventoryCreateRequest>): Promise<InventoryItem> =>
-    api.put(`/inventory/${id}`, data),
+//   // Update inventory item
+//   update: (id: number, data: Partial<InventoryCreateRequest>): Promise<InventoryItem> =>
+//     api.put(`/inventory/${id}`, data),
 
-  // Delete inventory item
-  delete: (id: number): Promise<void> =>
-    api.delete(`/inventory/${id}`)
-}
+//   // Delete inventory item
+//   delete: (id: number): Promise<void> =>
+//     api.delete(`/inventory/${id}`)
+// }
 
-// Inventory Logs API
-export const inventoryLogsApi = {
-  // Get all inventory logs
-  getAll: (params?: InventoryLogSearchRequest): Promise<PaginatedResponse<InventoryLog>> =>
-    api.get('/inventory/logs', { params }),
+// // Inventory Logs API
+// export const inventoryLogsApi = {
+//   // Get all inventory logs
+//   getAll: (params?: InventoryLogSearchRequest): Promise<PaginatedResponse<InventoryLog>> =>
+//     api.get('/inventory/logs', { params }),
 
-  // Get inventory log by ID
-  getById: (id: number): Promise<InventoryLog> =>
-    api.get(`/inventory/logs/${id}`),
+//   // Get inventory log by ID
+//   getById: (id: number): Promise<InventoryLog> =>
+//     api.get(`/inventory/logs/${id}`),
 
-  // Search inventory logs
-  search: (searchRequest: InventoryLogSearchRequest): Promise<PaginatedResponse<InventoryLog>> =>
-    api.post('/inventory/logs/search', searchRequest),
+//   // Search inventory logs
+//   search: (searchRequest: InventoryLogSearchRequest): Promise<PaginatedResponse<InventoryLog>> =>
+//     api.post('/inventory/logs/search', searchRequest),
 
-  // Create new inventory log (nhập/xuất kho)
-  create: (data: InventoryLogCreateRequest): Promise<InventoryLog> =>
-    api.post('/inventory/logs', data),
+//   // Create new inventory log (nhập/xuất kho)
+//   create: (data: InventoryLogCreateRequest): Promise<InventoryLog> =>
+//     api.post('/inventory/logs', data),
 
-  // Update inventory log
-  update: (id: number, data: Partial<InventoryLogCreateRequest>): Promise<InventoryLog> =>
-    api.put(`/inventory/logs/${id}`, data),
+//   // Update inventory log
+//   update: (id: number, data: Partial<InventoryLogCreateRequest>): Promise<InventoryLog> =>
+//     api.put(`/inventory/logs/${id}`, data),
 
-  // Delete inventory log
-  delete: (id: number): Promise<void> =>
-    api.delete(`/inventory/logs/${id}`)
-} 
+//   // Delete inventory log
+//   delete: (id: number): Promise<void> =>
+//     api.delete(`/inventory/logs/${id}`)
+// } 

@@ -135,18 +135,24 @@ export interface MaterialDTO {
   type: number // Loại: 1 - hóa chất, 2 - vật tư - int32
 }
 
-// Inventory Log DTO
+// Inventory Log DTO - Updated to match new API spec
 export interface InventoryLogItemDTO {
-  type: number // Loại hàng hóa: 1 - hóa chất, 2 - vật tư - int32
+  type: number // Loại hàng hóa - int32
   materialId: number // ID của vật tư hoặc hóa chất - int64
   quantity: number // Số lượng xuất / nhập - int64
-  expiryDate?: string // Hạn sử dụng - date format
+  expiryDate: string // Hạn sử dụng - date format (e.g. "2026-06-19")
+  unitPrice: number // Đơn giá
+  amount: number // Thành tiền
+  note: string // Ghi chú
 }
 
 export interface InventoryLogsDTO {
+  id?: number
   logType: number // Loại log: 1 - nhập kho, 2 - xuất kho - int32
+  exportType: number // Loại xuất
+  exportId: number // ID liên quan đến xuất
   items: InventoryLogItemDTO[]
-  note?: string // Ghi chú
+  note: string // Ghi chú
 }
 
 // Create/Update Request types
@@ -206,9 +212,11 @@ export interface CreateMaterialRequest {
 }
 
 export interface CreateInventoryLogRequest {
-  logType: number
+  logType: number // Loại log: 1 - nhập kho, 2 - xuất kho
+  exportType: number // Loại xuất
+  exportId: number // ID liên quan đến xuất
   items: InventoryLogItemDTO[]
-  note?: string
+  note: string // Ghi chú
 }
 
 // Utility types for compatibility with existing code
@@ -388,4 +396,424 @@ export interface InventoryLogCreateRequest {
   quantity: number
   reason?: string
   note?: string
+}
+
+// ===== NEW TYPES FOR COMPLETE API INTEGRATION =====
+
+// Notification Types - Updated to match API spec
+export interface Notification {
+  id: number
+  title: string
+  message: string
+  type: number
+  typeName: string
+  typeClass: string
+  targetType: number
+  targetTypeName: string
+  targetValue: string
+  recipientUsername: string
+  isRead: boolean
+  readAt?: string
+  sentBy: string
+  priority: number
+  priorityText: string
+  expiresAt?: string
+  actionUrl?: string
+  createdAt: string
+  updatedAt: string
+  isExpired: boolean
+}
+
+export interface NotificationConfig {
+  id: number
+  username: string
+  notificationType: number
+  notificationTypeName: string
+  enabled: boolean
+  realTimeEnabled: boolean
+  emailEnabled: boolean
+  soundEnabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateNotificationRequest {
+  title: string
+  message: string
+  type: number
+  targetType: number
+  targetValue: string
+  priority: number
+  expiresAt?: string
+  actionUrl?: string
+  notificationType: string
+  validTarget: boolean
+  notificationTarget: string
+}
+
+export interface CreateNotificationConfigRequest {
+  notificationType: number
+  enabled: boolean
+  realTimeEnabled: boolean
+  emailEnabled: boolean
+  soundEnabled: boolean
+}
+
+export interface NotificationSearchParams {
+  page?: number
+  size?: number
+  sortBy?: string
+  sortDir?: string
+  type?: number
+  priority?: number
+  isRead?: boolean
+  startTime?: string
+  endTime?: string
+  minPriority?: number
+}
+
+// Legacy types for backward compatibility
+export enum NotificationType {
+  PATIENT_TEST_COMPLETED = 'PATIENT_TEST_COMPLETED',
+  SAMPLE_STATUS_UPDATED = 'SAMPLE_STATUS_UPDATED',
+  INVENTORY_LOW_STOCK = 'INVENTORY_LOW_STOCK',
+  EXPENSE_DUE = 'EXPENSE_DUE',
+  REVENUE_TARGET = 'REVENUE_TARGET',
+  SYSTEM_ALERT = 'SYSTEM_ALERT'
+}
+
+export enum NotificationPriority {
+  LOW = 1,
+  MEDIUM = 2,
+  HIGH = 3,
+  URGENT = 4
+}
+
+// Patient Test Types
+export interface PatientTest {
+  id: number
+  patientId: number
+  patientName: string
+  patientCode: string
+  testTypeId: number
+  testTypeName: string
+  testSampleId: number
+  testSampleName: string
+  status: PatientTestStatus
+  registrationDate: string
+  collectionDate?: string
+  processingDate?: string
+  completedDate?: string
+  resultHtml?: string
+  notes?: string
+  referralSourceId?: number
+  referralSourceName?: string
+  price: number
+  createdAt: string
+  updatedAt: string
+}
+
+export enum PatientTestStatus {
+  REGISTERED = 0,      // Đã đăng ký
+  COLLECTING = 1,      // Đang thu thập mẫu
+  COLLECTED = 2,       // Đã thu thập mẫu
+  PROCESSING = 3,      // Đang xử lý
+  COMPLETED = 4,       // Hoàn thành
+  REJECTED = 5,        // Từ chối
+  CANCELLED = 6        // Hủy bỏ
+}
+
+export interface PatientTestSearchDTO extends SearchDTO {
+  testSampleId?: number
+  testTypeId?: number
+  referralSourceId?: number
+  status?: PatientTestStatus
+  fromDate?: string
+  toDate?: string
+}
+
+export interface CreatePatientTestRequest {
+  patientId: number
+  typeTests: Array<{
+    testId: number
+    testSampleId: number
+    priority?: string
+  }>
+  referralSourceId?: number
+  notes?: string
+}
+
+export interface PatientTestResult {
+  id: number
+  patientTestId: number
+  resultHtml: string
+  resultData: any
+  testedBy: string
+  testedAt: string
+  verifiedBy?: string
+  verifiedAt?: string
+}
+
+// Revenue Types
+export interface Revenue {
+  id: number
+  patientTestId: number
+  patientName: string
+  testTypeName: string
+  amount: number
+  referralSourceId?: number
+  referralSourceName?: string
+  registrationDate: string
+  status: RevenueStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export enum RevenueStatus {
+  PENDING = 0,         // Chờ thanh toán
+  PAID = 1,            // Đã thanh toán
+  CANCELLED = 2,       // Đã hủy
+  REFUNDED = 3         // Đã hoàn tiền
+}
+
+export interface RevenueSearchParams {
+  keyword?: string
+  fromDate?: string
+  toDate?: string
+  referralSourceId?: number
+  status?: RevenueStatus
+  pageIndex?: number
+  pageSize?: number
+  orderCol?: string
+  isDesc?: boolean
+}
+
+// Expense Category Types
+export interface ExpenseCategory {
+  id: number
+  short: number
+  name: string
+  englishName: string
+  description?: string
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export enum ExpenseCategoryEnum {
+  RENT = 1,            // Chi phí thuê phòng
+  CHEMICAL = 2,        // Chi phí hóa chất
+  CONSUMABLE = 3,      // Chi phí vật tư tiêu hao
+  STAFF_SALARY = 4,    // Lương nhân viên
+  ADMIN = 5,           // Chi phí quản lý
+  EQUIPMENT = 6,       // Chi phí thiết bị
+  MAINTENANCE = 7,     // Chi phí bảo trì
+  UTILITY = 8,         // Chi phí tiện ích (điện, nước, internet)
+  MARKETING = 9,       // Chi phí marketing
+  INSURANCE = 10,      // Chi phí bảo hiểm
+  TRAINING = 11,       // Chi phí đào tạo
+  OTHER = 12           // Chi phí khác
+}
+
+// Monthly Costs Types - Updated to match new API spec
+export interface MonthlyCost {
+  id: number
+  month: number
+  year: number
+  monthYearDisplay: string
+  category: number
+  categoryName: string
+  categoryCssClass: string
+  costName: string
+  description?: string
+  amount: number
+  formattedAmount: string
+  isRecurring: boolean
+  isActive: boolean
+  vendorName?: string
+  invoiceNumber?: string
+  paymentDate?: string
+  dueDate: string
+  notes?: string
+  createdBy: string
+  updatedBy?: string
+  revenueId?: number
+  createdAt: string
+  updatedAt: string
+  isPaid: boolean
+  isOverdue: boolean
+  paymentStatus: string
+  recurringText: string
+}
+
+export interface CreateMonthlyCostRequest {
+  month: number
+  year: number
+  category: number
+  costName: string
+  description?: string
+  amount: number
+  isRecurring: boolean
+  vendorName?: string
+  invoiceNumber?: string
+  paymentDate?: string
+  dueDate: string
+  notes?: string
+  validMonthYear: boolean
+  dueDateValid: boolean
+}
+
+export interface UpdateMonthlyCostRequest {
+  month?: number
+  year?: number
+  category?: number
+  costName?: string
+  description?: string
+  amount?: number
+  isRecurring?: boolean
+  vendorName?: string
+  invoiceNumber?: string
+  paymentDate?: string
+  dueDate?: string
+  notes?: string
+  validMonthYear?: boolean
+  dueDateValid?: boolean
+}
+
+export interface MonthlyCostSearchParams {
+  month?: number
+  year?: number
+  category?: number
+  costName?: string
+  vendorName?: string
+  isRecurring?: boolean
+  isPaid?: boolean
+  page?: number
+  size?: number
+  sortBy?: string
+  sortDirection?: string
+}
+
+export interface MonthlyCostSummary {
+  month: number
+  year: number
+  monthYearDisplay: string
+  totalCost: number
+  formattedTotalCost: string
+  costByCategory: Record<string, number>
+  formattedCostByCategory: Record<string, string>
+  totalCostItems: number
+  paidItems: number
+  unpaidItems: number
+  overdueItems: number
+  totalPaidAmount: number
+  totalUnpaidAmount: number
+  topCategories: Array<{
+    categoryCode: number
+    categoryName: string
+    amount: number
+    formattedAmount: string
+    percentage: number
+    itemCount: number
+  }>
+  monthlyTrend: Array<{
+    month: number
+    monthName: string
+    amount: number
+    formattedAmount: string
+  }>
+}
+
+export interface MonthlyCostTrend {
+  month: number
+  monthName: string
+  amount: number
+  formattedAmount: string
+}
+
+export interface MonthlyCostBreakdown {
+  categoryCode: number
+  categoryName: string
+  amount: number
+  formattedAmount: string
+  percentage: number
+  itemCount: number
+}
+
+// Legacy types for backward compatibility
+export interface MonthlyCostLegacy {
+  id: number
+  categoryId: number
+  categoryName: string
+  categoryShort: number
+  name: string
+  description?: string
+  amount: number
+  month: number
+  year: number
+  dueDate: string
+  isRecurring: boolean
+  isPaid: boolean
+  paidDate?: string
+  paymentMethod?: string
+  notes?: string
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+// Financial Report Types
+export interface FinancialReport {
+  period: string
+  revenue: number
+  expenses: number
+  profit: number
+  testCount: number
+  patientCount: number
+  averageOrderValue: number
+  revenueByService: RevenueByService[]
+  expenseBreakdown: ExpenseBreakdown[]
+}
+
+export interface RevenueByService {
+  serviceName: string
+  serviceCode: string
+  revenue: number
+  testCount: number
+  percentage: number
+}
+
+export interface ExpenseBreakdown {
+  category: string
+  amount: number
+  percentage: number
+  description: string
+}
+
+// WebSocket Types
+export interface WebSocketMessage {
+  type: string
+  data: any
+  timestamp: string
+}
+
+export interface WebSocketNotification {
+  id: number
+  title: string
+  message: string
+  type: NotificationType
+  priority: NotificationPriority
+  isRead: boolean
+  createdAt: string
+}
+
+export interface WebSocketUnreadCount {
+  count: number
+  timestamp: string
+}
+
+export interface WebSocketError {
+  code: string
+  message: string
+  timestamp: string
 } 

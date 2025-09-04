@@ -1,5 +1,13 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import type { User, AuthContextType, LoginCredentials } from '@/types/auth'
+import { toast } from 'react-hot-toast'
+import type { 
+  User, 
+  AuthContextType, 
+  LoginCredentials, 
+  // RefreshTokenRequest,
+  ChangePasswordRequest 
+} from '@/types/auth'
+import { authApi } from '@/services/api'
 import { config } from '@/config'
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -19,21 +27,38 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(null)
+  const [refreshToken, setRefreshToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const initAuth = () => {
+    const initAuth = async () => {
       const storedToken = localStorage.getItem(config.TOKEN_STORAGE_KEY)
+      const storedRefreshToken = localStorage.getItem(config.REFRESH_TOKEN_STORAGE_KEY)
       const storedUser = localStorage.getItem(config.USER_STORAGE_KEY)
 
-      if (storedToken && storedUser) {
+      if (storedToken && storedRefreshToken && storedUser) {
         try {
           setToken(storedToken)
+          setRefreshToken(storedRefreshToken)
           setUser(JSON.parse(storedUser))
+          
+          // Verify token is still valid by getting user info
+          await getUserInfo()
         } catch (error) {
-          console.error('Invalid stored auth data:', error)
-          localStorage.removeItem(config.TOKEN_STORAGE_KEY)
-          localStorage.removeItem(config.USER_STORAGE_KEY)
+          console.error('Invalid stored auth data or token expired:', error)
+          // Try to refresh token
+          try {
+            await refreshAuthToken()
+          } catch (refreshError) {
+            console.error('Token refresh failed:', refreshError)
+            // Clear invalid data
+            localStorage.removeItem(config.TOKEN_STORAGE_KEY)
+            localStorage.removeItem(config.REFRESH_TOKEN_STORAGE_KEY)
+            localStorage.removeItem(config.USER_STORAGE_KEY)
+            setToken(null)
+            setRefreshToken(null)
+            setUser(null)
+          }
         }
       }
       setIsLoading(false)
@@ -46,87 +71,115 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       setIsLoading(true)
       
-      // Mock authentication - check for demo accounts
-      const mockUsers = [
-        {
-          id: '1',
-          email: 'admin@clinic.com',
-          password: 'admin123',
-          name: 'Admin User',
-          role: 'admin' as const
-        },
-        {
-          id: '2', 
-          email: 'receptionist@clinic.com',
-          password: 'receptionist123', 
-          name: 'Receptionist User',
-          role: 'receptionist' as const
-        },
-        {
-          id: '3',
-          email: 'lab@clinic.com',
-          password: 'lab123',
-          name: 'Lab Technician',
-          role: 'lab_technician' as const
-        },
-        {
-          id: '4',
-          email: 'accountant@clinic.com',
-          password: 'accountant123',
-          name: 'Accountant User',
-          role: 'accountant' as const
-        }
-      ]
-
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000))
-
-      const mockUser = mockUsers.find(
-        u => u.email === credentials.email && u.password === credentials.password
-      )
-
-      if (!mockUser) {
-        throw new Error('Email hoặc mật khẩu không đúng')
-      }
-
-      // Create mock user and token
-      const user: User = {
-        id: mockUser.id,
-        email: mockUser.email,
-        name: mockUser.name,
-        role: mockUser.role,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-
-      const mockToken = `mock_token_${mockUser.id}_${Date.now()}`
+      const response = await authApi.login(credentials)
       
-      setUser(user)
-      setToken(mockToken)
+      setUser(response.user)
+      setToken(response.token)
+      setRefreshToken(response.refreshToken)
       
-      localStorage.setItem(config.TOKEN_STORAGE_KEY, mockToken)
-      localStorage.setItem(config.USER_STORAGE_KEY, JSON.stringify(user))
+      localStorage.setItem(config.TOKEN_STORAGE_KEY, response.token)
+      localStorage.setItem(config.REFRESH_TOKEN_STORAGE_KEY, response.refreshToken)
+      localStorage.setItem(config.USER_STORAGE_KEY, JSON.stringify(response.user))
 
+      toast.success('Đăng nhập thành công!')
     } catch (error) {
       console.error('Login failed:', error)
+      toast.error('Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.')
       throw error
     } finally {
       setIsLoading(false)
     }
   }
 
-  const logout = () => {
-    setUser(null)
-    setToken(null)
-    localStorage.removeItem(config.TOKEN_STORAGE_KEY)
-    localStorage.removeItem(config.USER_STORAGE_KEY)
+  const logout = async () => {
+    try {
+      if (refreshToken) {
+        await authApi.logout({ refreshToken })
+      }
+    } catch (error) {
+      console.error('Logout API call failed:', error)
+    } finally {
+      // Always clear local data
+      setUser(null)
+      setToken(null)
+      setRefreshToken(null)
+      localStorage.removeItem(config.TOKEN_STORAGE_KEY)
+      localStorage.removeItem(config.REFRESH_TOKEN_STORAGE_KEY)
+      localStorage.removeItem(config.USER_STORAGE_KEY)
+      
+      toast.success('Đăng xuất thành công!')
+    }
+  }
+
+  const refreshAuthToken = async () => {
+    if (!refreshToken) {
+      throw new Error('No refresh token available')
+    }
+
+    try {
+      const response = await authApi.refresh({ refreshToken })
+      
+      setToken(response.token)
+      setRefreshToken(response.refreshToken)
+      
+      localStorage.setItem(config.TOKEN_STORAGE_KEY, response.token)
+      localStorage.setItem(config.REFRESH_TOKEN_STORAGE_KEY, response.refreshToken)
+      
+      return response
+    } catch (error) {
+      console.error('Token refresh failed:', error)
+      // Clear invalid tokens
+      setToken(null)
+      setRefreshToken(null)
+      setUser(null)
+      localStorage.removeItem(config.TOKEN_STORAGE_KEY)
+      localStorage.removeItem(config.REFRESH_TOKEN_STORAGE_KEY)
+      localStorage.removeItem(config.USER_STORAGE_KEY)
+      throw error
+    }
+  }
+
+  const changePassword = async (request: ChangePasswordRequest) => {
+    try {
+      const response = await authApi.changePassword(request)
+      
+      if (response.success) {
+        toast.success('Đổi mật khẩu thành công!')
+      } else {
+        toast.error(response.message || 'Đổi mật khẩu thất bại')
+      }
+      
+      return response
+    } catch (error) {
+      console.error('Change password failed:', error)
+      toast.error('Đổi mật khẩu thất bại. Vui lòng thử lại.')
+      throw error
+    }
+  }
+
+  const getUserInfo = async (): Promise<User> => {
+    try {
+      const response = await authApi.getUserInfo()
+      
+      setUser(response.user)
+      localStorage.setItem(config.USER_STORAGE_KEY, JSON.stringify(response.user))
+      
+      return response.user
+    } catch (error) {
+      console.error('Get user info failed:', error)
+      throw error
+    }
   }
 
   const value: AuthContextType = {
     user,
     token,
+    refreshToken,
     login,
     logout,
+    refreshAuthToken,
+    changePassword,
+    getUserInfo,
     isLoading,
     isAuthenticated: !!user && !!token
   }

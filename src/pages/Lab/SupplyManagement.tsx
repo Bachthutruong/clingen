@@ -21,7 +21,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react'
-import { materialsApi, inventoryApi, packagingApi } from '@/services/api'
+import { materialsApi, inventoryLogsApi, packagingApi } from '@/services/api'
 import type { 
   Material, 
   InventoryLogsDTO,
@@ -167,7 +167,7 @@ const SupplyManagement: React.FC = () => {
       
       try {
         [logsResponse, packagingResponse] = await Promise.all([
-          inventoryApi.getLogs({
+          inventoryLogsApi.search({
             pageIndex: 0,
             pageSize: 10
           }).catch(err => {
@@ -305,7 +305,7 @@ const SupplyManagement: React.FC = () => {
     
     try {
       setSubmitting(true)
-      await inventoryApi.importMaterials({
+      await inventoryLogsApi.importMaterials({
         materialId: transactionForm.materialId,
         quantity: transactionForm.quantity,
         note: transactionForm.note
@@ -335,7 +335,7 @@ const SupplyManagement: React.FC = () => {
     
     try {
       setSubmitting(true)
-      await inventoryApi.exportMaterials({
+      await inventoryLogsApi.exportMaterials({
         materialId: transactionForm.materialId,
         quantity: transactionForm.quantity,
         note: transactionForm.note

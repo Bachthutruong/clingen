@@ -2,6 +2,8 @@ import React, { useState } from 'react'
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
+import { getRoleDisplayName } from '@/lib/utils'
+import { NotificationBell } from '@/components/NotificationBell'
 import {
   User,
   LogOut,
@@ -14,7 +16,8 @@ import {
 //   BarChart3,
   Settings,
   UserCheck,
-  Calculator
+  Calculator,
+  // Bell
 } from 'lucide-react'
 
 interface SubMenuItem {
@@ -79,7 +82,8 @@ const menuItems: MenuItem[] = [
     subItems: [
       { label: 'Báo cáo tài chính', path: '/finance/financial-reports', roles: ['admin', 'accountant'] },
       { label: 'Hóa đơn & Thanh toán', path: '/finance/invoice-payments', roles: ['admin', 'accountant'] },
-      { label: 'Quản lý nhà cung cấp', path: '/finance/supplier-management', roles: ['admin', 'accountant'] }
+      { label: 'Quản lý nhà cung cấp', path: '/finance/supplier-management', roles: ['admin', 'accountant'] },
+      { label: 'Chi phí hàng tháng', path: '/finance/monthly-costs', roles: ['admin', 'accountant'] }
     ]
   },
   {
@@ -89,6 +93,7 @@ const menuItems: MenuItem[] = [
     roles: ['admin'],
     subItems: [
       { label: 'Quản lý tài khoản', path: '/admin/user-management', roles: ['admin'] },
+      { label: 'Quản lý thông báo', path: '/admin/notification-management', roles: ['admin'] },
       { label: 'Lịch sử hệ thống', path: '/admin/system-history', roles: ['admin'] }
     ]
   }
@@ -105,19 +110,17 @@ const Layout: React.FC = () => {
     navigate('/login')
   }
 
+  // Helper function to check if user has access to a role
+  const hasRoleAccess = (requiredRoles: string[]) => {
+    if (!user?.role) return false
+    return requiredRoles.includes(user.role)
+  }
+
   const filteredMenuItems = menuItems.filter(item => 
-    !item.roles || item.roles.includes(user?.role || '')
+    !item.roles || hasRoleAccess(item.roles)
   )
 
-  const getRoleName = (role: string) => {
-    switch (role) {
-      case 'admin': return 'Quản trị viên'
-      case 'receptionist': return 'Nhân viên đón tiếp'
-      case 'lab_technician': return 'Nhân viên xét nghiệm'
-      case 'accountant': return 'Kế toán'
-      default: return role
-    }
-  }
+
 
   return (
     <div className="h-screen flex overflow-hidden bg-gray-50">
@@ -173,7 +176,7 @@ const Layout: React.FC = () => {
                   {item.subItems && isMainActive && (
                     <ul className="mt-2 space-y-1 ml-4">
                       {item.subItems
-                        .filter(subItem => !subItem.roles || subItem.roles.includes(user?.role || ''))
+                        .filter(subItem => !subItem.roles || hasRoleAccess(subItem.roles || []))
                         .map((subItem) => (
                         <li key={subItem.path}>
                           <Link
@@ -209,7 +212,7 @@ const Layout: React.FC = () => {
                 {user?.name}
               </p>
               <p className="text-xs text-blue-600 font-medium">
-                {user?.role && getRoleName(user.role)}
+                {user?.roleCode && getRoleDisplayName(user.roleCode)}
               </p>
             </div>
           </div>
@@ -246,6 +249,7 @@ const Layout: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-4">
+            <NotificationBell />
             <div className="text-sm text-gray-600">
               Chào mừng, <span className="font-semibold text-blue-600">{user?.name}</span>
             </div>
