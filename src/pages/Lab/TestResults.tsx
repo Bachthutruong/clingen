@@ -649,25 +649,43 @@ const TestResults: React.FC = () => {
             <div className="p-6 space-y-6">
               {/* Patient Info */}
               <div className="border-b pb-4">
-                <h3 className="font-semibold text-lg">{selectedResult.patientName}</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2 text-sm">
+                <div className="flex justify-between items-start">
                   <div>
-                    <span className="text-gray-600">Mã BN:</span>
-                    <span className="ml-2 font-medium">{selectedResult.patientCode}</span>
+                    <h3 className="font-semibold text-lg">{selectedResult.patientName}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2 text-sm">
+                      <div>
+                        <span className="text-gray-600">Mã BN:</span>
+                        <span className="ml-2 font-medium">{selectedResult.patientCode}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Tuổi:</span>
+                        <span className="ml-2 font-medium">{selectedResult.patientAge}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Giới tính:</span>
+                        <span className="ml-2 font-medium">
+                          {selectedResult.patientGender === 1 ? 'Nam' : selectedResult.patientGender === 0 ? 'Nữ' : 'Khác'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Mã mẫu:</span>
+                        <span className="ml-2 font-medium">{selectedResult.sampleCode}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-gray-600">Tuổi:</span>
-                    <span className="ml-2 font-medium">{selectedResult.patientAge}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Giới tính:</span>
-                    <span className="ml-2 font-medium">
-                      {selectedResult.patientGender === 1 ? 'Nam' : selectedResult.patientGender === 0 ? 'Nữ' : 'Khác'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Mã mẫu:</span>
-                    <span className="ml-2 font-medium">{selectedResult.sampleCode}</span>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => toast.success('Xem lịch sử khám bệnh')}>
+                      <FileText size={14} className="mr-1" />
+                      Lịch sử
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => toast.success('Cập nhật thông tin bệnh nhân')}>
+                      <Edit size={14} className="mr-1" />
+                      Cập nhật
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => toast.success('In thông tin bệnh nhân')}>
+                      <Printer size={14} className="mr-1" />
+                      In thông tin
+                    </Button>
                   </div>
                 </div>
               </div>

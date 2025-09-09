@@ -1385,14 +1385,35 @@ export const revenueApi = {
     }
 
     try {
+      console.log('Revenue API search called with params:', searchParams)
       const response: AxiosResponse<any> = await api.post('/revenue/search', searchParams)
+      console.log('Revenue API response:', response.data)
 
-      // Handle structure: { status: true, data: [...] | {content, totalElements, ...}, totalRecord }
-      if (response?.data?.status === true) {
-        const data = response.data.data
-        const totalRecord = response.data.totalRecord
+      // Handle different response structures
+      const responseData = response.data
 
-        // Case A: data is array
+      // Case 1: Direct pagination structure { content: [], totalElements: 0, ... }
+      if (responseData && Array.isArray(responseData.content)) {
+        console.log('Revenue API: Using direct pagination structure')
+        return {
+          content: responseData.content || [],
+          totalElements: responseData.totalElements || 0,
+          totalPages: responseData.totalPages || 0,
+          size: responseData.size || searchParams.pageSize,
+          number: responseData.number || searchParams.pageIndex,
+          first: responseData.first || (responseData.number === 0),
+          last: responseData.last || false,
+          numberOfElements: responseData.numberOfElements || (responseData.content?.length || 0)
+        }
+      }
+
+      // Case 2: MethodResult structure { status: true, data: [...], totalRecord: 0 }
+      if (responseData?.status === true) {
+        console.log('Revenue API: Using MethodResult structure')
+        const data = responseData.data
+        const totalRecord = responseData.totalRecord
+
+        // Case 2A: data is array
         if (Array.isArray(data)) {
           const content = data
           const totalElements = typeof totalRecord === 'number' ? totalRecord : content.length
@@ -1410,12 +1431,12 @@ export const revenueApi = {
           }
         }
 
-        // Case B: data is object with pagination fields
+        // Case 2B: data is object with pagination fields
         if (data && typeof data === 'object') {
           const paginationData = data
           return {
             content: paginationData.content || [],
-            totalElements: paginationData.totalElements ?? response.data.totalRecord ?? 0,
+            totalElements: paginationData.totalElements ?? responseData.totalRecord ?? 0,
             totalPages: paginationData.totalPages ?? 0,
             size: paginationData.size ?? searchParams.pageSize,
             number: paginationData.number ?? searchParams.pageIndex,
@@ -1426,20 +1447,36 @@ export const revenueApi = {
         }
       }
 
-      // Legacy structure fallback: pass to transformer expecting {status,message,data}
-      return transformToPaginatedResponse(response.data, searchParams.pageIndex, searchParams.pageSize)
+      // Case 3: Direct array response
+      if (Array.isArray(responseData)) {
+        console.log('Revenue API: Using direct array structure')
+        return {
+          content: responseData,
+          totalElements: responseData.length,
+          totalPages: Math.ceil(responseData.length / searchParams.pageSize),
+          size: searchParams.pageSize,
+          number: searchParams.pageIndex,
+          first: searchParams.pageIndex === 0,
+          last: searchParams.pageIndex >= Math.ceil(responseData.length / searchParams.pageSize) - 1,
+          numberOfElements: responseData.length
+        }
+      }
+
+      // Case 4: Legacy structure fallback: pass to transformer expecting {status,message,data}
+      console.log('Revenue API: Using fallback transformer with data:', responseData)
+      return transformToPaginatedResponse(responseData, searchParams.pageIndex, searchParams.pageSize)
     } catch (error) {
       console.error('Error calling POST /revenue/search:', error)
       // Return empty response on error since GET /revenue doesn't exist
-        return {
-          content: [],
-          totalElements: 0,
-          totalPages: 0,
-          size: searchParams.pageSize,
-          number: searchParams.pageIndex,
-          first: true,
-          last: true,
-          numberOfElements: 0
+      return {
+        content: [],
+        totalElements: 0,
+        totalPages: 0,
+        size: searchParams.pageSize,
+        number: searchParams.pageIndex,
+        first: true,
+        last: true,
+        numberOfElements: 0
       }
     }
   },

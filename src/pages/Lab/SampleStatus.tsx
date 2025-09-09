@@ -22,7 +22,8 @@ import {
   Calendar,
   // MapPin,
   DollarSign,
-  FileText
+  FileText,
+  Save
 } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 import { patientSamplesApi } from '@/services'
@@ -93,6 +94,12 @@ const SampleStatus: React.FC = () => {
     newStatus?: string
     sample: PatientSample
   } | null>(null)
+
+  // Result upload states
+  const [showResultUploadDialog, setShowResultUploadDialog] = useState(false)
+  const [uploadedHtml, setUploadedHtml] = useState<string>('')
+  const [isEditingHtml, setIsEditingHtml] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
 
   // Fetch patient samples from API
   const fetchSamples = async () => {
@@ -282,10 +289,10 @@ const SampleStatus: React.FC = () => {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'pending': return 'Chờ lấy mẫu'
-      case 'collected': return 'Đã lấy mẫu'
-      case 'processing': return 'Đang xử lý'
-      case 'completed': return 'Hoàn thành'
+      case 'pending': return 'Đang tiếp nhận'
+      case 'collected': return 'Đang phân tích'
+      case 'processing': return 'Đang phân tích'
+      case 'completed': return 'Đã có kết quả'
       case 'rejected': return 'Từ chối'
       default: return status
     }
@@ -329,6 +336,98 @@ const SampleStatus: React.FC = () => {
       sample
     })
     setShowConfirmDialog(true)
+  }
+
+  // Handle file upload for results
+  const handleFileUpload = async (file: File, sampleId: number) => {
+    try {
+      setIsUploading(true)
+      
+      // Create FormData for file upload
+      const formData = new FormData()
+      formData.append('file', file)
+      
+      // Call API to upload file and get HTML result
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://pk.caduceus.vn/api/pk/v1'}/patient-test/result/${sampleId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: formData
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        if (result.status && result.data) {
+          setUploadedHtml(result.data)
+          setShowResultUploadDialog(true)
+          toast.success('Upload file thành công!')
+        } else {
+          toast.error('Lỗi khi xử lý file')
+        }
+      } else {
+        toast.error('Lỗi khi upload file')
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error)
+      toast.error('Có lỗi xảy ra khi upload file')
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  // Handle drag and drop
+  const handleDrop = (e: React.DragEvent, sampleId: number) => {
+    e.preventDefault()
+    const files = Array.from(e.dataTransfer.files)
+    const excelFile = files.find(file => 
+      file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      file.type === 'application/vnd.ms-excel'
+    )
+    
+    if (excelFile) {
+      handleFileUpload(excelFile, sampleId)
+    } else {
+      toast.error('Vui lòng chọn file Excel (.xlsx hoặc .xls)')
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+  }
+
+  // Save edited HTML
+  const handleSaveHtml = async (sampleId: number) => {
+    try {
+      setIsUploading(true)
+      
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://pk.caduceus.vn/api/pk/v1'}/patient-test`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: JSON.stringify({
+          id: sampleId,
+          htmlResult: uploadedHtml
+        })
+      })
+      
+      if (response.ok) {
+        toast.success('Lưu kết quả thành công!')
+        setShowResultUploadDialog(false)
+        setUploadedHtml('')
+        setIsEditingHtml(false)
+        await fetchSamples() // Refresh data
+      } else {
+        toast.error('Lỗi khi lưu kết quả')
+      }
+    } catch (error) {
+      console.error('Error saving HTML:', error)
+      toast.error('Có lỗi xảy ra khi lưu kết quả')
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   const handleConfirmAction = async () => {
@@ -391,7 +490,7 @@ const SampleStatus: React.FC = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600">Chờ lấy mẫu</p>
+                <p className="text-xs text-gray-600">Đang tiếp nhận</p>
                 <p className="text-lg font-bold text-yellow-600">{stats.pending}</p>
               </div>
               <Clock className="h-6 w-6 text-yellow-600" />
@@ -403,7 +502,7 @@ const SampleStatus: React.FC = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600">Đã lấy mẫu</p>
+                <p className="text-xs text-gray-600">Đang phân tích</p>
                 <p className="text-lg font-bold text-blue-600">{stats.collected}</p>
               </div>
               <Package className="h-6 w-6 text-blue-600" />
@@ -415,7 +514,7 @@ const SampleStatus: React.FC = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600">Đang xử lý</p>
+                <p className="text-xs text-gray-600">Đang phân tích</p>
                 <p className="text-lg font-bold text-purple-600">{stats.processing}</p>
               </div>
               <Microscope className="h-6 w-6 text-purple-600" />
@@ -427,7 +526,7 @@ const SampleStatus: React.FC = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600">Hoàn thành</p>
+                <p className="text-xs text-gray-600">Đã có kết quả</p>
                 <p className="text-lg font-bold text-green-600">{stats.completed}</p>
               </div>
               <CheckCircle className="h-6 w-6 text-green-600" />
@@ -481,10 +580,10 @@ const SampleStatus: React.FC = () => {
               className="px-3 py-2 border border-gray-300 rounded-md w-full sm:w-auto"
             >
               <option value="">Tất cả trạng thái</option>
-              <option value="pending">Chờ lấy mẫu</option>
-              <option value="collected">Đã lấy mẫu</option>
-              <option value="processing">Đang xử lý</option>
-              <option value="completed">Hoàn thành</option>
+              <option value="pending">Đang tiếp nhận</option>
+              <option value="collected">Đang phân tích</option>
+              <option value="processing">Đang phân tích</option>
+              <option value="completed">Đã có kết quả</option>
               <option value="rejected">Từ chối</option>
             </select>
 
@@ -618,8 +717,8 @@ const SampleStatus: React.FC = () => {
                               onClick={() => handleUpdateStatus(sample, 'collected')}
                               className="text-xs"
                             >
-                              <Package size={12} className="mr-1" />
-                              Lấy mẫu
+                              <Microscope size={12} className="mr-1" />
+                              Bắt đầu phân tích
                             </Button>
                           )}
                           
@@ -629,19 +728,22 @@ const SampleStatus: React.FC = () => {
                               onClick={() => handleUpdateStatus(sample, 'processing')}
                               className="text-xs"
                             >
-                              <Microscope size={12} className="mr-1" />
-                              Xử lý
+                              <CheckCircle size={12} className="mr-1" />
+                              Hoàn thành phân tích
                             </Button>
                           )}
                           
                           {sample.status === 'processing' && (
                             <Button
                               size="sm"
-                              onClick={() => handleUpdateStatus(sample, 'completed')}
+                              onClick={() => {
+                                setSelectedSample(sample)
+                                setShowResultUploadDialog(true)
+                              }}
                               className="text-xs"
                             >
-                              <CheckCircle size={12} className="mr-1" />
-                              Hoàn thành
+                              <FileText size={12} className="mr-1" />
+                              Nhập kết quả
                             </Button>
                           )}
                           
@@ -912,6 +1014,117 @@ const SampleStatus: React.FC = () => {
                   {confirmAction.type === 'update_status' ? 'Cập nhật' : 'Từ chối'}
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Result Upload Dialog */}
+      {showResultUploadDialog && selectedSample && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg w-full max-w-6xl max-h-[90vh] overflow-hidden">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="text-lg font-semibold">Nhập kết quả xét nghiệm - {selectedSample.sampleCode}</h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowResultUploadDialog(false)
+                  setUploadedHtml('')
+                  setIsEditingHtml(false)
+                }}
+              >
+                <X size={16} />
+              </Button>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              {!uploadedHtml ? (
+                <div
+                  className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors"
+                  onDrop={(e) => handleDrop(e, parseInt(selectedSample.id))}
+                  onDragOver={handleDragOver}
+                >
+                  <FileText size={48} className="mx-auto text-gray-400 mb-4" />
+                  <p className="text-lg font-medium text-gray-600 mb-2">
+                    Kéo thả file Excel vào đây
+                  </p>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Hoặc click để chọn file (.xlsx, .xls)
+                  </p>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        handleFileUpload(file, parseInt(selectedSample.id))
+                      }
+                    }}
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  <Button
+                    onClick={() => document.getElementById('file-upload')?.click()}
+                    disabled={isUploading}
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 size={16} className="mr-2 animate-spin" />
+                        Đang xử lý...
+                      </>
+                    ) : (
+                      'Chọn file Excel'
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-medium">Kết quả HTML từ file Excel:</h4>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setIsEditingHtml(!isEditingHtml)}
+                      >
+                        {isEditingHtml ? 'Xem kết quả' : 'Chỉnh sửa'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => handleSaveHtml(parseInt(selectedSample.id))}
+                        disabled={isUploading}
+                      >
+                        {isUploading ? (
+                          <>
+                            <Loader2 size={14} className="mr-1 animate-spin" />
+                            Đang lưu...
+                          </>
+                        ) : (
+                          <>
+                            <Save size={14} className="mr-1" />
+                            Lưu kết quả
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {isEditingHtml ? (
+                    <textarea
+                      value={uploadedHtml}
+                      onChange={(e) => setUploadedHtml(e.target.value)}
+                      className="w-full h-96 p-3 border border-gray-300 rounded-md font-mono text-sm"
+                      placeholder="Chỉnh sửa HTML kết quả..."
+                    />
+                  ) : (
+                    <div 
+                      className="border border-gray-300 rounded-md p-4 max-h-96 overflow-y-auto"
+                      dangerouslySetInnerHTML={{ __html: uploadedHtml }}
+                    />
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -274,17 +274,38 @@ const SupplyManagement: React.FC = () => {
   const handleSaveMaterial = async () => {
     if (!selectedMaterial) return
     
+    // Validate required fields
+    if (!selectedMaterial.name || !selectedMaterial.code) {
+      toast.error('Vui lòng nhập tên và mã vật tư')
+      return
+    }
+    
+    if (!selectedMaterial.packagingId) {
+      toast.error('Vui lòng chọn quy cách đóng gói')
+      return
+    }
+    
+    if (!selectedMaterial.type) {
+      toast.error('Vui lòng chọn loại vật tư')
+      return
+    }
+    
     try {
       setSubmitting(true)
-      await materialsApi.update(selectedMaterial.id!, {
+      
+      const updateData = {
         name: selectedMaterial.name,
         code: selectedMaterial.code,
-        quantity: selectedMaterial.quantity,
+        quantity: selectedMaterial.quantity || 0,
         packagingId: selectedMaterial.packagingId,
         importTime: selectedMaterial.importTime,
-        expiryTime: selectedMaterial.expiryTime,
+        expiryTime: selectedMaterial.expiryTime || undefined,
         type: selectedMaterial.type
-      })
+      }
+      
+      console.log('Updating material with data:', updateData)
+      
+      await materialsApi.update(selectedMaterial.id!, updateData)
       
       toast.success('Lưu thông tin vật tư thành công!')
       setIsEditing(false)
@@ -843,32 +864,49 @@ const SupplyManagement: React.FC = () => {
                           />
                         </div>
                         <div>
-                          <Label>Loại</Label>
+                          <Label>Loại *</Label>
                           <select
-                            value={selectedMaterial.type}
+                            value={selectedMaterial.type || ''}
                             onChange={(e) => setSelectedMaterial({
                               ...selectedMaterial,
                               type: parseInt(e.target.value)
                             })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-md"
                           >
-                            {/* <option value={0}>Thuốc thử</option>
-                            <option value={1}>Thiết bị</option> */}
+                            <option value="">Chọn loại vật tư</option>
                             <option value={1}>Hoá chất</option>
                             <option value={2}>Vật tư</option>
-                            {/* <option value={4}>Khác</option> */}
                           </select>
                         </div>
                       </div>
                       
                       <div>
-                        <Label>Ngày hết hạn</Label>
-                        <Input
-                          type="datetime-local"
-                          value={selectedMaterial.expiryTime ? new Date(selectedMaterial.expiryTime).toISOString().slice(0, 16) : ''}
+                        <Label>Quy cách đóng gói *</Label>
+                        <select
+                          value={selectedMaterial.packagingId || ''}
                           onChange={(e) => setSelectedMaterial({
                             ...selectedMaterial,
-                            expiryTime: e.target.value ? new Date(e.target.value).toISOString() : undefined
+                            packagingId: parseInt(e.target.value)
+                          })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        >
+                          <option value="">Chọn quy cách đóng gói</option>
+                          {packagingData?.content?.map(packaging => (
+                            <option key={packaging.id} value={packaging.id}>
+                              {packaging.name} ({packaging.code})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      
+                      <div>
+                        <Label>Ngày hết hạn</Label>
+                        <Input
+                          type="date"
+                          value={selectedMaterial.expiryTime ? new Date(selectedMaterial.expiryTime).toISOString().slice(0, 10) : ''}
+                          onChange={(e) => setSelectedMaterial({
+                            ...selectedMaterial,
+                            expiryTime: e.target.value ? new Date(e.target.value + 'T00:00:00.000Z').toISOString() : undefined
                           })}
                         />
                       </div>
@@ -1101,8 +1139,8 @@ const SupplyManagement: React.FC = () => {
                 <div>
                   <Label>Ngày hết hạn</Label>
                   <Input
-                    type="datetime-local"
-                    value={newMaterial.expiryTime ? new Date(newMaterial.expiryTime).toISOString().slice(0, 16) : ''}
+                    type="date"
+                    value={newMaterial.expiryTime ? new Date(newMaterial.expiryTime).toISOString().slice(0, 10) : ''}
                     onChange={(e) => setNewMaterial({ ...newMaterial, expiryTime: e.target.value ? new Date(e.target.value).toISOString() : '' })}
                   />
                 </div>

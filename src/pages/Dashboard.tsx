@@ -110,8 +110,41 @@ const Dashboard: React.FC = () => {
         }
         
         try {
-          console.log('Revenue API params: none (getting all revenue)')
-          revenueResponse = await revenueApi.getAll()
+          // Set default time parameters for revenue API
+          const currentDate = new Date()
+          const currentMonth = currentDate.getMonth() + 1
+          const currentYear = currentDate.getFullYear()
+          
+          // Calculate first and last day of the month
+          const firstDay = new Date(currentYear, currentMonth - 1, 1)
+          const lastDay = new Date(currentYear, currentMonth, 0)
+          
+          // Format dates as DD/MM/YYYY
+          const formatDate = (date: Date) => {
+            const day = date.getDate().toString().padStart(2, '0')
+            const month = (date.getMonth() + 1).toString().padStart(2, '0')
+            const year = date.getFullYear()
+            return `${day}/${month}/${year}`
+          }
+          
+          const revenueParams = {
+            keyword: "",
+            status: 0,
+            pageIndex: 0,
+            pageSize: 100,
+            orderCol: "createdAt",
+            isDesc: true,
+            filterType: 'MONTH',
+            fromDate: formatDate(firstDay),
+            toDate: formatDate(lastDay),
+            month: currentMonth,
+            year: currentYear,
+            testTypeId: 0,
+            referralSourceId: ""
+          }
+          
+          console.log('Revenue API params:', revenueParams)
+          revenueResponse = await revenueApi.search(revenueParams)
           console.log('Revenue API response:', revenueResponse)
         } catch (error) {
           console.error('Error fetching revenue:', error)

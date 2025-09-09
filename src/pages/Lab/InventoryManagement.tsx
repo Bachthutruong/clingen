@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label'
 import { 
   Package, 
   Search, 
-  Plus, 
   Edit3, 
   TrendingUp,
   TrendingDown,
@@ -30,8 +29,6 @@ import type {
   InventoryLogsDTO,
   InventorySearchRequest,
   InventoryLogSearchRequest,
-  InventoryCreateRequest,
-  InventoryLogCreateRequest,
   CreateInventoryLogRequest,
   PaginatedResponse 
 } from '@/types/api'
@@ -56,28 +53,29 @@ const InventoryManagement: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
 
   // Form States
-  const [newItem, setNewItem] = useState<InventoryCreateRequest>({
-    name: '',
-    code: '',
-    description: '',
-    unit: '',
-    currentStock: 0,
-    minStock: 0,
-    maxStock: 0,
-    unitPrice: 0,
-    location: '',
-    materialType: 1, // 1 - hóa chất
-    status: 1,
-    importDate: '',
-    expiryDate: ''
-  })
 
-  const [logForm, setLogForm] = useState<InventoryLogCreateRequest>({
-    inventoryId: 0,
-    logType: 1, // 1 - nhập kho
+  const [logForm, setLogForm] = useState<{
+    quantity: number
+    note: string
+    logType: number
+    exportType: number
+    exportId: number
+    items: Array<{
+      type: number
+      materialId: number
+      quantity: number
+      expiryDate: string
+      unitPrice: number
+      amount: number
+      note: string
+    }>
+  }>({
     quantity: 0,
-    reason: '',
-    note: ''
+    note: '',
+    logType: 1,
+    exportType: 1,
+    exportId: 1,
+    items: []
   })
 
   // Fetch inventory items
@@ -186,37 +184,75 @@ const InventoryManagement: React.FC = () => {
     }
   }
 
-  const handleAddNewItem = async () => {
+
+  const handleImportExport = (type: 'import' | 'export') => {
+    setLogForm({
+      quantity: 0,
+      note: '',
+      logType: type === 'import' ? 1 : 2,
+      exportType: 1, // 1 - department, 2 - referral source
+      exportId: 1, // Default department ID
+      items: []
+    })
+    setIsAddingNew(true)
+  }
+
+  const handleSubmitImportExport = async () => {
+    if (logForm.items.length === 0) {
+      toast.error('Vui lòng thêm ít nhất một vật tư')
+      return
+    }
+
+    // Validate items
+    for (const item of logForm.items) {
+      if (item.materialId <= 0) {
+        toast.error('Vui lòng nhập ID vật tư hợp lệ')
+        return
+      }
+      if (item.quantity <= 0) {
+        toast.error('Vui lòng nhập số lượng hợp lệ')
+        return
+      }
+    }
+
     try {
       setSubmitting(true)
       
-      if (!newItem.name || !newItem.code || !newItem.unit) {
-        toast.error('Vui lòng nhập đầy đủ thông tin bắt buộc (Tên, Mã, Đơn vị)')
-        return
+      const logData: CreateInventoryLogRequest = {
+        logType: logForm.logType,
+        exportType: logForm.exportType,
+        exportId: logForm.exportId,
+        note: logForm.note,
+        items: logForm.items.map(item => ({
+          type: item.type,
+          materialId: item.materialId,
+          quantity: item.quantity,
+          expiryDate: item.expiryDate || '',
+          unitPrice: item.unitPrice || 0,
+          amount: item.amount || 0,
+          note: item.note || ''
+        }))
       }
+
+      console.log('Submitting inventory log:', logData)
+      await inventoryLogsApi.create(logData)
       
-      // Note: Inventory items are read-only, new items should be added through inventory logs
-      toast.success('Vật tư kho chỉ có thể xem, không thể thêm mới trực tiếp. Sử dụng nhập kho để thêm vật tư.')
-      setNewItem({
-        name: '',
-        code: '',
-        description: '',
-        unit: '',
-        currentStock: 0,
-        minStock: 0,
-        maxStock: 0,
-        unitPrice: 0,
-        location: '',
-        materialType: 1, // 1 - hóa chất
-        status: 1,
-        importDate: '',
-        expiryDate: ''
-      })
+      toast.success(logForm.logType === 1 ? 'Nhập kho thành công!' : 'Xuất kho thành công!')
       setIsAddingNew(false)
-      await fetchInventoryItems()
+      await fetchInventoryLogs()
+      
+      // Reset form
+      setLogForm({
+        quantity: 0,
+        note: '',
+        logType: 1,
+        exportType: 1,
+        exportId: 1,
+        items: []
+      })
     } catch (error) {
-      console.error('Error adding item:', error)
-      toast.error('Có lỗi xảy ra khi thêm vật tư')
+      console.error('Error submitting inventory log:', error)
+      toast.error('Có lỗi xảy ra khi thực hiện giao dịch')
     } finally {
       setSubmitting(false)
     }
@@ -233,10 +269,10 @@ const InventoryManagement: React.FC = () => {
       
       const logData: CreateInventoryLogRequest = {
         logType: type === 'import' ? 1 : 2, // 1 - nhập kho, 2 - xuất kho
-        exportType: 0, // Default export type
-        exportId: 0, // Default export ID
+        exportType: 1, // 1 - department, 2 - referral source
+        exportId: 1, // Default department ID
         items: [{
-          type: 0, // Default type
+          type: 1, // 1 - hóa chất, 2 - vật tư
           materialId: selectedItem.id!,
           quantity: logForm.quantity,
           expiryDate: '', // Default expiry date
@@ -251,11 +287,12 @@ const InventoryManagement: React.FC = () => {
       toast.success(`${type === 'import' ? 'Nhập' : 'Xuất'} kho thành công!`)
       
       setLogForm({
-        inventoryId: selectedItem.id!,
-        logType: 1, // 1 - nhập kho
         quantity: 0,
-        reason: '',
-        note: ''
+        note: '',
+        logType: 1,
+        exportType: 1,
+        exportId: 1,
+        items: []
       })
       
       await fetchInventoryItems()
@@ -318,14 +355,24 @@ const InventoryManagement: React.FC = () => {
               <p className="text-emerald-100">Quản lý vật tư và theo dõi tồn kho</p>
             </div>
           </div>
-          <Button 
-            onClick={() => setIsAddingNew(true)}
-            className="bg-white text-emerald-600 hover:bg-gray-100"
-            disabled={submitting}
-          >
-            <Plus size={16} className="mr-2" />
-            Thêm vật tư
-          </Button>
+          <div className="flex space-x-2">
+            <Button 
+              onClick={() => handleImportExport('import')}
+              className="bg-white text-green-600 hover:bg-gray-100"
+              disabled={submitting}
+            >
+              <ArrowUpCircle size={16} className="mr-2" />
+              Nhập kho
+            </Button>
+            <Button 
+              onClick={() => handleImportExport('export')}
+              className="bg-white text-red-600 hover:bg-gray-100"
+              disabled={submitting}
+            >
+              <ArrowDownCircle size={16} className="mr-2" />
+              Xuất kho
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -831,21 +878,13 @@ const InventoryManagement: React.FC = () => {
                                   />
                                 </div>
                                 <div>
-                                  <Label>Lý do</Label>
+                                  <Label>Ghi chú</Label>
                                   <Input
-                                    value={logForm.reason}
-                                    onChange={(e) => setLogForm({...logForm, reason: e.target.value})}
-                                    placeholder="Lý do nhập/xuất"
+                                    value={logForm.note}
+                                    onChange={(e) => setLogForm({...logForm, note: e.target.value})}
+                                    placeholder="Ghi chú nhập/xuất"
                                   />
                                 </div>
-                              </div>
-                              <div>
-                                <Label>Ghi chú</Label>
-                                <Input
-                                  value={logForm.note}
-                                  onChange={(e) => setLogForm({...logForm, note: e.target.value})}
-                                  placeholder="Ghi chú thêm"
-                                />
                               </div>
                               <div className="flex space-x-2">
                                 <Button 
@@ -922,13 +961,15 @@ const InventoryManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Add New Item Modal */}
+      {/* Import/Export Modal */}
       {isAddingNew && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <CardHeader className="border-b">
               <div className="flex justify-between items-center">
-                <CardTitle>Thêm vật tư mới</CardTitle>
+                <CardTitle>
+                  {logForm.logType === 1 ? 'Nhập kho' : 'Xuất kho'}
+                </CardTitle>
                 <Button
                   variant="outline"
                   size="sm"
@@ -943,174 +984,163 @@ const InventoryManagement: React.FC = () => {
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="name">Tên vật tư *</Label>
-                    <Input
-                      id="name"
-                      value={newItem.name}
-                      onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                      placeholder="VD: Ống nghiệm"
-                      required
-                      disabled={submitting}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="code">Mã vật tư *</Label>
-                    <Input
-                      id="code"
-                      value={newItem.code}
-                      onChange={(e) => setNewItem({ ...newItem, code: e.target.value })}
-                      placeholder="VD: ONG_001"
-                      required
-                      disabled={submitting}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="unit">Đơn vị *</Label>
-                    <Input
-                      id="unit"
-                      value={newItem.unit}
-                      onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
-                      placeholder="VD: cái, hộp, lít"
-                      required
-                      disabled={submitting}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="materialType">Loại vật tư *</Label>
+                    <Label>Loại giao dịch *</Label>
                     <select
-                      id="materialType"
-                      value={newItem.materialType}
-                      onChange={(e) => setNewItem({ ...newItem, materialType: parseInt(e.target.value) })}
+                      value={logForm.logType}
+                      onChange={(e) => setLogForm({ ...logForm, logType: parseInt(e.target.value) })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      required
                       disabled={submitting}
                     >
-                      <option value={1}>Hóa chất</option>
-                      <option value={2}>Vật tư</option>
+                      <option value={1}>Nhập kho</option>
+                      <option value={2}>Xuất kho</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <Label>Loại xuất *</Label>
+                    <select
+                      value={logForm.exportType}
+                      onChange={(e) => setLogForm({ ...logForm, exportType: parseInt(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      disabled={submitting}
+                    >
+                      <option value={1}>Phòng ban</option>
+                      <option value={2}>Nguồn gửi</option>
                     </select>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="currentStock">Tồn kho ban đầu</Label>
-                    <Input
-                      id="currentStock"
-                      type="number"
-                      value={newItem.currentStock}
-                      onChange={(e) => setNewItem({ ...newItem, currentStock: parseInt(e.target.value) || 0 })}
-                      disabled={submitting}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="minStock">Tồn kho tối thiểu</Label>
-                    <Input
-                      id="minStock"
-                      type="number"
-                      value={newItem.minStock}
-                      onChange={(e) => setNewItem({ ...newItem, minStock: parseInt(e.target.value) || 0 })}
-                      disabled={submitting}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="maxStock">Tồn kho tối đa</Label>
-                    <Input
-                      id="maxStock"
-                      type="number"
-                      value={newItem.maxStock}
-                      onChange={(e) => setNewItem({ ...newItem, maxStock: parseInt(e.target.value) || 0 })}
-                      disabled={submitting}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="unitPrice">Đơn giá</Label>
-                    <Input
-                      id="unitPrice"
-                      type="number"
-                      value={newItem.unitPrice}
-                      onChange={(e) => setNewItem({ ...newItem, unitPrice: parseFloat(e.target.value) || 0 })}
-                      disabled={submitting}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="location">Vị trí lưu trữ</Label>
-                    <Input
-                      id="location"
-                      value={newItem.location}
-                      onChange={(e) => setNewItem({ ...newItem, location: e.target.value })}
-                      placeholder="VD: Tủ A1, Kệ B2"
-                      disabled={submitting}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="importDate">Ngày nhập</Label>
-                    <Input
-                      id="importDate"
-                      type="date"
-                      value={newItem.importDate}
-                      onChange={(e) => setNewItem({ ...newItem, importDate: e.target.value })}
-                      disabled={submitting}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="expiryDate">Ngày hết hạn</Label>
-                    <Input
-                      id="expiryDate"
-                      type="date"
-                      value={newItem.expiryDate}
-                      onChange={(e) => setNewItem({ ...newItem, expiryDate: e.target.value })}
-                      disabled={submitting}
-                    />
-                  </div>
-                </div>
-
                 <div>
-                  <Label htmlFor="description">Mô tả</Label>
-                  <textarea
-                    id="description"
-                    value={newItem.description}
-                    onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
-                    placeholder="Mô tả chi tiết về vật tư"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    rows={3}
+                  <Label>ID Phòng ban/Nguồn gửi *</Label>
+                  <Input
+                    type="number"
+                    value={logForm.exportId}
+                    onChange={(e) => setLogForm({ ...logForm, exportId: parseInt(e.target.value) || 0 })}
+                    placeholder="Nhập ID phòng ban hoặc nguồn gửi"
                     disabled={submitting}
                   />
                 </div>
 
-                <div className="flex justify-end space-x-4 pt-4 border-t">
+                <div>
+                  <Label>Ghi chú</Label>
+                  <Input
+                    value={logForm.note}
+                    onChange={(e) => setLogForm({ ...logForm, note: e.target.value })}
+                    placeholder="Nhập ghi chú (tùy chọn)"
+                    disabled={submitting}
+                  />
+                </div>
+
+                <div className="border-t pt-4">
+                  <Label className="text-lg font-semibold">Danh sách vật tư</Label>
+                  <div className="space-y-2 mt-2">
+                    {logForm.items.map((item, index) => (
+                      <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-2 p-3 border rounded">
+                        <div>
+                          <Label className="text-sm">Loại hàng hóa</Label>
+                          <select
+                            value={item.type}
+                            onChange={(e) => {
+                              const newItems = [...logForm.items]
+                              newItems[index].type = parseInt(e.target.value)
+                              setLogForm({ ...logForm, items: newItems })
+                            }}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                            disabled={submitting}
+                          >
+                            <option value={1}>Hóa chất</option>
+                            <option value={2}>Vật tư</option>
+                          </select>
+                        </div>
+                        <div>
+                          <Label className="text-sm">ID Vật tư</Label>
+                          <Input
+                            type="number"
+                            value={item.materialId}
+                            onChange={(e) => {
+                              const newItems = [...logForm.items]
+                              newItems[index].materialId = parseInt(e.target.value) || 0
+                              setLogForm({ ...logForm, items: newItems })
+                            }}
+                            className="text-sm"
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-sm">Số lượng</Label>
+                          <Input
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const newItems = [...logForm.items]
+                              newItems[index].quantity = parseInt(e.target.value) || 0
+                              setLogForm({ ...logForm, items: newItems })
+                            }}
+                            className="text-sm"
+                            disabled={submitting}
+                          />
+                        </div>
+                        <div className="flex items-end">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const newItems = logForm.items.filter((_, i) => i !== index)
+                              setLogForm({ ...logForm, items: newItems })
+                            }}
+                            disabled={submitting}
+                          >
+                            <X size={14} />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setLogForm({
+                          ...logForm,
+                          items: [...logForm.items, {
+                            type: 1,
+                            materialId: 0,
+                            quantity: 0,
+                            expiryDate: '',
+                            unitPrice: 0,
+                            amount: 0,
+                            note: ''
+                          }]
+                        })
+                      }}
+                      disabled={submitting}
+                    >
+                      + Thêm vật tư
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-4 border-t">
                   <Button
-                    type="button"
                     variant="outline"
                     onClick={() => setIsAddingNew(false)}
                     disabled={submitting}
                   >
                     Hủy
                   </Button>
-                  <Button onClick={handleAddNewItem} disabled={submitting}>
+                  <Button
+                    onClick={handleSubmitImportExport}
+                    disabled={submitting || logForm.items.length === 0}
+                  >
                     {submitting ? (
                       <>
                         <Loader2 size={16} className="mr-2 animate-spin" />
-                        Đang thêm...
+                        Đang xử lý...
                       </>
                     ) : (
                       <>
                         <Save size={16} className="mr-2" />
-                        Thêm vật tư
+                        {logForm.logType === 1 ? 'Nhập kho' : 'Xuất kho'}
                       </>
                     )}
                   </Button>

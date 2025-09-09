@@ -769,6 +769,7 @@ const PatientRegistration: React.FC = () => {
                     disabled={loadingReferralSources}
                   >
                     <option value="">Chọn nguồn gửi</option>
+                    <option value="0">Khách lẻ</option>
                     {(() => {
                       // Handle case where referralSources might be the whole response object
                       let sources = referralSources

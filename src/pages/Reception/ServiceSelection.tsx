@@ -701,162 +701,6 @@ const ServiceSelection: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Patient Selection */}
-        <div className="lg:col-span-1">
-          <Card className="shadow-lg border-0">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <User size={20} className="text-blue-600" />
-                <span>Chọn bệnh nhân</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Tìm bệnh nhân..."
-                  value={searchPatientQuery}
-                  onChange={(e) => setSearchPatientQuery(e.target.value)}
-                  className="pl-10"
-                />
-                {loadingPatients && (
-                  <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-gray-400" />
-                )}
-              </div>
-
-              {selectedPatient ? (
-                <div className="p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-semibold text-blue-900">{selectedPatient.fullName}</h3>
-                      <p className="text-sm text-blue-700">SĐT: {selectedPatient.phoneNumber}</p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedPatient(null)}
-                    >
-                      Đổi
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="max-h-60 overflow-y-auto space-y-2">
-                  {patients.map(patient => (
-                    <div
-                      key={patient.id}
-                      className="p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
-                      onClick={() => setSelectedPatient(patient)}
-                    >
-                      <div className="font-medium">{patient.fullName}</div>
-                      <div className="text-sm text-gray-600">
-                        {patient.phoneNumber}
-                      </div>
-                    </div>
-                  ))}
-                  {patients.length === 0 && searchPatientQuery && !loadingPatients && (
-                    <p className="text-gray-500 text-center py-4">
-                      Không tìm thấy bệnh nhân
-                    </p>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Selected Services Summary */}
-          <Card className="shadow-lg border-0 mt-6">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <ShoppingCart size={20} className="text-green-600" />
-                <span>Dịch vụ đã chọn</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {selectedServices.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">
-                  Chưa chọn dịch vụ nào
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {selectedServices.map((item, index) => (
-                    <div key={`${item.testType.id}-${index}`} className="p-3 bg-gray-50 rounded-lg space-y-2">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="font-medium text-sm">{item.testType.name}</div>
-                          <div className="text-xs text-gray-600">
-                            {formatCurrency(item.price)}
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-6 w-6 p-0 text-red-500 hover:bg-red-50"
-                          onClick={() => removeService(item.testType.id!)}
-                        >
-                          <Trash2 size={12} />
-                        </Button>
-                      </div>
-                      
-                      {/* Sample Selection */}
-                      <div>
-                        <Label className="text-xs text-gray-700">Chọn mẫu (có thể chọn nhiều):</Label>
-                        <div className="text-xs text-gray-500 mb-1">Mẫu mặc định đã được chọn sẵn, bạn có thể thêm/bỏ tùy ý</div>
-                        <div className="mt-1 space-y-1 max-h-24 overflow-y-auto border rounded-md p-2">
-                          {item.availableSamples.map(sample => {
-                            const isDefault = item.testType.testSamples?.some(s => s.id === sample.id) || false
-                            return (
-                              <label key={sample.id} className="flex items-center space-x-2 text-xs">
-                                <input
-                                  type="checkbox"
-                                  checked={item.selectedSampleIds.includes(sample.id!)}
-                                  onChange={(e) => updateSampleSelection(item.testType.id!, sample.id!, e.target.checked)}
-                                  className="rounded border-gray-300"
-                                />
-                                <span className={isDefault ? "font-medium text-blue-700" : ""}>
-                                  {sample.name}
-                                  {isDefault && <span className="text-blue-500 ml-1">(mặc định)</span>}
-                                </span>
-                              </label>
-                            )
-                          })}
-                        </div>
-                        {item.selectedSampleNames.length > 0 && (
-                          <div className="text-xs text-green-600 mt-1">
-                            ✓ Đã chọn: {item.selectedSampleNames.join(', ')}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  
-                  <div className="border-t pt-3">
-                    <div className="flex justify-between items-center font-semibold">
-                      <span>Tổng cộng:</span>
-                      <span className="text-green-600">{formatCurrency(calculateTotal())}</span>
-                    </div>
-                  </div>
-                  
-                  <Button
-                    className="w-full"
-                    onClick={handleSubmit}
-                    disabled={isSubmitting || !selectedPatient}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 size={16} className="mr-2 animate-spin" />
-                        Đang xử lý...
-                      </>
-                    ) : (
-                      'Đăng ký xét nghiệm'
-                    )}
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
         {/* Service Selection */}
         <div className="lg:col-span-2 flex flex-col">
           <Card className="shadow-lg border-0 flex flex-col h-auto min-h-0">
@@ -1059,6 +903,162 @@ const ServiceSelection: React.FC = () => {
                       </Button>
                     </div>
                   )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Patient Selection */}
+        <div className="lg:col-span-1">
+          <Card className="shadow-lg border-0">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <User size={20} className="text-blue-600" />
+                <span>Chọn bệnh nhân</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Tìm bệnh nhân..."
+                  value={searchPatientQuery}
+                  onChange={(e) => setSearchPatientQuery(e.target.value)}
+                  className="pl-10"
+                />
+                {loadingPatients && (
+                  <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-gray-400" />
+                )}
+              </div>
+
+              {selectedPatient ? (
+                <div className="p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-semibold text-blue-900">{selectedPatient.fullName}</h3>
+                      <p className="text-sm text-blue-700">SĐT: {selectedPatient.phoneNumber}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedPatient(null)}
+                    >
+                      Đổi
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="max-h-60 overflow-y-auto space-y-2">
+                  {patients.map(patient => (
+                    <div
+                      key={patient.id}
+                      className="p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                      onClick={() => setSelectedPatient(patient)}
+                    >
+                      <div className="font-medium">{patient.fullName}</div>
+                      <div className="text-sm text-gray-600">
+                        {patient.phoneNumber}
+                      </div>
+                    </div>
+                  ))}
+                  {patients.length === 0 && searchPatientQuery && !loadingPatients && (
+                    <p className="text-gray-500 text-center py-4">
+                      Không tìm thấy bệnh nhân
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Selected Services Summary */}
+          <Card className="shadow-lg border-0 mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <ShoppingCart size={20} className="text-green-600" />
+                <span>Dịch vụ đã chọn</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {selectedServices.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">
+                  Chưa chọn dịch vụ nào
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {selectedServices.map((item, index) => (
+                    <div key={`${item.testType.id}-${index}`} className="p-3 bg-gray-50 rounded-lg space-y-2">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">{item.testType.name}</div>
+                          <div className="text-xs text-gray-600">
+                            {formatCurrency(item.price)}
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 w-6 p-0 text-red-500 hover:bg-red-50"
+                          onClick={() => removeService(item.testType.id!)}
+                        >
+                          <Trash2 size={12} />
+                        </Button>
+                      </div>
+                      
+                      {/* Sample Selection */}
+                      <div>
+                        <Label className="text-xs text-gray-700">Chọn mẫu (có thể chọn nhiều):</Label>
+                        <div className="text-xs text-gray-500 mb-1">Mẫu mặc định đã được chọn sẵn, bạn có thể thêm/bỏ tùy ý</div>
+                        <div className="mt-1 space-y-1 max-h-24 overflow-y-auto border rounded-md p-2">
+                          {item.availableSamples.map(sample => {
+                            const isDefault = item.testType.testSamples?.some(s => s.id === sample.id) || false
+                            return (
+                              <label key={sample.id} className="flex items-center space-x-2 text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={item.selectedSampleIds.includes(sample.id!)}
+                                  onChange={(e) => updateSampleSelection(item.testType.id!, sample.id!, e.target.checked)}
+                                  className="rounded border-gray-300"
+                                />
+                                <span className={isDefault ? "font-medium text-blue-700" : ""}>
+                                  {sample.name}
+                                  {isDefault && <span className="text-blue-500 ml-1">(mặc định)</span>}
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                        {item.selectedSampleNames.length > 0 && (
+                          <div className="text-xs text-green-600 mt-1">
+                            ✓ Đã chọn: {item.selectedSampleNames.join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <div className="border-t pt-3">
+                    <div className="flex justify-between items-center font-semibold">
+                      <span>Tổng cộng:</span>
+                      <span className="text-green-600">{formatCurrency(calculateTotal())}</span>
+                    </div>
+                  </div>
+                  
+                  <Button
+                    className="w-full"
+                    onClick={handleSubmit}
+                    disabled={isSubmitting || !selectedPatient}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 size={16} className="mr-2 animate-spin" />
+                        Đang xử lý...
+                      </>
+                    ) : (
+                      'Đăng ký xét nghiệm'
+                    )}
+                  </Button>
                 </div>
               )}
             </CardContent>
