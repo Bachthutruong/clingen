@@ -48,7 +48,6 @@ const menuItems: MenuItem[] = [
     roles: ['admin', 'receptionist'],
     subItems: [
       { label: 'Nhập thông tin hành chính', path: '/reception/patient-registration', roles: ['admin', 'receptionist'] },
-      { label: 'Dịch vụ xét nghiệm', path: '/reception/service-selection', roles: ['admin', 'receptionist'] },
       { label: 'Quản lý nguồn gửi', path: '/reception/referral-sources', roles: ['admin', 'receptionist'] }
     ]
   },
@@ -65,6 +64,7 @@ const menuItems: MenuItem[] = [
     roles: ['admin', 'lab_technician'],
     subItems: [
       { label: 'Thông tin bệnh nhân', path: '/lab/patient-info', roles: ['admin', 'lab_technician'] },
+      { label: 'Dịch vụ xét nghiệm', path: '/lab/service-selection', roles: ['admin', 'lab_technician'] },
       { label: 'Trạng thái mẫu', path: '/lab/sample-status', roles: ['admin', 'lab_technician'] },
       { label: 'Kết quả xét nghiệm', path: '/lab/test-results', roles: ['admin', 'lab_technician'] },
       { label: 'Quản lý vật tư', path: '/lab/supply-management', roles: ['admin', 'lab_technician'] },

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { toast } from 'react-hot-toast'
+// import { toast } from 'react-hot-toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,7 +12,7 @@ import {
   CheckCircle,
   AlertTriangle,
   Microscope,
-  FileText,
+  // FileText,
   Loader2,
   ChevronLeft,
   ChevronRight,
@@ -281,31 +281,31 @@ const PatientInfo: React.FC = () => {
     setShowDialog(true)
   }
 
-  const handleUpdateStatus = async (serviceId: string, newStatus: string) => {
-    try {
-      // In real implementation, call API to update status
-      // await registrationsApi.updateServiceStatus(registrationId, serviceId, newStatus)
-      toast.success(`Cập nhật trạng thái ${newStatus} cho dịch vụ ${serviceId}`)
-      // Refresh data after update
-      fetchPatients()
-    } catch (error) {
-      console.error('Error updating status:', error)
-      toast.error('Có lỗi xảy ra khi cập nhật trạng thái')
-    }
-  }
+  // const handleUpdateStatus = async (serviceId: string, newStatus: string) => {
+  //   try {
+  //     // In real implementation, call API to update status
+  //     // await registrationsApi.updateServiceStatus(registrationId, serviceId, newStatus)
+  //     toast.success(`Cập nhật trạng thái ${newStatus} cho dịch vụ ${serviceId}`)
+  //     // Refresh data after update
+  //     fetchPatients()
+  //   } catch (error) {
+  //     console.error('Error updating status:', error)
+  //     toast.error('Có lỗi xảy ra khi cập nhật trạng thái')
+  //   }
+  // }
 
-  const handleInputResult = async (service: RegistrationService) => {
-    try {
-      // In real implementation, call API to add test result
-      // await registrationsApi.addTestResult(service.id, resultData)
-      toast.success(`Nhập kết quả cho: ${service.service.name}`)
-      // Refresh data after adding result
-      fetchPatients()
-    } catch (error) {
-      console.error('Error adding result:', error)
-      toast.error('Có lỗi xảy ra khi nhập kết quả')
-    }
-  }
+  // const handleInputResult = async (service: RegistrationService) => {
+  //   try {
+  //     // In real implementation, call API to add test result
+  //     // await registrationsApi.addTestResult(service.id, resultData)
+  //     toast.success(`Nhập kết quả cho: ${service.service.name}`)
+  //     // Refresh data after adding result
+  //     fetchPatients()
+  //   } catch (error) {
+  //     console.error('Error adding result:', error)
+  //     toast.error('Có lỗi xảy ra khi nhập kết quả')
+  //   }
+  // }
 
   const handleSearch = () => {
     setCurrentPage(0)
@@ -625,11 +625,11 @@ const PatientInfo: React.FC = () => {
                         <th className="px-4 py-3 text-left font-medium text-gray-900 border-b">Mẫu xét nghiệm</th>
                         <th className="px-4 py-3 text-left font-medium text-gray-900 border-b">Giá</th>
                         <th className="px-4 py-3 text-left font-medium text-gray-900 border-b">Trạng thái</th>
-                        <th className="px-4 py-3 text-left font-medium text-gray-900 border-b">Thao tác</th>
+                        {/* <th className="px-4 py-3 text-left font-medium text-gray-900 border-b">Thao tác</th> */}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {selectedPatient.details.map((detail, index) => {
+                      {selectedPatient.details.map((detail) => {
                         const serviceStatus = getTestStatus(detail)
                         return (
                           <tr key={detail.id} className="hover:bg-gray-50">
@@ -648,7 +648,7 @@ const PatientInfo: React.FC = () => {
                                 <span className="ml-1">{getStatusLabel(serviceStatus)}</span>
                               </span>
                             </td>
-                            <td className="px-4 py-4 border-b">
+                            {/* <td className="px-4 py-4 border-b">
                               <div className="flex space-x-2">
                                 {serviceStatus !== 'completed' && (
                                   <>
@@ -680,7 +680,7 @@ const PatientInfo: React.FC = () => {
                                   </>
                                 )}
                               </div>
-                            </td>
+                            </td> */}
                           </tr>
                         )
                       })}

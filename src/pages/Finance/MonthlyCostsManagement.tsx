@@ -7,30 +7,39 @@ import {
   PieChart,
   BarChart3,
   Download,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle
 } from 'lucide-react'
 import { monthlyCostsApi } from '@/services'
-import type { MonthlyCostSummary, MonthlyCostTrend } from '@/types/api'
+import type { MonthlyCostSummary, MonthlyCostTrend, MonthlyCostBreakdown } from '@/types/api'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { MonthlyCostList } from '@/components/MonthlyCostList'
+import { toast } from 'react-hot-toast'
 
 const MonthlyCostsManagement: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1)
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [summary, setSummary] = useState<MonthlyCostSummary | null>(null)
   const [trend, setTrend] = useState<MonthlyCostTrend[]>([])
+  const [breakdown, setBreakdown] = useState<MonthlyCostBreakdown[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'list' | 'summary' | 'trend'>('list')
 
   // Load summary data
   const loadSummary = async (month: number, year: number) => {
     setLoading(true)
+    setError(null)
     try {
+      console.log('Loading summary for month:', month, 'year:', year)
       const summaryData = await monthlyCostsApi.getSummaryByMonth(month, year)
+      console.log('Summary data loaded:', summaryData)
       setSummary(summaryData)
     } catch (error) {
       console.error('Error loading summary:', error)
+      setError('Không thể tải dữ liệu tổng hợp. Vui lòng thử lại.')
+      toast.error('Lỗi khi tải dữ liệu tổng hợp')
     } finally {
       setLoading(false)
     }
@@ -39,22 +48,66 @@ const MonthlyCostsManagement: React.FC = () => {
   // Load trend data
   const loadTrend = async (year: number) => {
     try {
+      console.log('Loading trend for year:', year)
       const trendData = await monthlyCostsApi.getTrendByYear(year)
+      console.log('Trend data loaded:', trendData)
       setTrend(trendData)
     } catch (error) {
       console.error('Error loading trend:', error)
+      toast.error('Lỗi khi tải dữ liệu xu hướng')
+    }
+  }
+
+  // Load breakdown data
+  const loadBreakdown = async (month: number, year: number) => {
+    try {
+      console.log('Loading breakdown for month:', month, 'year:', year)
+      const breakdownData = await monthlyCostsApi.getBreakdownByMonth(month, year)
+      console.log('Breakdown data loaded:', breakdownData)
+      setBreakdown(breakdownData)
+    } catch (error) {
+      console.error('Error loading breakdown:', error)
+      toast.error('Lỗi khi tải dữ liệu phân tích')
     }
   }
 
   useEffect(() => {
     loadSummary(currentMonth, currentYear)
     loadTrend(currentYear)
+    loadBreakdown(currentMonth, currentYear)
   }, [currentMonth, currentYear])
 
   // Handle month/year change
   const handleMonthYearChange = (month: number, year: number) => {
     setCurrentMonth(month)
     setCurrentYear(year)
+  }
+
+  // Export functions
+  const handleExportExcel = async () => {
+    try {
+      setLoading(true)
+      // TODO: Implement export functionality when API is ready
+      toast.success('Chức năng xuất Excel sẽ được triển khai sớm!')
+    } catch (error) {
+      console.error('Error exporting Excel:', error)
+      toast.error('Lỗi khi xuất file Excel')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleExportSummary = async () => {
+    try {
+      setLoading(true)
+      // TODO: Implement export functionality when API is ready
+      toast.success('Chức năng xuất báo cáo sẽ được triển khai sớm!')
+    } catch (error) {
+      console.error('Error exporting summary:', error)
+      toast.error('Lỗi khi xuất báo cáo tổng hợp')
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Format currency
@@ -106,7 +159,11 @@ const MonthlyCostsManagement: React.FC = () => {
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={() => loadSummary(currentMonth, currentYear)}
+            onClick={() => {
+              loadSummary(currentMonth, currentYear)
+              loadTrend(currentYear)
+              loadBreakdown(currentMonth, currentYear)
+            }}
             disabled={loading}
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -114,15 +171,41 @@ const MonthlyCostsManagement: React.FC = () => {
           </Button>
           <Button
             variant="outline"
-            onClick={() => {
-              // TODO: Export to Excel
-            }}
+            onClick={handleExportExcel}
+            disabled={loading}
           >
             <Download className="h-4 w-4 mr-2" />
-            Xuất báo cáo
+            Xuất Excel
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExportSummary}
+            disabled={loading}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Báo cáo năm
           </Button>
         </div>
       </div>
+
+      {/* Error Message */}
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2 text-red-600">
+              <AlertTriangle size={20} />
+              <span>{error}</span>
+              <Button variant="outline" size="sm" onClick={() => {
+                loadSummary(currentMonth, currentYear)
+                loadTrend(currentYear)
+                loadBreakdown(currentMonth, currentYear)
+              }}>
+                Thử lại
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Month/Year Selector */}
       <Card className="p-4">
@@ -162,14 +245,28 @@ const MonthlyCostsManagement: React.FC = () => {
       </Card>
 
       {/* Summary Cards */}
-      {summary && (
+      {loading && !summary ? (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Card key={index} className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                  <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+                <div className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : summary ? (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Tổng chi phí</p>
                 <p className="text-2xl font-bold text-red-600">
-                  {formatCurrency(summary.totalCost)}
+                  {summary.formattedTotalCost || formatCurrency(summary.totalCost)}
                 </p>
               </div>
               <DollarSign className="h-8 w-8 text-red-500" />
@@ -219,7 +316,7 @@ const MonthlyCostsManagement: React.FC = () => {
             </div>
           </Card>
         </div>
-      )}
+      ) : null}
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
@@ -266,52 +363,128 @@ const MonthlyCostsManagement: React.FC = () => {
         />
       )}
 
-      {activeTab === 'summary' && summary && (
+      {activeTab === 'summary' && (
         <div className="space-y-6">
-          {/* Top Categories */}
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <PieChart className="h-5 w-5" />
-              Chi phí theo loại
-            </h3>
-            <div className="space-y-3">
-              {summary.topCategories.map((category) => (
-                <div key={category.categoryCode} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 rounded-full bg-blue-500"></div>
-                    <span className="font-medium">
-                      {getCategoryName(category.categoryCode)}
-                    </span>
-                    <span className="text-sm text-gray-500">
-                      ({category.itemCount} khoản)
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold">{formatCurrency(category.amount)}</p>
-                    <p className="text-sm text-gray-500">
-                      {category.percentage.toFixed(1)}%
-                    </p>
-                  </div>
+          {loading ? (
+            <div className="space-y-6">
+              <Card className="p-6">
+                <div className="h-6 bg-gray-200 rounded animate-pulse mb-4"></div>
+                <div className="space-y-3">
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-4 h-4 bg-gray-200 rounded-full animate-pulse"></div>
+                        <div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+                        <div className="h-4 w-16 bg-gray-200 rounded animate-pulse"></div>
+                      </div>
+                      <div className="text-right">
+                        <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                        <div className="h-3 w-12 bg-gray-200 rounded animate-pulse mt-1"></div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </Card>
             </div>
-          </Card>
+          ) : summary ? (
+            <>
+              {/* Top Categories */}
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <PieChart className="h-5 w-5" />
+                  Chi phí theo loại
+                </h3>
+                <div className="space-y-3">
+                  {summary.topCategories && summary.topCategories.length > 0 ? (
+                    summary.topCategories.map((category) => (
+                      <div key={category.categoryCode} className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-4 h-4 rounded-full bg-blue-500"></div>
+                          <span className="font-medium">
+                            {category.categoryName || getCategoryName(category.categoryCode)}
+                          </span>
+                          <span className="text-sm text-gray-500">
+                            ({category.itemCount} khoản)
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold">
+                            {category.formattedAmount || formatCurrency(category.amount)}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {category.percentage.toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      Không có dữ liệu chi phí theo loại
+                    </div>
+                  )}
+                </div>
+              </Card>
 
-          {/* Monthly Trend */}
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <BarChart3 className="h-5 w-5" />
-              Xu hướng theo tháng
-            </h3>
-            <div className="space-y-2">
-              {summary.monthlyTrend.map((monthData) => (
-                <div key={monthData.month} className="flex items-center justify-between">
-                  <span className="font-medium">{monthData.monthName}</span>
-                  <span className="font-semibold">{formatCurrency(monthData.amount)}</span>
+              {/* Monthly Trend */}
+              <Card className="p-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Xu hướng theo tháng
+                </h3>
+                <div className="space-y-2">
+                  {summary.monthlyTrend && summary.monthlyTrend.length > 0 ? (
+                    summary.monthlyTrend.map((monthData) => (
+                      <div key={monthData.month} className="flex items-center justify-between">
+                        <span className="font-medium">{monthData.monthName}</span>
+                        <span className="font-semibold">
+                          {monthData.formattedAmount || formatCurrency(monthData.amount)}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      Không có dữ liệu xu hướng
+                    </div>
+                  )}
                 </div>
-              ))}
+              </Card>
+
+              {/* Breakdown by Category */}
+              {breakdown && breakdown.length > 0 && (
+                <Card className="p-6">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <PieChart className="h-5 w-5" />
+                    Phân tích chi tiết theo loại
+                  </h3>
+                  <div className="space-y-3">
+                    {breakdown.map((item) => (
+                      <div key={item.categoryCode} className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-4 h-4 rounded-full bg-green-500"></div>
+                          <span className="font-medium">{item.categoryName}</span>
+                          <span className="text-sm text-gray-500">
+                            ({item.itemCount} khoản)
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold">
+                            {item.formattedAmount || formatCurrency(item.amount)}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {item.percentage.toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              Không có dữ liệu tổng hợp
             </div>
-          </Card>
+          )}
         </div>
       )}
 
@@ -321,14 +494,31 @@ const MonthlyCostsManagement: React.FC = () => {
             <BarChart3 className="h-5 w-5" />
             Xu hướng chi phí năm {currentYear}
           </h3>
-          <div className="space-y-2">
-            {trend.map((monthData) => (
-              <div key={monthData.month} className="flex items-center justify-between">
-                <span className="font-medium">{monthData.monthName}</span>
-                <span className="font-semibold">{formatCurrency(monthData.amount)}</span>
-              </div>
-            ))}
-          </div>
+          {loading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 12 }).map((_, index) => (
+                <div key={index} className="flex items-center justify-between">
+                  <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+              ))}
+            </div>
+          ) : trend && trend.length > 0 ? (
+            <div className="space-y-2">
+              {trend.map((monthData) => (
+                <div key={monthData.month} className="flex items-center justify-between">
+                  <span className="font-medium">{monthData.monthName}</span>
+                  <span className="font-semibold">
+                    {monthData.formattedAmount || formatCurrency(monthData.amount)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              Không có dữ liệu xu hướng cho năm {currentYear}
+            </div>
+          )}
         </Card>
       )}
     </div>

@@ -22,7 +22,7 @@ import {
   X
 } from 'lucide-react'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
-import { inventoryApi, inventoryLogsApi } from '@/services'
+import { inventoryApi, inventoryLogsApi, departmentApi, supplierApi } from '@/services'
 import { getMaterialTypeLabel } from '@/types/api'
 import type { 
   InventoryItem, 
@@ -44,13 +44,18 @@ const InventoryManagement: React.FC = () => {
   const [showLogs, setShowLogs] = useState(false)
   const [currentPage, setCurrentPage] = useState(0)
   const [pageSize] = useState(20)
+  const [departments, setDepartments] = useState<Array<{id:number;name:string}>>([])
+  const [suppliers, setSuppliers] = useState<Array<{id:number;name:string}>>([])
 
   // API State
   const [inventoryData, setInventoryData] = useState<PaginatedResponse<InventoryItem> | null>(null)
   const [inventoryLogs, setInventoryLogs] = useState<PaginatedResponse<InventoryLogsDTO> | null>(null)
+  const [logsTabData, setLogsTabData] = useState<PaginatedResponse<InventoryLogsDTO> | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingLogs, setLoadingLogs] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [logsError, setLogsError] = useState<string | null>(null)
 
   // Form States
 
@@ -123,6 +128,37 @@ const InventoryManagement: React.FC = () => {
     }
   }
 
+  // Logs tab state & loader
+  const [logsKeyword, setLogsKeyword] = useState('')
+  const [logsType, setLogsType] = useState<string>('')
+  const [logsFromDate, setLogsFromDate] = useState('')
+  const [logsToDate, setLogsToDate] = useState('')
+  const [logsPage, setLogsPage] = useState(0)
+  const [logsPageSize] = useState(20)
+
+  const fetchLogsTab = async () => {
+    try {
+      setLoadingLogs(true)
+      setLogsError(null)
+      const params: InventoryLogSearchRequest = {
+        keyword: logsKeyword || undefined,
+        pageIndex: logsPage,
+        pageSize: logsPageSize,
+        isDesc: true,
+        logType: logsType ? parseInt(logsType) : undefined,
+        fromDate: logsFromDate || undefined,
+        toDate: logsToDate || undefined
+      }
+      const response = await inventoryLogsApi.search(params)
+      setLogsTabData(response)
+    } catch (err) {
+      console.error('Error fetching logs tab:', err)
+      setLogsError('Không thể tải lịch sử nhập xuất. Vui lòng thử lại.')
+    } finally {
+      setLoadingLogs(false)
+    }
+  }
+
   useEffect(() => {
     fetchInventoryItems()
   }, [currentPage, searchQuery, materialTypeFilter, statusFilter])
@@ -132,6 +168,19 @@ const InventoryManagement: React.FC = () => {
       fetchInventoryLogs()
     }
   }, [selectedItem])
+
+  useEffect(() => {
+    if (currentTab === 'logs') {
+      fetchLogsTab()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTab, logsKeyword, logsType, logsFromDate, logsToDate, logsPage])
+
+  useEffect(() => {
+    // Preload master data
+    departmentApi.getAll().then(setDepartments).catch(() => setDepartments([]))
+    supplierApi.getAll().then(setSuppliers).catch(() => setSuppliers([]))
+  }, [])
 
   const getStockStatus = (item: InventoryItem) => {
     if (item.currentStock <= 0) {
@@ -220,7 +269,7 @@ const InventoryManagement: React.FC = () => {
       
       const logData: CreateInventoryLogRequest = {
         logType: logForm.logType,
-        exportType: logForm.exportType,
+        exportType: logForm.logType === 1 ? 2 : 1, // import->supplier(2), export->department(1)
         exportId: logForm.exportId,
         note: logForm.note,
         items: logForm.items.map(item => ({
@@ -231,7 +280,8 @@ const InventoryManagement: React.FC = () => {
           unitPrice: item.unitPrice || 0,
           amount: item.amount || 0,
           note: item.note || ''
-        }))
+        })),
+        isPay: logForm.logType === 1 ? (logForm as any).isPay === true : undefined
       }
 
       console.log('Submitting inventory log:', logData)
@@ -949,13 +999,92 @@ const InventoryManagement: React.FC = () => {
           <Card className="shadow-lg border-0">
             <CardHeader>
               <CardTitle>Lịch sử nhập xuất kho</CardTitle>
-              <CardDescription>Xem toàn bộ lịch sử giao dịch kho</CardDescription>
+              <CardDescription>Lọc theo từ khóa, loại log và khoảng ngày</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8 text-gray-500">
-                <History size={48} className="mx-auto mb-4 text-gray-300" />
-                <p>Tính năng đang phát triển</p>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+                <div className="md:col-span-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Tìm kiếm theo ghi chú..."
+                      value={logsKeyword}
+                      onChange={(e) => setLogsKeyword(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <select
+                  value={logsType}
+                  onChange={(e) => { setLogsType(e.target.value); setLogsPage(0) }}
+                  className="px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="">Tất cả loại log</option>
+                  <option value="1">Nhập kho</option>
+                  <option value="2">Xuất kho</option>
+                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input type="date" value={logsFromDate} onChange={(e) => { setLogsFromDate(e.target.value); setLogsPage(0) }} />
+                  <Input type="date" value={logsToDate} onChange={(e) => { setLogsToDate(e.target.value); setLogsPage(0) }} />
+                </div>
               </div>
+
+              {logsError && (
+                <div className="text-red-600 mb-3">{logsError}</div>
+              )}
+
+              {loadingLogs ? (
+                <div className="text-center py-8">
+                  <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
+                  <p className="mt-2 text-gray-500">Đang tải dữ liệu...</p>
+                </div>
+              ) : !logsTabData || !(Array.isArray((logsTabData as any).content) || Array.isArray(logsTabData as any)) ||
+                (Array.isArray((logsTabData as any).content) ? (logsTabData as any).content.length === 0 : Array.isArray(logsTabData as any) ? (logsTabData as any).length === 0 : true) ? (
+                <div className="text-center py-8 text-gray-500">
+                  <History size={48} className="mx-auto mb-4 text-gray-300" />
+                  <p>Không có dữ liệu</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {(Array.isArray((logsTabData as any).content) ? (logsTabData as any).content : Array.isArray(logsTabData as any) ? (logsTabData as any) : []).map((log: any) => (
+                    <div key={(log as any).id || Math.random()} className="p-3 border rounded-lg">
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center space-x-2">
+                          {log.logType === 1 ? (
+                            <ArrowUpCircle size={16} className="text-green-600" />
+                          ) : (
+                            <ArrowDownCircle size={16} className="text-red-600" />
+                          )}
+                          <span className="font-medium">{log.logType === 1 ? 'Nhập kho' : 'Xuất kho'}</span>
+                        </div>
+                        {typeof (log as any).createdAt === 'string' && (
+                          <div className="text-sm text-gray-600">{formatDateTime((log as any).createdAt)}</div>
+                        )}
+                      </div>
+                      {log.note && (
+                        <p className="text-sm text-gray-700 mt-1">{log.note}</p>
+                      )}
+                      {typeof (log as any).isPay === 'boolean' && (
+                        <div className="text-xs mt-1">
+                          Trạng thái thanh toán: {(log as any).isPay ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {typeof (logsTabData as any).totalPages === 'number' && (logsTabData as any).totalPages > 1 && (
+                    <div className="flex justify-center items-center space-x-2 pt-2">
+                      <Button variant="outline" onClick={() => setLogsPage(Math.max(0, logsPage - 1))} disabled={logsPage === 0}>
+                        Trước
+                      </Button>
+                      <span className="text-sm text-gray-600">Trang {logsPage + 1} / {(logsTabData as any).totalPages}</span>
+                      <Button variant="outline" onClick={() => setLogsPage(Math.min((logsTabData as any).totalPages - 1, logsPage + 1))} disabled={logsPage >= (logsTabData as any).totalPages - 1}>
+                        Sau
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -997,29 +1126,23 @@ const InventoryManagement: React.FC = () => {
                   </div>
 
                   <div>
-                    <Label>Loại xuất *</Label>
+                    <Label>{logForm.logType === 1 ? 'Nhà cung cấp' : 'Phòng ban'} *</Label>
                     <select
-                      value={logForm.exportType}
-                      onChange={(e) => setLogForm({ ...logForm, exportType: parseInt(e.target.value) })}
+                      value={logForm.exportId}
+                      onChange={(e) => setLogForm({ ...logForm, exportId: parseInt(e.target.value) || 0 })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                       disabled={submitting}
                     >
-                      <option value={1}>Phòng ban</option>
-                      <option value={2}>Nguồn gửi</option>
+                      <option value={0}>Chọn {logForm.logType === 1 ? 'nhà cung cấp' : 'phòng ban'}</option>
+                      {(logForm.logType === 1 ? suppliers : departments).map(opt => (
+                        <option key={opt.id} value={opt.id}>{opt.name}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
 
-                <div>
-                  <Label>ID Phòng ban/Nguồn gửi *</Label>
-                  <Input
-                    type="number"
-                    value={logForm.exportId}
-                    onChange={(e) => setLogForm({ ...logForm, exportId: parseInt(e.target.value) || 0 })}
-                    placeholder="Nhập ID phòng ban hoặc nguồn gửi"
-                    disabled={submitting}
-                  />
-                </div>
+                {/* Auto set exportType by logType: import -> supplier (2), export -> department (1) */}
+                {(() => { logForm.exportType = logForm.logType === 1 ? 2 : 1; return null })()}
 
                 <div>
                   <Label>Ghi chú</Label>
@@ -1030,6 +1153,20 @@ const InventoryManagement: React.FC = () => {
                     disabled={submitting}
                   />
                 </div>
+
+                {logForm.logType === 1 && (
+                  <div>
+                    <label className="inline-flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={(logForm as any).isPay || false}
+                        onChange={(e) => setLogForm({ ...(logForm as any), isPay: e.target.checked })}
+                        className="h-4 w-4"
+                      />
+                      <span>Đã thanh toán</span>
+                    </label>
+                  </div>
+                )}
 
                 <div className="border-t pt-4">
                   <Label className="text-lg font-semibold">Danh sách vật tư</Label>

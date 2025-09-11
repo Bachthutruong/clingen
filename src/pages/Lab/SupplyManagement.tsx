@@ -8,7 +8,7 @@ import {
   Package, 
   Search, 
   Plus,
-  Minus,
+  // Minus,
   AlertTriangle,
   CheckCircle,
   Edit,
@@ -29,7 +29,7 @@ import type {
   PaginatedResponse
 } from '@/types/api'
 import { getMaterialTypeLabel, getInventoryLogTypeLabel } from '@/types/api'
-import { formatDateTime } from '@/lib/utils'
+import { formatDateTime, formatDateSimple } from '@/lib/utils'
 
 const SupplyManagement: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('')
@@ -62,12 +62,12 @@ const SupplyManagement: React.FC = () => {
   })
 
   // Transaction form state
-  const [transactionForm, setTransactionForm] = useState({
-    logType: 1, // 1: nhập kho, 2: xuất kho
-    quantity: 0,
-    materialId: 0,
-    note: ''
-  })
+  // const [transactionForm, setTransactionForm] = useState({
+  //   logType: 1, // 1: nhập kho, 2: xuất kho
+  //   quantity: 0,
+  //   materialId: 0,
+  //   note: ''
+  // })
 
   // Debug API connection
   const testApiConnection = async () => {
@@ -318,65 +318,65 @@ const SupplyManagement: React.FC = () => {
     }
   }
 
-  const handleImportMaterial = async () => {
-    if (!transactionForm.materialId || transactionForm.quantity <= 0) {
-      toast.error('Vui lòng chọn vật tư và nhập số lượng hợp lệ')
-      return
-    }
+  // const handleImportMaterial = async () => {
+  //   if (!transactionForm.materialId || transactionForm.quantity <= 0) {
+  //     toast.error('Vui lòng chọn vật tư và nhập số lượng hợp lệ')
+  //     return
+  //   }
     
-    try {
-      setSubmitting(true)
-      await inventoryLogsApi.importMaterials({
-        materialId: transactionForm.materialId,
-        quantity: transactionForm.quantity,
-        note: transactionForm.note
-      })
+  //   try {
+  //     setSubmitting(true)
+  //     await inventoryLogsApi.importMaterials({
+  //       materialId: transactionForm.materialId,
+  //       quantity: transactionForm.quantity,
+  //       note: transactionForm.note
+  //     })
       
-      toast.success('Nhập kho thành công!')
-      setTransactionForm({
-        logType: 1, // 1: nhập kho
-        quantity: 0,
-        materialId: 0,
-        note: ''
-      })
-      await fetchMaterials()
-    } catch (error) {
-      console.error('Error importing material:', error)
-      toast.error('Có lỗi xảy ra khi nhập kho')
-    } finally {
-      setSubmitting(false)
-    }
-  }
+  //     toast.success('Nhập kho thành công!')
+  //     setTransactionForm({
+  //       logType: 1, // 1: nhập kho
+  //       quantity: 0,
+  //       materialId: 0,
+  //       note: ''
+  //     })
+  //     await fetchMaterials()
+  //   } catch (error) {
+  //     console.error('Error importing material:', error)
+  //     toast.error('Có lỗi xảy ra khi nhập kho')
+  //   } finally {
+  //     setSubmitting(false)
+  //   }
+  // }
 
-  const handleExportMaterial = async () => {
-    if (!transactionForm.materialId || transactionForm.quantity <= 0) {
-      toast.error('Vui lòng chọn vật tư và nhập số lượng hợp lệ')
-      return
-    }
+  // const handleExportMaterial = async () => {
+  //   if (!transactionForm.materialId || transactionForm.quantity <= 0) {
+  //     toast.error('Vui lòng chọn vật tư và nhập số lượng hợp lệ')
+  //     return
+  //   }
     
-    try {
-      setSubmitting(true)
-      await inventoryLogsApi.exportMaterials({
-        materialId: transactionForm.materialId,
-        quantity: transactionForm.quantity,
-        note: transactionForm.note
-      })
+  //   try {
+  //     setSubmitting(true)
+  //     await inventoryLogsApi.exportMaterials({
+  //       materialId: transactionForm.materialId,
+  //       quantity: transactionForm.quantity,
+  //       note: transactionForm.note
+  //     })
       
-      toast.success('Xuất kho thành công!')
-      setTransactionForm({
-        logType: 2, // 2: xuất kho
-        quantity: 0,
-        materialId: 0,
-        note: ''
-      })
-      await fetchMaterials()
-    } catch (error) {
-      console.error('Error exporting material:', error)
-      toast.error('Có lỗi xảy ra khi xuất kho')
-    } finally {
-      setSubmitting(false)
-    }
-  }
+  //     toast.success('Xuất kho thành công!')
+  //     setTransactionForm({
+  //       logType: 2, // 2: xuất kho
+  //       quantity: 0,
+  //       materialId: 0,
+  //       note: ''
+  //     })
+  //     await fetchMaterials()
+  //   } catch (error) {
+  //     console.error('Error exporting material:', error)
+  //     toast.error('Có lỗi xảy ra khi xuất kho')
+  //   } finally {
+  //     setSubmitting(false)
+  //   }
+  // }
 
   const handleViewTransactions = (material: Material) => {
     setSelectedMaterial(material)
@@ -450,21 +450,16 @@ const SupplyManagement: React.FC = () => {
     fetchMaterials()
   }
 
-  const getPackagingName = (packagingId: number) => {
+  const getPackagingName = (packagingId: number | string) => {
     if (!Array.isArray(packagings)) {
       return 'Không xác định'
     }
-    const packaging = packagings.find(p => p.id === packagingId)
+    const numericId = typeof packagingId === 'string' ? parseInt(packagingId) : packagingId
+    const packaging = packagings.find(p => p.id === numericId)
     return packaging?.name || 'Không xác định'
   }
 
-  const stats = {
-    total: Array.isArray(materials) ? materials.length : 0,
-    normal: Array.isArray(materials) ? materials.filter((m: Material) => getStockStatus(m).status === 'NORMAL').length : 0,
-    lowStock: Array.isArray(materials) ? materials.filter((m: Material) => getStockStatus(m).status === 'LOW_STOCK').length : 0,
-    outOfStock: Array.isArray(materials) ? materials.filter((m: Material) => getStockStatus(m).status === 'OUT_OF_STOCK').length : 0,
-    expiring: Array.isArray(materials) ? materials.filter((m: Material) => getStockStatus(m).status === 'EXPIRING').length : 0,
-  }
+  // Removed statistics for Supplies page; CRUD only
 
   return (
     <div className="space-y-6">
@@ -529,68 +524,7 @@ const SupplyManagement: React.FC = () => {
         </Card>
       )}
 
-      {/* Statistics */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Tổng số</p>
-                <p className="text-lg font-bold text-blue-600">{stats.total}</p>
-              </div>
-              <Package className="h-6 w-6 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Bình thường</p>
-                <p className="text-lg font-bold text-green-600">{stats.normal}</p>
-              </div>
-              <CheckCircle className="h-6 w-6 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Sắp hết</p>
-                <p className="text-lg font-bold text-yellow-600">{stats.lowStock}</p>
-              </div>
-              <AlertTriangle className="h-6 w-6 text-yellow-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Hết hàng</p>
-                <p className="text-lg font-bold text-red-600">{stats.outOfStock}</p>
-              </div>
-              <X className="h-6 w-6 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Sắp hết hạn</p>
-                <p className="text-lg font-bold text-orange-600">{stats.expiring}</p>
-              </div>
-              <AlertTriangle className="h-6 w-6 text-orange-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* CRUD only - no statistics for Supplies page */}
 
       {/* Search and Filter */}
       <Card className="shadow-lg border-0">
@@ -674,9 +608,9 @@ const SupplyManagement: React.FC = () => {
                           <tr key={material.id} className="border-b hover:bg-gray-50 transition-colors">
                             <td className="p-3 font-mono text-sm">{material.code}</td>
                             <td className="p-3 font-medium">{material.name}</td>
-                            <td className="p-3 text-sm">{getMaterialTypeLabel(material.type)}</td>
+                            <td className="p-3 text-sm">{getMaterialTypeLabel(typeof material.type === 'string' ? parseInt(material.type as unknown as string) : material.type)}</td>
                             <td className="p-3 text-sm font-medium">{material.quantity}</td>
-                            <td className="p-3 text-sm">{getPackagingName(material.packagingId)}</td>
+                            <td className="p-3 text-sm">{getPackagingName(material.packagingId as unknown as number | string)}</td>
                             <td className="p-3">
                               <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${stockStatus.color}`}>
                                 {getStatusIcon(stockStatus.status)}
@@ -684,7 +618,7 @@ const SupplyManagement: React.FC = () => {
                               </span>
                             </td>
                             <td className="p-3 text-sm">
-                              {material.expiryTime ? formatDateTime(material.expiryTime) : '-'}
+                              {material.expiryTime ? formatDateSimple(material.expiryTime) : '-'}
                             </td>
                             <td className="p-3">
                               <div className="flex space-x-1">
@@ -903,10 +837,11 @@ const SupplyManagement: React.FC = () => {
                         <Label>Ngày hết hạn</Label>
                         <Input
                           type="date"
-                          value={selectedMaterial.expiryTime ? new Date(selectedMaterial.expiryTime).toISOString().slice(0, 10) : ''}
+                          value={selectedMaterial.expiryTime ? String(selectedMaterial.expiryTime).slice(0, 10) : ''}
                           onChange={(e) => setSelectedMaterial({
                             ...selectedMaterial,
-                            expiryTime: e.target.value ? new Date(e.target.value + 'T00:00:00.000Z').toISOString() : undefined
+                            // store as date-only string YYYY-MM-DD
+                            expiryTime: e.target.value || undefined
                           })}
                         />
                       </div>
@@ -935,7 +870,7 @@ const SupplyManagement: React.FC = () => {
                         </div>
                         <div>
                           <span className="text-gray-600">Loại:</span>
-                          <p className="font-medium">{getMaterialTypeLabel(selectedMaterial.type)}</p>
+                          <p className="font-medium">{getMaterialTypeLabel(typeof selectedMaterial.type === 'string' ? parseInt(selectedMaterial.type as unknown as string) : selectedMaterial.type)}</p>
                         </div>
                         <div>
                           <span className="text-gray-600">Số lượng:</span>
@@ -943,7 +878,7 @@ const SupplyManagement: React.FC = () => {
                         </div>
                         <div>
                           <span className="text-gray-600">Đóng gói:</span>
-                          <p className="font-medium">{getPackagingName(selectedMaterial.packagingId)}</p>
+                          <p className="font-medium">{getPackagingName(selectedMaterial.packagingId as unknown as number | string)}</p>
                         </div>
                         <div>
                           <span className="text-gray-600">Nhập kho:</span>
@@ -952,13 +887,13 @@ const SupplyManagement: React.FC = () => {
                         {selectedMaterial.expiryTime && (
                           <div className="col-span-2">
                             <span className="text-gray-600">Hết hạn:</span>
-                            <p className="font-medium">{formatDateTime(selectedMaterial.expiryTime)}</p>
+                            <p className="font-medium">{formatDateSimple(selectedMaterial.expiryTime)}</p>
                           </div>
                         )}
                       </div>
 
                       {/* Quick Actions */}
-                      <div className="border-t pt-4">
+                      {/* <div className="border-t pt-4">
                         <h4 className="font-semibold mb-3">Thao tác nhanh</h4>
                         <div className="space-y-3">
                           <div className="flex space-x-2">
@@ -999,7 +934,7 @@ const SupplyManagement: React.FC = () => {
                             })}
                           />
                         </div>
-                      </div>
+                      </div> */}
                     </div>
                   )}
                 </>
@@ -1140,8 +1075,8 @@ const SupplyManagement: React.FC = () => {
                   <Label>Ngày hết hạn</Label>
                   <Input
                     type="date"
-                    value={newMaterial.expiryTime ? new Date(newMaterial.expiryTime).toISOString().slice(0, 10) : ''}
-                    onChange={(e) => setNewMaterial({ ...newMaterial, expiryTime: e.target.value ? new Date(e.target.value).toISOString() : '' })}
+                    value={newMaterial.expiryTime || ''}
+                    onChange={(e) => setNewMaterial({ ...newMaterial, expiryTime: e.target.value || '' })}
                   />
                 </div>
 

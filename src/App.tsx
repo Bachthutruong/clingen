@@ -142,6 +142,14 @@ function App() {
                 } 
               />
               <Route 
+                path="service-selection"
+                element={
+                  <ProtectedRoute allowedRoles={['admin', 'lab_technician']}>
+                    <ServiceSelection />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
                 path="supply-management"
                 element={
                   <ProtectedRoute allowedRoles={['admin', 'lab_technician']}>

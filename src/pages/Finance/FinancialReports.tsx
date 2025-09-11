@@ -19,55 +19,85 @@ import {
   CreditCard,
   Filter,
 //   RefreshCw,
-  ArrowUpRight,
-  ArrowDownRight,
   Loader2
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { financialReportsApi } from '@/services/api'
 import type { 
-  FinancialReport, 
-  RevenueByService, 
-  ExpenseBreakdown 
+  FinancialReportData
 } from '@/types/api'
 
 const FinancialReports: React.FC = () => {
   const [dateFrom, setDateFrom] = useState('2024-01-01')
   const [dateTo, setDateTo] = useState('2024-01-31')
-  const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly'>('monthly')
-  const [selectedPeriod, setSelectedPeriod] = useState<FinancialReport | null>(null)
+  const [reportType, setReportType] = useState<'current-month' | 'current-year' | 'monthly' | 'yearly' | 'range'>('current-month')
+  const [selectedPeriod, setSelectedPeriod] = useState<FinancialReportData | null>(null)
   const [loading, setLoading] = useState(false)
-  const [financialData, setFinancialData] = useState<FinancialReport[]>([])
-  const [revenueByService, setRevenueByService] = useState<RevenueByService[]>([])
-  const [expenseCategories, setExpenseCategories] = useState<ExpenseBreakdown[]>([])
+  const [financialData, setFinancialData] = useState<FinancialReportData | null>(null)
+  const [trendData, setTrendData] = useState<FinancialReportData[]>([])
 
   // Load financial data from API
   const loadFinancialData = async () => {
     setLoading(true)
     try {
-      // Load financial reports for the selected period
-      const period = `${dateFrom.split('-')[0]}-${dateFrom.split('-')[1]}`
-      console.log('Loading financial data for period:', period)
+      let reportData: any = null
+      let trendDataArray: FinancialReportData[] = []
+
+      console.log('Loading financial data for report type:', reportType)
       console.log('Date from:', dateFrom, 'Date to:', dateTo)
+
+      switch (reportType) {
+        case 'current-month':
+          reportData = await financialReportsApi.getCurrentMonth()
+          break
+        case 'current-year':
+          reportData = await financialReportsApi.getCurrentYear()
+          break
+        case 'monthly':
+          const fromDate = new Date(dateFrom)
+          const month = fromDate.getMonth() + 1
+          const year = fromDate.getFullYear()
+          reportData = await financialReportsApi.getMonthly(month, year)
+          break
+        case 'yearly':
+          const yearFromDate = new Date(dateFrom).getFullYear()
+          reportData = await financialReportsApi.getYearly(yearFromDate)
+          break
+        case 'range':
+          const fromDateRange = new Date(dateFrom)
+          const toDateRange = new Date(dateTo)
+          const fromMonth = fromDateRange.getMonth() + 1
+          const fromYear = fromDateRange.getFullYear()
+          const toMonth = toDateRange.getMonth() + 1
+          const toYear = toDateRange.getFullYear()
+          reportData = await financialReportsApi.getRange(fromMonth, fromYear, toMonth, toYear)
+          break
+      }
+
+      console.log('Financial report loaded:', reportData)
+      console.log('Report data structure:', JSON.stringify(reportData, null, 2))
+
+      // Extract data based on report type
+      if (reportData) {
+        if (reportType === 'yearly' || reportType === 'range') {
+          // For yearly and range reports, extract monthly data for trends
+          if (reportData.monthlyData) {
+            trendDataArray = reportData.monthlyData
+            setFinancialData(reportData)
+          }
+          if (reportData.trendData) {
+            trendDataArray = reportData.trendData
+          }
+        } else {
+          // For monthly reports, use the data directly
+          setFinancialData(reportData)
+        }
+      }
+
+      setTrendData(trendDataArray)
       
-      const report = await financialReportsApi.getReport(period)
-      console.log('Financial report loaded:', report)
-      
-      // Load revenue by service
-      const revenueByServiceData = await financialReportsApi.getRevenueByService(period)
-      console.log('Revenue by service loaded:', revenueByServiceData)
-      
-      // Load expense breakdown
-      const expenseBreakdownData = await financialReportsApi.getExpenseBreakdown(period)
-      console.log('Expense breakdown loaded:', expenseBreakdownData)
-      
-      // Load trend data for multiple periods
-      const trendData = await financialReportsApi.getTrend(period)
-      console.log('Trend data loaded:', trendData)
-      
-      setFinancialData(trendData)
-      setRevenueByService(revenueByServiceData)
-      setExpenseCategories(expenseBreakdownData)
+      console.log('Financial data set:', financialData)
+      console.log('Trend data set:', trendDataArray)
       
       toast.success('Dữ liệu tài chính đã được tải thành công')
     } catch (error: any) {
@@ -77,9 +107,8 @@ const FinancialReports: React.FC = () => {
       toast.error('Không thể tải dữ liệu tài chính')
       
       // Fallback to empty data
-      setFinancialData([])
-      setRevenueByService([])
-      setExpenseCategories([])
+      setFinancialData(null)
+      setTrendData([])
     } finally {
       setLoading(false)
     }
@@ -131,17 +160,10 @@ const FinancialReports: React.FC = () => {
     toast.success('In báo cáo thành công!')
   }
 
-  const handleViewDetails = (data: FinancialReport) => {
+  const handleViewDetails = (data: FinancialReportData) => {
     setSelectedPeriod(data)
   }
 
-  const getGrowthColor = (growth: number) => {
-    return growth > 0 ? 'text-green-600' : growth < 0 ? 'text-red-600' : 'text-gray-600'
-  }
-
-  const getGrowthIcon = (growth: number) => {
-    return growth > 0 ? <ArrowUpRight size={16} /> : growth < 0 ? <ArrowDownRight size={16} /> : null
-  }
 
   return (
     <div className="space-y-6">
@@ -207,12 +229,14 @@ const FinancialReports: React.FC = () => {
               <label className="text-sm text-gray-600 mb-1 block">Loại báo cáo</label>
               <select
                 value={reportType}
-                onChange={(e) => setReportType(e.target.value as 'daily' | 'weekly' | 'monthly')}
+                onChange={(e) => setReportType(e.target.value as 'current-month' | 'current-year' | 'monthly' | 'yearly' | 'range')}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md"
               >
-                <option value="daily">Theo ngày</option>
-                <option value="weekly">Theo tuần</option>
+                <option value="current-month">Tháng hiện tại</option>
+                <option value="current-year">Năm hiện tại</option>
                 <option value="monthly">Theo tháng</option>
+                <option value="yearly">Theo năm</option>
+                <option value="range">Khoảng thời gian</option>
               </select>
             </div>
                           <div className="flex items-end">
@@ -244,20 +268,19 @@ const FinancialReports: React.FC = () => {
       )}
 
       {/* Key Financial Metrics */}
-      {!loading && (
+      {!loading && financialData && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <Card className="shadow-lg border-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600">Doanh thu tháng</p>
+                <p className="text-xs text-gray-600">Tổng doanh thu</p>
                 <p className="text-xl font-bold text-emerald-600">
-                  {formatCurrency(financialData[0]?.revenue || 0)}
+                  {formatCurrency(financialData.totalRevenue || 0)}
                 </p>
-                <div className={`flex items-center mt-1 ${getGrowthColor(financialData[1]?.revenue ? ((financialData[0]?.revenue - financialData[1]?.revenue) / financialData[1]?.revenue) * 100 : 0)}`}>
-                  {getGrowthIcon(financialData[1]?.revenue ? ((financialData[0]?.revenue - financialData[1]?.revenue) / financialData[1]?.revenue) * 100 : 0)}
-                  <span className="text-xs ml-1">
-                    {financialData[1]?.revenue ? ((financialData[0]?.revenue - financialData[1]?.revenue) / financialData[1]?.revenue * 100).toFixed(1) : 0}%
+                <div className="flex items-center mt-1 text-gray-600">
+                  <span className="text-xs">
+                    {financialData.monthYearDisplay || 'Tháng hiện tại'}
                   </span>
                 </div>
               </div>
@@ -270,13 +293,13 @@ const FinancialReports: React.FC = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600">Chi phí tháng</p>
+                <p className="text-xs text-gray-600">Tổng chi phí</p>
                 <p className="text-xl font-bold text-red-600">
-                  {formatCurrency(financialData[0]?.expenses || 0)}
+                  {formatCurrency(financialData.totalExpense || 0)}
                 </p>
                 <div className="flex items-center mt-1 text-gray-600">
                   <span className="text-xs">
-                    {financialData[0]?.revenue ? ((financialData[0]?.expenses / financialData[0]?.revenue) * 100).toFixed(1) : 0}%
+                    {financialData.totalRevenue ? ((financialData.totalExpense / financialData.totalRevenue) * 100).toFixed(1) : 0}%
                   </span>
                 </div>
               </div>
@@ -289,14 +312,13 @@ const FinancialReports: React.FC = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600">Lợi nhuận tháng</p>
+                <p className="text-xs text-gray-600">Lợi nhuận ròng</p>
                 <p className="text-xl font-bold text-blue-600">
-                  {formatCurrency(financialData[0]?.profit || 0)}
+                  {formatCurrency(financialData.netProfit || 0)}
                 </p>
-                <div className={`flex items-center mt-1 ${getGrowthColor(financialData[1]?.profit ? ((financialData[0]?.profit - financialData[1]?.profit) / financialData[1]?.profit) * 100 : 0)}`}>
-                  {getGrowthIcon(financialData[1]?.profit ? ((financialData[0]?.profit - financialData[1]?.profit) / financialData[1]?.profit) * 100 : 0)}
-                  <span className="text-xs ml-1">
-                    {financialData[1]?.profit ? ((financialData[0]?.profit - financialData[1]?.profit) / financialData[1]?.profit * 100).toFixed(1) : 0}%
+                <div className="flex items-center mt-1 text-gray-600">
+                  <span className="text-xs">
+                    Lợi nhuận sau thuế
                   </span>
                 </div>
               </div>
@@ -309,13 +331,13 @@ const FinancialReports: React.FC = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600">Lãi ròng</p>
+                <p className="text-xs text-gray-600">Số bệnh nhân</p>
                 <p className="text-xl font-bold text-indigo-600">
-                  {formatCurrency(financialData[0]?.profit * 0.8 || 0)}
+                  {financialData.totalPatients || 0}
                 </p>
                 <div className="flex items-center mt-1 text-gray-600">
                   <span className="text-xs">
-                    {financialData[0]?.revenue ? ((financialData[0]?.profit * 0.8 / financialData[0]?.revenue) * 100).toFixed(1) : 0}%
+                    Tổng số bệnh nhân
                   </span>
                 </div>
               </div>
@@ -330,7 +352,7 @@ const FinancialReports: React.FC = () => {
               <div>
                 <p className="text-xs text-gray-600">Biên lợi nhuận</p>
                 <p className="text-xl font-bold text-purple-600">
-                  {financialData[0]?.revenue ? ((financialData[0]?.profit / financialData[0]?.revenue) * 100).toFixed(1) : 0}%
+                  {(financialData.profitMargin || 0).toFixed(1)}%
                 </p>
                 <div className="flex items-center mt-1 text-gray-600">
                   <span className="text-xs">
@@ -371,20 +393,21 @@ const FinancialReports: React.FC = () => {
                   
                   {/* Chart data */}
                   {(() => {
-                    const maxRevenue = Math.max(...financialData.map(d => d.revenue))
-                    const maxProfit = Math.max(...financialData.map(d => d.profit))
-                    const maxValue = Math.max(maxRevenue, maxProfit)
+                    const chartData = trendData.length > 0 ? trendData : (financialData ? [financialData] : [])
+                    const maxRevenue = Math.max(...chartData.map(d => d.totalRevenue || 0))
+                    const maxProfit = Math.max(...chartData.map(d => d.netProfit || 0))
+                    const maxValue = Math.max(maxRevenue, maxProfit, 1) // Ensure at least 1 to avoid division by zero
                     
-                    const revenuePoints = financialData.map((data, index) => {
+                    const revenuePoints = chartData.map((data, index) => {
                       const x = 50 + (index * 80)
-                      const y = 180 - (data.revenue / maxValue * 150)
-                      return { x, y, value: data.revenue }
+                      const y = 180 - ((data.totalRevenue || 0) / maxValue * 150)
+                      return { x, y, value: data.totalRevenue || 0 }
                     }).reverse()
                     
-                    const profitPoints = financialData.map((data, index) => {
+                    const profitPoints = chartData.map((data, index) => {
                       const x = 50 + (index * 80)
-                      const y = 180 - (data.profit / maxValue * 150)
-                      return { x, y, value: data.profit }
+                      const y = 180 - ((data.netProfit || 0) / maxValue * 150)
+                      return { x, y, value: data.netProfit || 0 }
                     }).reverse()
                     
                     return (
@@ -436,7 +459,7 @@ const FinancialReports: React.FC = () => {
                         ))}
                         
                         {/* X-axis labels */}
-                        {financialData.map((data, index) => (
+                        {chartData.map((data, index) => (
                           <text
                             key={`label-${index}`}
                             x={50 + (index * 80)}
@@ -445,7 +468,7 @@ const FinancialReports: React.FC = () => {
                             fontSize="12"
                             fill="#6b7280"
                           >
-                            T{data.period.split('-')[1]}
+                            {data.monthYearDisplay || data.period || `T${index + 1}`}
                           </text>
                         )).reverse()}
                       </>
@@ -468,24 +491,24 @@ const FinancialReports: React.FC = () => {
               
               {/* Summary data */}
               <div className="grid grid-cols-2 gap-4 pt-4 border-t">
-                {financialData.slice(0, 2).map((data) => (
+                {(trendData.length > 0 ? trendData.slice(0, 2) : (financialData ? [financialData] : [])).map((data, index) => (
                   <div 
-                    key={data.period} 
+                    key={data.monthYearDisplay || data.period || index} 
                     className="p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
                     onClick={() => handleViewDetails(data)}
                   >
                     <div className="flex justify-between items-center mb-1">
-                      <span className="font-medium text-sm">Tháng {data.period.split('-')[1]}/2024</span>
-                      <span className="text-xs text-gray-500">{data.testCount} XN</span>
+                      <span className="font-medium text-sm">{data.monthYearDisplay || data.period || `Kỳ ${index + 1}`}</span>
+                      <span className="text-xs text-gray-500">{data.totalTests || 0} XN</span>
                     </div>
                     <div className="space-y-1">
                       <div className="flex justify-between text-xs">
                         <span className="text-emerald-600">Doanh thu:</span>
-                        <span className="font-medium text-emerald-600">{formatCurrency(data.revenue)}</span>
+                        <span className="font-medium text-emerald-600">{formatCurrency(data.totalRevenue || 0)}</span>
                       </div>
                       <div className="flex justify-between text-xs">
                         <span className="text-blue-600">Lợi nhuận:</span>
-                        <span className="font-medium text-blue-600">{formatCurrency(data.profit)}</span>
+                        <span className="font-medium text-blue-600">{formatCurrency(data.netProfit || 0)}</span>
                       </div>
                     </div>
                   </div>
@@ -506,29 +529,34 @@ const FinancialReports: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {revenueByService.map((service, index) => (
-                <div key={service.serviceCode} className="flex items-center justify-between">
+              {financialData?.revenueDetails?.map((detail, index) => (
+                <div key={index} className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
                     <div className="flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-600 rounded-full text-sm font-bold">
                       {index + 1}
                     </div>
                     <div>
-                      <p className="font-medium">{service.serviceName}</p>
-                      <p className="text-sm text-gray-600">{service.serviceCode} • {service.testCount} lần</p>
+                      <p className="font-medium">{detail.description}</p>
+                      <p className="text-sm text-gray-600">{detail.revenueType} • {detail.quantity} lần</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-emerald-600">{formatCurrency(service.revenue)}</p>
-                    <p className="text-sm text-gray-600">{service.percentage}%</p>
+                    <p className="font-bold text-emerald-600">{formatCurrency(detail.amount)}</p>
+                    <p className="text-sm text-gray-600">{detail.averageValue.toFixed(2)} VNĐ/lần</p>
                   </div>
                 </div>
-              ))}
+              )) || (
+                <div className="text-center py-8 text-gray-500">
+                  <PieChart className="mx-auto mb-2 text-gray-400" size={48} />
+                  <p>Không có dữ liệu doanh thu theo dịch vụ</p>
+                </div>
+              )}
               
               <div className="pt-4 border-t">
                 <div className="flex justify-between">
                   <span className="font-medium">Tổng doanh thu:</span>
                   <span className="font-bold text-emerald-600">
-                    {formatCurrency(revenueByService.reduce((sum, s) => sum + s.revenue, 0))}
+                    {formatCurrency(financialData?.totalRevenue || 0)}
                   </span>
                 </div>
               </div>
@@ -550,29 +578,36 @@ const FinancialReports: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {expenseCategories.map((expense) => (
-                <div key={expense.category} className="space-y-2">
+              {financialData?.expenseDetails?.map((expense, index) => (
+                <div key={index} className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="font-medium">{expense.category}</span>
+                    <span className="font-medium">{expense.description || 'Chi phí khác'}</span>
                     <span className="font-bold text-red-600">{formatCurrency(expense.amount)}</span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-3">
                     <div 
                       className="bg-red-500 h-3 rounded-full flex items-center justify-end pr-2" 
-                      style={{ width: `${expense.percentage}%` }}
+                      style={{ width: `${(financialData?.totalRevenue || 0) > 0 ? (expense.amount / financialData.totalRevenue * 100) : 0}%` }}
                     >
-                      <span className="text-xs text-white font-medium">{expense.percentage}%</span>
+                      <span className="text-xs text-white font-medium">
+                        {financialData?.totalRevenue ? ((expense.amount / financialData.totalRevenue) * 100).toFixed(1) : 0}%
+                      </span>
                     </div>
                   </div>
-                  <p className="text-sm text-gray-600">{expense.description}</p>
+                  <p className="text-sm text-gray-600">{expense.revenueType || 'Chi phí hoạt động'}</p>
                 </div>
-              ))}
+              )) || (
+                <div className="text-center py-8 text-gray-500">
+                  <BarChart3 className="mx-auto mb-2 text-gray-400" size={48} />
+                  <p>Không có dữ liệu chi phí</p>
+                </div>
+              )}
               
               <div className="pt-4 border-t">
                 <div className="flex justify-between">
                   <span className="font-medium">Tổng chi phí:</span>
                   <span className="font-bold text-red-600">
-                    {formatCurrency(expenseCategories.reduce((sum, e) => sum + e.amount, 0))}
+                    {formatCurrency(financialData?.totalExpense || 0)}
                   </span>
                 </div>
               </div>
@@ -595,20 +630,20 @@ const FinancialReports: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 bg-emerald-50 rounded-lg">
                   <p className="text-sm text-gray-600">Số bệnh nhân</p>
-                  <p className="text-xl font-bold text-emerald-600">{financialData[0]?.patientCount || 0}</p>
-                  <div className={`flex items-center mt-1 ${getGrowthColor(financialData[1]?.patientCount ? ((financialData[0]?.patientCount - financialData[1]?.patientCount) / financialData[1]?.patientCount) * 100 : 0)}`}>
+                  <p className="text-xl font-bold text-emerald-600">{financialData?.totalPatients || 0}</p>
+                  <div className="flex items-center mt-1 text-gray-600">
                     <span className="text-xs">
-                      {financialData[1]?.patientCount ? ((financialData[0]?.patientCount - financialData[1]?.patientCount) / financialData[1]?.patientCount * 100).toFixed(1) : 0}% vs tháng trước
+                      Tổng số bệnh nhân
                     </span>
                   </div>
                 </div>
                 
                 <div className="p-4 bg-blue-50 rounded-lg">
                   <p className="text-sm text-gray-600">Số xét nghiệm</p>
-                  <p className="text-xl font-bold text-blue-600">{financialData[0]?.testCount || 0}</p>
-                  <div className={`flex items-center mt-1 ${getGrowthColor(financialData[1]?.testCount ? ((financialData[0]?.testCount - financialData[1]?.testCount) / financialData[1]?.testCount) * 100 : 0)}`}>
+                  <p className="text-xl font-bold text-blue-600">{financialData?.totalTests || 0}</p>
+                  <div className="flex items-center mt-1 text-gray-600">
                     <span className="text-xs">
-                      {financialData[1]?.testCount ? ((financialData[0]?.testCount - financialData[1]?.testCount) / financialData[1]?.testCount * 100).toFixed(1) : 0}% vs tháng trước
+                      Tổng số xét nghiệm
                     </span>
                   </div>
                 </div>
@@ -617,43 +652,36 @@ const FinancialReports: React.FC = () => {
               {/* Average Values */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                  <span className="text-sm text-gray-600">Giá trị đơn hàng TB</span>
-                  <span className="font-bold">{formatCurrency(financialData[0]?.averageOrderValue || 0)}</span>
+                  <span className="text-sm text-gray-600">Doanh thu/Bệnh nhân TB</span>
+                  <span className="font-bold">{formatCurrency(financialData?.avgRevenuePerPatient || 0)}</span>
                 </div>
                 
                 <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
                   <span className="text-sm text-gray-600">XN/Bệnh nhân TB</span>
-                                      <span className="font-bold">{financialData[0]?.patientCount ? (financialData[0]?.testCount / financialData[0]?.patientCount).toFixed(1) : 0}</span>
+                  <span className="font-bold">{financialData?.totalPatients ? (financialData?.totalTests / financialData?.totalPatients).toFixed(1) : 0}</span>
                 </div>
                 
                 <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-                  <span className="text-sm text-gray-600">Doanh thu/XN TB</span>
-                                      <span className="font-bold">{formatCurrency(financialData[0]?.testCount ? financialData[0]?.revenue / financialData[0]?.testCount : 0)}</span>
+                  <span className="text-sm text-gray-600">Chi phí/XN TB</span>
+                  <span className="font-bold">{formatCurrency(financialData?.avgCostPerTest || 0)}</span>
                 </div>
               </div>
 
-              {/* Growth Summary */}
+              {/* Revenue Details */}
               <div className="pt-4 border-t">
-                <h4 className="font-semibold mb-2">Tóm tắt tăng trưởng</h4>
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span>Doanh thu:</span>
-                    <span className={getGrowthColor(financialData[1]?.revenue ? ((financialData[0]?.revenue - financialData[1]?.revenue) / financialData[1]?.revenue) * 100 : 0)}>
-                      {financialData[1]?.revenue ? ((financialData[0]?.revenue - financialData[1]?.revenue) / financialData[1]?.revenue * 100).toFixed(1) : 0}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Lợi nhuận:</span>
-                    <span className={getGrowthColor(financialData[1]?.profit ? ((financialData[0]?.profit - financialData[1]?.profit) / financialData[1]?.profit) * 100 : 0)}>
-                      {financialData[1]?.profit ? ((financialData[0]?.profit - financialData[1]?.profit) / financialData[1]?.profit * 100).toFixed(1) : 0}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Số XN:</span>
-                    <span className={getGrowthColor(financialData[1]?.testCount ? ((financialData[0]?.testCount - financialData[1]?.testCount) / financialData[1]?.testCount) * 100 : 0)}>
-                      {financialData[1]?.testCount ? ((financialData[0]?.testCount - financialData[1]?.testCount) / financialData[1]?.testCount * 100).toFixed(1) : 0}%
-                    </span>
-                  </div>
+                <h4 className="font-semibold mb-2">Chi tiết doanh thu</h4>
+                <div className="space-y-2">
+                  {financialData?.revenueDetails?.map((detail, index) => (
+                    <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                      <span className="text-sm text-gray-600">{detail.description}</span>
+                      <div className="text-right">
+                        <span className="font-bold text-emerald-600">{formatCurrency(detail.amount)}</span>
+                        <div className="text-xs text-gray-500">{detail.quantity} lần</div>
+                      </div>
+                    </div>
+                  )) || (
+                    <div className="text-sm text-gray-500 text-center py-2">Không có dữ liệu doanh thu</div>
+                  )}
                 </div>
               </div>
             </div>
@@ -666,7 +694,7 @@ const FinancialReports: React.FC = () => {
         <Card className="shadow-lg border-0">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>Chi tiết tháng {selectedPeriod.period}</span>
+              <span>Chi tiết {selectedPeriod.monthYearDisplay || selectedPeriod.period || 'kỳ báo cáo'}</span>
               <Button size="sm" variant="outline" onClick={() => setSelectedPeriod(null)}>
                 Đóng
               </Button>
@@ -679,15 +707,15 @@ const FinancialReports: React.FC = () => {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Tổng doanh thu:</span>
-                    <span className="font-bold text-emerald-600">{formatCurrency(selectedPeriod.revenue)}</span>
+                    <span className="font-bold text-emerald-600">{formatCurrency(selectedPeriod.totalRevenue || 0)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Doanh thu/ngày TB:</span>
-                    <span className="font-medium">{formatCurrency(selectedPeriod.revenue / 31)}</span>
+                    <span className="text-sm text-gray-600">Doanh thu/Bệnh nhân TB:</span>
+                    <span className="font-medium text-emerald-600">{formatCurrency(selectedPeriod.avgRevenuePerPatient || 0)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Doanh thu/XN TB:</span>
-                    <span className="font-medium">{formatCurrency(selectedPeriod.testCount ? selectedPeriod.revenue / selectedPeriod.testCount : 0)}</span>
+                    <span className="font-medium">{formatCurrency(selectedPeriod.totalTests ? (selectedPeriod.totalRevenue || 0) / selectedPeriod.totalTests : 0)}</span>
                   </div>
                 </div>
               </div>
@@ -697,15 +725,15 @@ const FinancialReports: React.FC = () => {
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Tổng chi phí:</span>
-                    <span className="font-bold text-red-600">{formatCurrency(selectedPeriod.expenses)}</span>
+                    <span className="font-bold text-red-600">{formatCurrency(selectedPeriod.totalExpense || 0)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Chi phí/doanh thu:</span>
-                    <span className="font-medium">{((selectedPeriod.expenses / selectedPeriod.revenue) * 100).toFixed(1)}%</span>
+                    <span className="font-medium">{(selectedPeriod.totalRevenue || 0) ? (((selectedPeriod.totalExpense || 0) / (selectedPeriod.totalRevenue || 0)) * 100).toFixed(1) : 0}%</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Chi phí/XN TB:</span>
-                    <span className="font-medium">{formatCurrency(selectedPeriod.testCount ? selectedPeriod.expenses / selectedPeriod.testCount : 0)}</span>
+                    <span className="font-medium">{formatCurrency(selectedPeriod.avgCostPerTest || 0)}</span>
                   </div>
                 </div>
               </div>
@@ -714,16 +742,20 @@ const FinancialReports: React.FC = () => {
                 <h4 className="font-semibold">Lợi nhuận</h4>
                 <div className="space-y-2">
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Tổng lợi nhuận:</span>
-                    <span className="font-bold text-blue-600">{formatCurrency(selectedPeriod.profit)}</span>
+                    <span className="text-sm text-gray-600">Lợi nhuận ròng:</span>
+                    <span className="font-bold text-blue-600">{formatCurrency(selectedPeriod.netProfit || 0)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-gray-600">Biên lợi nhuận:</span>
-                    <span className="font-medium">{((selectedPeriod.profit / selectedPeriod.revenue) * 100).toFixed(1)}%</span>
+                    <span className="font-medium">{(selectedPeriod.profitMargin || 0).toFixed(1)}%</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-gray-600">Lợi nhuận/XN TB:</span>
-                    <span className="font-medium">{formatCurrency(selectedPeriod.testCount ? selectedPeriod.profit / selectedPeriod.testCount : 0)}</span>
+                    <span className="text-sm text-gray-600">Số bệnh nhân:</span>
+                    <span className="font-medium text-indigo-600">{selectedPeriod.totalPatients || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600">Số xét nghiệm:</span>
+                    <span className="font-medium text-blue-600">{selectedPeriod.totalTests || 0}</span>
                   </div>
                 </div>
               </div>
@@ -735,4 +767,4 @@ const FinancialReports: React.FC = () => {
   )
 }
 
-export default FinancialReports 
+export default FinancialReports

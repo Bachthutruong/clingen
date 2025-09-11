@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { toast } from 'react-hot-toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -76,7 +76,9 @@ const SampleStatus: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [priorityFilter, setPriorityFilter] = useState<string>('')
   const [currentPage, setCurrentPage] = useState(0)
-  const [pageSize] = useState(20)
+  const [pageSize, setPageSize] = useState(20)
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
   
   // API state
   const [responseData, setResponseData] = useState<SampleTestResponse | null>(null)
@@ -88,18 +90,47 @@ const SampleStatus: React.FC = () => {
   // Dialog states
   const [selectedSample, setSelectedSample] = useState<PatientSample | null>(null)
   const [showDetailDialog, setShowDetailDialog] = useState(false)
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
-  const [confirmAction, setConfirmAction] = useState<{
-    type: 'update_status' | 'reject'
-    newStatus?: string
-    sample: PatientSample
-  } | null>(null)
 
   // Result upload states
   const [showResultUploadDialog, setShowResultUploadDialog] = useState(false)
   const [uploadedHtml, setUploadedHtml] = useState<string>('')
   const [isEditingHtml, setIsEditingHtml] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [showCodeView, setShowCodeView] = useState(false)
+  const codeRef = useRef<HTMLElement | null>(null)
+  const [hljsReady, setHljsReady] = useState(false)
+
+  // Load highlight.js (CDN) once for pretty HTML code view
+  useEffect(() => {
+    if (hljsReady) return
+    const script = document.createElement('script')
+    script.src = 'https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/common.min.js'
+    script.async = true
+    script.onload = () => setHljsReady(true)
+    document.head.appendChild(script)
+
+    const style = document.createElement('link')
+    style.rel = 'stylesheet'
+    style.href = 'https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css'
+    document.head.appendChild(style)
+  }, [hljsReady])
+
+  // Highlight when code view toggled or html changes
+  useEffect(() => {
+    try {
+      if (showCodeView && hljsReady && (window as any).hljs && codeRef.current) {
+        ;(window as any).hljs.highlightElement(codeRef.current)
+      }
+    } catch {}
+  }, [showCodeView, hljsReady, uploadedHtml])
+
+  const escapeHtmlForCode = (html: string) =>
+    html
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\"/g, '&quot;')
+      .replace(/'/g, '&#039;')
 
   // Fetch patient samples from API
   const fetchSamples = async () => {
@@ -126,6 +157,10 @@ const SampleStatus: React.FC = () => {
         if (response.status && Array.isArray(response.data)) {
           console.log('✅ Using custom API structure - found', response.data.length, 'items')
           setResponseData(response as SampleTestResponse)
+          
+          // Set pagination info for custom API structure
+          setTotalElements(response.totalRecord || response.data.length)
+          setTotalPages(Math.ceil((response.totalRecord || response.data.length) / pageSize))
           
           if (response.data.length > 0) {
             const transformedSamples: PatientSample[] = response.data.map((item: any) => ({
@@ -157,6 +192,10 @@ const SampleStatus: React.FC = () => {
         else if (Array.isArray(response.content)) {
           console.log('✅ Using pagination structure - found', response.content.length, 'items')
           
+          // Set pagination info for standard pagination structure
+          setTotalElements(response.totalElements || response.content.length)
+          setTotalPages(response.totalPages || Math.ceil((response.totalElements || response.content.length) / pageSize))
+          
           if (response.content.length > 0) {
             const transformedSamples: PatientSample[] = response.content.map((item: any) => ({
               id: item.id.toString(),
@@ -185,6 +224,11 @@ const SampleStatus: React.FC = () => {
         // Case 3: Direct array
         else if (Array.isArray(response)) {
           console.log('✅ Using direct array structure - found', response.length, 'items')
+          
+          // Set pagination info for direct array
+          setTotalElements(response.length)
+          setTotalPages(Math.ceil(response.length / pageSize))
+          
           const transformedSamples: PatientSample[] = response.map((item: any) => ({
             id: item.id.toString(),
             sampleCode: `SM${item.id.toString().padStart(4, '0')}`,
@@ -215,10 +259,14 @@ const SampleStatus: React.FC = () => {
             keys: Object.keys(response)
           })
           setSamples([])
+          setTotalElements(0)
+          setTotalPages(0)
         }
       } else {
         console.error('❌ Invalid response:', response)
         setSamples([])
+        setTotalElements(0)
+        setTotalPages(0)
       }
       
     } catch (err) {
@@ -242,28 +290,19 @@ const SampleStatus: React.FC = () => {
     }
   }
 
+  // Removed status mapping; we don't update status via API here
+
   // Effect to fetch data when filters change
   useEffect(() => {
     fetchSamples()
-  }, [currentPage, searchQuery, statusFilter])
+  }, [currentPage, pageSize, searchQuery, statusFilter])
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(0)
-  }, [searchQuery, statusFilter, priorityFilter])
+  }, [searchQuery, statusFilter, priorityFilter, pageSize])
 
-  const filteredSamples = samples.filter(sample => {
-    const matchesSearch = 
-      sample.sampleCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sample.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sample.patientCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sample.testService.toLowerCase().includes(searchQuery.toLowerCase())
-
-    const matchesStatus = !statusFilter || sample.status === statusFilter
-    const matchesPriority = !priorityFilter || sample.priority === priorityFilter
-
-    return matchesSearch && matchesStatus && matchesPriority
-  })
+  // Client-side filtering removed - using server-side pagination and filtering
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -317,12 +356,11 @@ const SampleStatus: React.FC = () => {
   }
 
   const handleUpdateStatus = async (sample: PatientSample, newStatus: string) => {
-    setConfirmAction({
-      type: 'update_status',
-      newStatus,
-      sample
-    })
-    setShowConfirmDialog(true)
+    // Bỏ xác nhận: mở trực tiếp dialog nhập kết quả khi bắt đầu phân tích
+    if (newStatus === 'collected') {
+      setSelectedSample(sample)
+      setShowResultUploadDialog(true)
+    }
   }
 
   const handleViewDetails = (sample: PatientSample) => {
@@ -330,13 +368,13 @@ const SampleStatus: React.FC = () => {
     setShowDetailDialog(true)
   }
 
-  const handleReject = async (sample: PatientSample) => {
-    setConfirmAction({
-      type: 'reject',
-      sample
-    })
-    setShowConfirmDialog(true)
-  }
+  // const handleReject = async (sample: PatientSample) => {
+  //   setConfirmAction({
+  //     type: 'reject',
+  //     sample
+  //   })
+  //   setShowConfirmDialog(true)
+  // }
 
   // Handle file upload for results
   const handleFileUpload = async (file: File, sampleId: number) => {
@@ -390,6 +428,8 @@ const SampleStatus: React.FC = () => {
     } else {
       toast.error('Vui lòng chọn file Excel (.xlsx hoặc .xls)')
     }
+    // Clear drag data to avoid stuck state
+    try { e.dataTransfer.clearData() } catch {}
   }
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -408,8 +448,8 @@ const SampleStatus: React.FC = () => {
           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         },
         body: JSON.stringify({
-          id: sampleId,
-          htmlResult: uploadedHtml
+          patientTestId: sampleId,
+          html: uploadedHtml
         })
       })
       
@@ -430,30 +470,7 @@ const SampleStatus: React.FC = () => {
     }
   }
 
-  const handleConfirmAction = async () => {
-    if (!confirmAction) return
-
-    try {
-      if (confirmAction.type === 'update_status') {
-        // In real implementation, call API to update status
-        // await patientSamplesApi.updateStatus(parseInt(confirmAction.sample.id), statusToNumber(confirmAction.newStatus))
-        toast.success(`Cập nhật trạng thái thành công cho mẫu ${confirmAction.sample.sampleCode}`)
-      } else if (confirmAction.type === 'reject') {
-        // In real implementation, call API to reject sample
-        // await patientSamplesApi.updateStatus(parseInt(confirmAction.sample.id), 5) // 5 = rejected
-        toast.success(`Từ chối mẫu ${confirmAction.sample.sampleCode} thành công`)
-      }
-      
-      // Refresh data
-      fetchSamples()
-    } catch (error) {
-      console.error('Error performing action:', error)
-      toast.error('Có lỗi xảy ra khi thực hiện thao tác')
-    } finally {
-      setShowConfirmDialog(false)
-      setConfirmAction(null)
-    }
-  }
+  // Removed confirm handler and modal
 
   const handleSearch = () => {
     setCurrentPage(0)
@@ -562,7 +579,7 @@ const SampleStatus: React.FC = () => {
       {/* Search and Filter - Compact */}
       <Card className="shadow-lg border-0">
         <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-center">
+          <div className="flex flex-col lg:flex-row gap-4 items-center">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
@@ -574,33 +591,46 @@ const SampleStatus: React.FC = () => {
               />
             </div>
             
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md w-full sm:w-auto"
-            >
-              <option value="">Tất cả trạng thái</option>
-              <option value="pending">Đang tiếp nhận</option>
-              <option value="collected">Đang phân tích</option>
-              <option value="processing">Đang phân tích</option>
-              <option value="completed">Đã có kết quả</option>
-              <option value="rejected">Từ chối</option>
-            </select>
+            <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md w-full sm:w-auto"
+              >
+                <option value="">Tất cả trạng thái</option>
+                <option value="pending">Đang tiếp nhận</option>
+                <option value="collected">Đang phân tích</option>
+                <option value="processing">Đang phân tích</option>
+                <option value="completed">Đã có kết quả</option>
+                <option value="rejected">Từ chối</option>
+              </select>
 
-            <select
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md w-full sm:w-auto"
-            >
-              <option value="">Tất cả mức độ</option>
-              <option value="normal">Bình thường</option>
-              <option value="urgent">Khẩn cấp</option>
-              <option value="stat">CITO</option>
-            </select>
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md w-full sm:w-auto"
+              >
+                <option value="">Tất cả mức độ</option>
+                <option value="normal">Bình thường</option>
+                <option value="urgent">Khẩn cấp</option>
+                <option value="stat">CITO</option>
+              </select>
 
-            <Button onClick={handleSearch} disabled={loading}>
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-            </Button>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(parseInt(e.target.value))}
+                className="px-3 py-2 border border-gray-300 rounded-md w-full sm:w-auto"
+              >
+                <option value={10}>10 / trang</option>
+                <option value={20}>20 / trang</option>
+                <option value={50}>50 / trang</option>
+                <option value={100}>100 / trang</option>
+              </select>
+
+              <Button onClick={handleSearch} disabled={loading}>
+                {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -624,7 +654,7 @@ const SampleStatus: React.FC = () => {
       <Card className="shadow-lg border-0">
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Danh sách mẫu ({filteredSamples.length})</span>
+            <span>Danh sách mẫu ({totalElements} mẫu)</span>
             <div className="flex items-center space-x-2">
               {loading && <Loader2 size={16} className="animate-spin" />}
               <Button size="sm" onClick={fetchSamples} disabled={loading}>
@@ -635,12 +665,12 @@ const SampleStatus: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {loading && filteredSamples.length === 0 ? (
+          {loading && samples.length === 0 ? (
             <div className="text-center py-8">
               <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
               <p className="mt-4 text-gray-500">Đang tải dữ liệu...</p>
             </div>
-          ) : filteredSamples.length === 0 ? (
+          ) : samples.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               Không tìm thấy mẫu phù hợp
             </div>
@@ -660,7 +690,7 @@ const SampleStatus: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredSamples.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(sample => (
+                  {samples.map(sample => (
                     <tr key={sample.id} className="hover:bg-gray-50">
                       <td className="px-4 py-4">
                         <div className="font-medium text-gray-900">{sample.sampleCode}</div>
@@ -747,7 +777,7 @@ const SampleStatus: React.FC = () => {
                             </Button>
                           )}
                           
-                          {sample.status !== 'completed' && sample.status !== 'rejected' && (
+                          {/* {sample.status !== 'completed' && sample.status !== 'rejected' && (
                             <Button
                               size="sm"
                               variant="destructive"
@@ -757,7 +787,7 @@ const SampleStatus: React.FC = () => {
                               <XCircle size={12} className="mr-1" />
                               Từ chối
                             </Button>
-                          )}
+                          )} */}
                         </div>
                       </td>
                     </tr>
@@ -769,31 +799,109 @@ const SampleStatus: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Pagination - Simple version for filtered samples */}
-      {filteredSamples.length > 20 && (
-        <div className="flex justify-center items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-            disabled={currentPage === 0 || loading}
-          >
-            <ChevronLeft size={16} />
-            Trước
-          </Button>
-          <span className="text-sm text-gray-600">
-            Trang {currentPage + 1} / {Math.ceil(filteredSamples.length / pageSize)}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCurrentPage(Math.min(Math.ceil(filteredSamples.length / pageSize) - 1, currentPage + 1))}
-            disabled={currentPage >= Math.ceil(filteredSamples.length / pageSize) - 1 || loading}
-          >
-            Sau
-            <ChevronRight size={16} />
-          </Button>
-        </div>
+      {/* Pagination - Server-side pagination */}
+      {totalPages > 1 && (
+        <Card className="shadow-lg border-0">
+          <CardContent className="p-4">
+            <div className="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
+              {/* Pagination Info */}
+              <div className="text-sm text-gray-600">
+                Hiển thị {currentPage * pageSize + 1} - {Math.min((currentPage + 1) * pageSize, totalElements)} trong tổng số {totalElements} mẫu
+              </div>
+              
+              {/* Pagination Controls */}
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                  disabled={currentPage === 0 || loading}
+                >
+                  <ChevronLeft size={16} />
+                  Trước
+                </Button>
+                
+                {/* Page Numbers */}
+                <div className="flex items-center space-x-1">
+                  {(() => {
+                    const pages = []
+                    const maxVisiblePages = 5
+                    let startPage = Math.max(0, currentPage - Math.floor(maxVisiblePages / 2))
+                    let endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 1)
+                    
+                    // Adjust start page if we're near the end
+                    if (endPage - startPage < maxVisiblePages - 1) {
+                      startPage = Math.max(0, endPage - maxVisiblePages + 1)
+                    }
+                    
+                    // First page
+                    if (startPage > 0) {
+                      pages.push(
+                        <Button
+                          key={0}
+                          variant={currentPage === 0 ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(0)}
+                          disabled={loading}
+                        >
+                          1
+                        </Button>
+                      )
+                      if (startPage > 1) {
+                        pages.push(<span key="ellipsis1" className="px-2 text-gray-500">...</span>)
+                      }
+                    }
+                    
+                    // Page numbers
+                    for (let i = startPage; i <= endPage; i++) {
+                      pages.push(
+                        <Button
+                          key={i}
+                          variant={currentPage === i ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(i)}
+                          disabled={loading}
+                        >
+                          {i + 1}
+                        </Button>
+                      )
+                    }
+                    
+                    // Last page
+                    if (endPage < totalPages - 1) {
+                      if (endPage < totalPages - 2) {
+                        pages.push(<span key="ellipsis2" className="px-2 text-gray-500">...</span>)
+                      }
+                      pages.push(
+                        <Button
+                          key={totalPages - 1}
+                          variant={currentPage === totalPages - 1 ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(totalPages - 1)}
+                          disabled={loading}
+                        >
+                          {totalPages}
+                        </Button>
+                      )
+                    }
+                    
+                    return pages
+                  })()}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
+                  disabled={currentPage >= totalPages - 1 || loading}
+                >
+                  Sau
+                  <ChevronRight size={16} />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Detail Dialog */}
@@ -954,7 +1062,7 @@ const SampleStatus: React.FC = () => {
                 <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
                   Đóng
                 </Button>
-                {selectedSample.status !== 'completed' && selectedSample.status !== 'rejected' && (
+                {/* {selectedSample.status !== 'completed' && selectedSample.status !== 'rejected' && (
                   <Button 
                     variant="destructive"
                     onClick={() => {
@@ -965,59 +1073,14 @@ const SampleStatus: React.FC = () => {
                     <XCircle size={14} className="mr-1" />
                     Từ chối mẫu
                   </Button>
-                )}
+                )} */}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Confirm Dialog */}
-      {showConfirmDialog && confirmAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full">
-            <div className="p-6">
-              <div className="flex items-center mb-4">
-                <AlertTriangle className="h-6 w-6 text-amber-500 mr-3" />
-                <h3 className="text-lg font-medium">Xác nhận thao tác</h3>
-              </div>
-              
-              <div className="mb-4">
-                {confirmAction.type === 'update_status' ? (
-                  <p className="text-gray-600">
-                    Bạn có chắc chắn muốn cập nhật trạng thái mẫu <strong>{confirmAction.sample.sampleCode}</strong> 
-                    thành <strong>{getStatusLabel(confirmAction.newStatus!)}</strong>?
-                  </p>
-                ) : (
-                  <p className="text-gray-600">
-                    Bạn có chắc chắn muốn từ chối mẫu <strong>{confirmAction.sample.sampleCode}</strong>?
-                    <br />
-                    <span className="text-red-600 text-sm">Hành động này không thể hoàn tác.</span>
-                  </p>
-                )}
-              </div>
-
-              <div className="flex justify-end space-x-2">
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    setShowConfirmDialog(false)
-                    setConfirmAction(null)
-                  }}
-                >
-                  Hủy
-                </Button>
-                <Button 
-                  onClick={handleConfirmAction}
-                  className={confirmAction.type === 'reject' ? 'bg-red-600 hover:bg-red-700' : ''}
-                >
-                  {confirmAction.type === 'update_status' ? 'Cập nhật' : 'Từ chối'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Removed Confirm Dialog */}
 
       {/* Result Upload Dialog */}
       {showResultUploadDialog && selectedSample && (
@@ -1065,7 +1128,11 @@ const SampleStatus: React.FC = () => {
                     id="file-upload"
                   />
                   <Button
-                    onClick={() => document.getElementById('file-upload')?.click()}
+                    onClick={() => {
+                      const el = document.getElementById('file-upload') as HTMLInputElement | null
+                      if (el) el.value = ''
+                      el?.click()
+                    }}
                     disabled={isUploading}
                   >
                     {isUploading ? (
@@ -1090,6 +1157,9 @@ const SampleStatus: React.FC = () => {
                       >
                         {isEditingHtml ? 'Xem kết quả' : 'Chỉnh sửa'}
                       </Button>
+                      <Button size="sm" variant="outline" onClick={() => setShowCodeView(!showCodeView)}>
+                        {showCodeView ? 'Ẩn mã HTML' : 'Xem mã HTML'}
+                      </Button>
                       <Button
                         size="sm"
                         onClick={() => handleSaveHtml(parseInt(selectedSample.id))}
@@ -1110,7 +1180,13 @@ const SampleStatus: React.FC = () => {
                     </div>
                   </div>
                   
-                  {isEditingHtml ? (
+                  {showCodeView ? (
+                    <pre className="max-h-96 overflow-auto border rounded-md p-3 bg-gray-50 text-sm">
+                      <code ref={codeRef as any} className="language-xml">
+                        {escapeHtmlForCode(uploadedHtml)}
+                      </code>
+                    </pre>
+                  ) : isEditingHtml ? (
                     <textarea
                       value={uploadedHtml}
                       onChange={(e) => setUploadedHtml(e.target.value)}

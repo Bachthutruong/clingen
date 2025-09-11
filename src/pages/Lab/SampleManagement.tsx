@@ -27,7 +27,7 @@ interface DashboardStats {
   rejectedSamples: number
 }
 
-type TabType = 'dashboard' | 'samples' | 'testtypes' | 'registration' | 'management'
+type TabType = 'dashboard' | 'samples' | 'registration' | 'management'
 
 const SampleManagement: React.FC = () => {
   // NOTE: Đã bỏ các API search không hoạt động:
@@ -41,6 +41,7 @@ const SampleManagement: React.FC = () => {
   // Data states
   const [testSamples, setTestSamples] = useState<TestSample[]>([])
   const [testTypes, setTestTypes] = useState<TestType[]>([])
+  console.log(setTestTypes)
   const [patients, setPatients] = useState<PatientAPI[]>([])
   const [patientSamples, setPatientSamples] = useState<PatientAPI[]>([])
   const [dashboardStats, setDashboardStats] = useState<DashboardStats>({
@@ -58,15 +59,15 @@ const SampleManagement: React.FC = () => {
   
   // Pagination states
   const [samplePage, setSamplePage] = useState(0)
-  const [testTypePage, setTestTypePage] = useState(0)
+  // Removed test type tab
   const [patientSamplePage, setPatientSamplePage] = useState(0)
   const [sampleTotalPages, setSampleTotalPages] = useState(0)
-  const [testTypeTotalPages, setTestTypeTotalPages] = useState(0)
+  // Removed test type tab
   const [patientSampleTotalPages, setPatientSampleTotalPages] = useState(0)
   
   // Search states
   const [sampleKeyword, setSampleKeyword] = useState('')
-  const [testTypeKeyword, setTestTypeKeyword] = useState('')
+  // Removed test type tab
   const [patientSampleKeyword, setPatientSampleKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState<number | undefined>()
   
@@ -76,12 +77,7 @@ const SampleManagement: React.FC = () => {
   const [showSampleModal, setShowSampleModal] = useState(false)
   
   // Form states cho tạo test types
-  const [newTestTypeName, setNewTestTypeName] = useState('')
-  const [newTestTypeCode, setNewTestTypeCode] = useState('')
-  const [newTestTypePrice, setNewTestTypePrice] = useState(0)
-  const [selectedSamplesForTestType, setSelectedSamplesForTestType] = useState<number[]>([])
-  const [editingTestType, setEditingTestType] = useState<TestType | null>(null)
-  const [showTestTypeModal, setShowTestTypeModal] = useState(false)
+  // Removed test type tab states
   
   // Patient selection state
   const [selectedPatient, setSelectedPatient] = useState<number>(0)
@@ -94,12 +90,10 @@ const SampleManagement: React.FC = () => {
   useEffect(() => {
     if (activeTab === 'samples') {
       loadSamples()
-    } else if (activeTab === 'testtypes') {
-      loadTestTypes()
     } else if (activeTab === 'management') {
       loadPatientSamples()
     }
-  }, [activeTab, samplePage, testTypePage, patientSamplePage, sampleKeyword, testTypeKeyword, patientSampleKeyword, statusFilter])
+  }, [activeTab, samplePage, patientSamplePage, sampleKeyword, patientSampleKeyword, statusFilter])
 
   // Dashboard sử dụng dữ liệu có sẵn từ loadInitialData và được update tự động
 
@@ -222,38 +216,7 @@ const SampleManagement: React.FC = () => {
     }
   }
 
-  const loadTestTypes = async () => {
-    try {
-      setLoading(true)
-      // Bỏ API search, chỉ dùng getAllSimple và filter local
-      const allTestTypes = await testTypesApi.getAllSimple()
-      
-      // Filter local theo keyword
-      let filteredTestTypes = allTestTypes
-      if (testTypeKeyword) {
-        filteredTestTypes = allTestTypes.filter(testType => 
-          testType.name.toLowerCase().includes(testTypeKeyword.toLowerCase()) ||
-          testType.code?.toLowerCase().includes(testTypeKeyword.toLowerCase())
-        )
-      }
-      
-      // Pagination local
-      const pageSize = 10
-      const startIndex = testTypePage * pageSize
-      const endIndex = startIndex + pageSize
-      const paginatedTestTypes = filteredTestTypes.slice(startIndex, endIndex)
-      
-      setTestTypes(paginatedTestTypes)
-      setTestTypeTotalPages(Math.ceil(filteredTestTypes.length / pageSize))
-    } catch (error) {
-      console.error('Error loading test types:', error)
-      setMessage('Lỗi khi tải danh sách loại xét nghiệm')
-      setTestTypes([])
-      setTestTypeTotalPages(0)
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Removed test type loader
 
   const loadPatientSamples = async () => {
     try {
@@ -329,49 +292,7 @@ const SampleManagement: React.FC = () => {
   }
 
   // Tạo loại xét nghiệm mặc định
-  const createDefaultTestTypes = async () => {
-    try {
-      setLoading(true)
-      
-      const urineS = testSamples.find(s => s.name === 'Nước tiểu')
-      const bloodS = testSamples.find(s => s.name === 'Máu')
-      const mxn1S = testSamples.find(s => s.name === 'MXN1')
-      const mxn2S = testSamples.find(s => s.name === 'MXN2')
-      
-      if (!urineS || !bloodS || !mxn1S || !mxn2S) {
-        setMessage('Cần tạo mẫu xét nghiệm trước')
-        return
-      }
-      
-      // Tạo XN1: (MXN1, MXN2)
-      await testTypesApi.create({
-        code: 'XN1',
-        name: 'Xét nghiệm 1',
-        description: 'Loại xét nghiệm 1 - sử dụng MXN1 hoặc MXN2',
-        price: 200000,
-        status: 1,
-        testSampleIds: [mxn1S.id!, mxn2S.id!]
-      })
-      
-      // Tạo XN2: (Nước tiểu, Máu, MXN1)
-      await testTypesApi.create({
-        code: 'XN2',
-        name: 'Xét nghiệm 2',
-        description: 'Loại xét nghiệm 2 - sử dụng Nước tiểu, Máu hoặc MXN1',
-        price: 150000,
-        status: 1,
-        testSampleIds: [urineS.id!, bloodS.id!, mxn1S.id!]
-      })
-      
-      setMessage('Đã tạo thành công các loại xét nghiệm mặc định!')
-      await loadInitialData()
-    } catch (error) {
-      console.error('Error creating default test types:', error)
-      setMessage('Lỗi khi tạo loại xét nghiệm mặc định')
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Removed default test types creator
 
   // CRUD Operations cho Test Samples
   const createTestSample = async () => {
@@ -430,85 +351,11 @@ const SampleManagement: React.FC = () => {
     }
   }
 
-  // CRUD Operations cho Test Types
-  const createTestType = async () => {
-    if (!newTestTypeName || !newTestTypeCode || selectedSamplesForTestType.length === 0) {
-      setMessage('Vui lòng nhập tên, mã loại xét nghiệm và chọn ít nhất 1 mẫu')
-      return
-    }
+  // Removed test type CRUD
 
-    try {
-      setLoading(true)
-      await testTypesApi.create({
-        code: newTestTypeCode,
-        name: newTestTypeName,
-        description: `Loại xét nghiệm ${newTestTypeName}`,
-        price: newTestTypePrice,
-        status: 1,
-        testSampleIds: selectedSamplesForTestType
-      })
-      
-      setNewTestTypeName('')
-      setNewTestTypeCode('')
-      setNewTestTypePrice(0)
-      setSelectedSamplesForTestType([])
-      setMessage('Đã tạo loại xét nghiệm thành công!')
-      await loadTestTypes()
-    } catch (error) {
-      console.error('Error creating test type:', error)
-      setMessage('Lỗi khi tạo loại xét nghiệm')
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Removed test type update
 
-  const updateTestType = async () => {
-    if (!editingTestType || !editingTestType.name) {
-      setMessage('Vui lòng nhập tên loại xét nghiệm')
-      return
-    }
-    
-    if (!editingTestType.testSampleIds || editingTestType.testSampleIds.length === 0) {
-      setMessage('Vui lòng chọn ít nhất 1 mẫu xét nghiệm')
-      return
-    }
-    
-    try {
-      setLoading(true)
-      await testTypesApi.update(editingTestType.id!, {
-        code: editingTestType.code,
-        name: editingTestType.name,
-        description: editingTestType.description,
-        price: editingTestType.price,
-        status: editingTestType.status,
-        testSampleIds: editingTestType.testSampleIds
-      })
-      setEditingTestType(null)
-      setMessage('Đã cập nhật loại xét nghiệm thành công!')
-      await loadTestTypes()
-    } catch (error) {
-      console.error('Error updating test type:', error)
-      setMessage('Lỗi khi cập nhật loại xét nghiệm')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const deleteTestType = async (id: number) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa loại xét nghiệm này?')) return
-    
-    try {
-      setLoading(true)
-      await testTypesApi.delete(id)
-      setMessage('Đã xóa loại xét nghiệm thành công!')
-      await loadTestTypes()
-    } catch (error) {
-      console.error('Error deleting test type:', error)
-      setMessage('Lỗi khi xóa loại xét nghiệm')
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Removed test type delete
 
   // Quản lý trạng thái mẫu bệnh nhân (local update)
   const updateSampleStatus = (id: number, status: number) => {
@@ -720,7 +567,6 @@ const SampleManagement: React.FC = () => {
           {[
             // { id: 'dashboard', label: 'Dashboard' },
             { id: 'samples', label: 'Quản lý mẫu' },
-            { id: 'testtypes', label: 'Loại xét nghiệm' },
             // { id: 'registration', label: 'Đăng ký XN' },
             // { id: 'management', label: 'Quản lý mẫu BN' }
           ].map((tab) => (
@@ -812,9 +658,6 @@ const SampleManagement: React.FC = () => {
                 <Button onClick={createDefaultSamples} disabled={loading} variant="outline">
                   Tạo mẫu XN mặc định
                 </Button>
-                <Button onClick={createDefaultTestTypes} disabled={loading} variant="outline">
-                  Tạo loại XN mặc định
-                </Button>
               </div>
               <p className="text-sm text-gray-600">
                 Tạo nhanh: Nước tiểu, Máu, MXN1, MXN2 và 2 loại xét nghiệm XN1, XN2
@@ -884,136 +727,6 @@ const SampleManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Test Types Management Tab */}
-      {activeTab === 'testtypes' && (
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Quản lý loại xét nghiệm</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Search */}
-              <div className="flex gap-4">
-                <Input
-                  placeholder="Tìm kiếm loại xét nghiệm..."
-                  value={testTypeKeyword}
-                  onChange={(e) => setTestTypeKeyword(e.target.value)}
-                  className="flex-1"
-                />
-                <Button onClick={() => setTestTypePage(0)}>Tìm kiếm</Button>
-              </div>
-
-              <Button onClick={() => setShowTestTypeModal(true)} disabled={loading}>
-                Tạo mới
-              </Button>
-
-              {/* Test Types List */}
-              <div className="space-y-2">
-                {testTypes.map(testType => (
-                  <div key={testType.id} className="p-4 bg-gray-50 rounded">
-                    {editingTestType?.id === testType.id ? (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-3 gap-2">
-                          <Input
-                            value={editingTestType?.name || ''}
-                            onChange={(e) => editingTestType && setEditingTestType({
-                              ...editingTestType, 
-                              name: e.target.value
-                            })}
-                            placeholder="Tên loại xét nghiệm"
-                          />
-                          <Input
-                            value={editingTestType?.code || ''}
-                            onChange={(e) => editingTestType && setEditingTestType({
-                              ...editingTestType, 
-                              code: e.target.value.toUpperCase()
-                            })}
-                            placeholder="Mã loại xét nghiệm"
-                          />
-                          <Input
-                            type="number"
-                            value={editingTestType?.price || ''}
-                            onChange={(e) => editingTestType && setEditingTestType({
-                              ...editingTestType, 
-                              price: Number(e.target.value) || 0
-                            })}
-                            onFocus={(e) => {
-                              if (e.target.value === '0') {
-                                e.target.value = ''
-                              }
-                              e.target.select()
-                            }}
-                            placeholder="Giá"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-sm font-medium">Chọn mẫu xét nghiệm:</Label>
-                          <div className="max-h-24 overflow-y-auto space-y-1 border rounded p-2 mt-1">
-                            {testSamples.map(sample => (
-                              <label key={sample.id} className="flex items-center space-x-2 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={editingTestType?.testSampleIds?.includes(sample.id!) || false}
-                                  onChange={(e) => {
-                                    if (!editingTestType) return
-                                    const currentIds = editingTestType.testSampleIds || []
-                                    if (e.target.checked) {
-                                      setEditingTestType({
-                                        ...editingTestType,
-                                        testSampleIds: [...currentIds, sample.id!]
-                                      })
-                                    } else {
-                                      setEditingTestType({
-                                        ...editingTestType,
-                                        testSampleIds: currentIds.filter(id => id !== sample.id)
-                                      })
-                                    }
-                                  }}
-                                />
-                                <span>{sample.name}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={updateTestType}>Lưu</Button>
-                          <Button size="sm" variant="outline" onClick={() => setEditingTestType(null)}>Hủy</Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <span className="font-medium">{testType.name}</span>
-                            <span className="ml-2 text-sm text-gray-600">
-                              - {testType.price?.toLocaleString('vi-VN')} VND
-                            </span>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="outline" onClick={() => setEditingTestType(testType)}>
-                              Sửa
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => deleteTestType(testType.id!)}>
-                              Xóa
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="text-xs text-gray-600 mt-1">
-                          Mẫu: {testType.testSampleIds?.map(sampleId => 
-                            testSamples.find(s => s.id === sampleId)?.name
-                          ).filter(Boolean).join(', ') || 'Chưa có mẫu'}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {renderPagination(testTypePage, testTypeTotalPages, setTestTypePage)}
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       {/* Registration Tab - Keep existing logic */}
       {activeTab === 'registration' && (
@@ -1246,119 +959,39 @@ const SampleManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Test Type Creation Modal */}
-      {showTestTypeModal && (
+      {/* Removed Test Type Creation Modal */}
+      {false && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <CardHeader className="border-b">
               <div className="flex justify-between items-center">
                 <CardTitle>Tạo loại xét nghiệm mới</CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setShowTestTypeModal(false)
-                    setNewTestTypeName('')
-                    setNewTestTypeCode('')
-                    setNewTestTypePrice(0)
-                    setSelectedSamplesForTestType([])
-                  }}
-                  disabled={loading}
-                >
-                  <X size={16} />
-                </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4 pt-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <Label>Tên loại xét nghiệm</Label>
-                  <Input
-                    value={newTestTypeName}
-                    onChange={(e) => setNewTestTypeName(e.target.value)}
-                    placeholder="Nhập tên loại xét nghiệm"
-                  />
+                  <Input placeholder="Nhập tên loại xét nghiệm" />
                 </div>
                 <div>
                   <Label>Mã loại xét nghiệm</Label>
-                  <Input
-                    value={newTestTypeCode}
-                    onChange={(e) => setNewTestTypeCode(e.target.value.toUpperCase())}
-                    placeholder="Nhập mã loại xét nghiệm"
-                  />
+                  <Input placeholder="Nhập mã loại xét nghiệm" />
                 </div>
                 <div>
                   <Label>Giá</Label>
-                  <Input
-                    type="number"
-                    value={newTestTypePrice || ''}
-                    onChange={(e) => setNewTestTypePrice(Number(e.target.value) || 0)}
-                    onFocus={(e) => {
-                      if (e.target.value === '0') {
-                        e.target.value = ''
-                      }
-                      e.target.select()
-                    }}
-                    placeholder="Nhập giá"
-                  />
+                  <Input type="number" placeholder="Nhập giá" />
                 </div>
               </div>
 
               <div>
                 <Label>Chọn mẫu xét nghiệm</Label>
-                <div className="max-h-32 overflow-y-auto space-y-2 border rounded p-2">
-                  {testSamples.map(sample => (
-                    <label key={sample.id} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedSamplesForTestType.includes(sample.id!)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedSamplesForTestType(prev => [...prev, sample.id!])
-                          } else {
-                            setSelectedSamplesForTestType(prev => prev.filter(id => id !== sample.id))
-                          }
-                        }}
-                      />
-                      <span className="text-sm">{sample.name}</span>
-                    </label>
-                  ))}
-                </div>
+                <div className="max-h-32 overflow-y-auto space-y-2 border rounded p-2" />
               </div>
 
               <div className="flex justify-end space-x-4 pt-4 border-t">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShowTestTypeModal(false)
-                    setNewTestTypeName('')
-                    setNewTestTypeCode('')
-                    setNewTestTypePrice(0)
-                    setSelectedSamplesForTestType([])
-                  }}
-                  disabled={loading}
-                >
-                  Hủy
-                </Button>
-                <Button
-                  onClick={async () => {
-                    await createTestType()
-                    setShowTestTypeModal(false)
-                  }}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 size={16} className="mr-2 animate-spin" />
-                      Đang tạo...
-                    </>
-                  ) : (
-                    <>
-                      <Plus size={16} className="mr-2" />
-                      Tạo loại xét nghiệm
-                    </>
-                  )}
-                </Button>
+                <Button variant="outline">Hủy</Button>
+                <Button>Tạo loại xét nghiệm</Button>
               </div>
             </CardContent>
           </Card>

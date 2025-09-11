@@ -43,7 +43,17 @@ import type {
   PackagingSearchParams,
   TestTypeSearchParams,
   ReferralSourceSearchParams,
-  PatientSearchParams
+  PatientSearchParams,
+  SupplierDTO,
+  SupplierSearchDTO,
+  SupplierResponse,
+  MonthlyCost,
+  MonthlyCostRequest,
+  MonthlyCostSearchRequest,
+  MonthlyCostSearchResponse,
+  MonthlyCostSummary,
+  MonthlyCostTrend,
+  MonthlyCostBreakdown
 } from '@/types/api'
 import {
   transformToPaginatedResponse
@@ -884,6 +894,18 @@ export const inventoryLogsApi = {
   }
 }
 
+// Master data APIs
+export const departmentApi = {
+  getAll: async (): Promise<Array<{ id: number; name: string }>> => {
+    const response: AxiosResponse<any> = await api.get('/department')
+    const payload = response.data?.data || response.data
+    if (Array.isArray(payload)) return payload
+    if (payload?.content && Array.isArray(payload.content)) return payload.content
+    return []
+  }
+}
+
+
 // Patient Test Management API (Quản lý mẫu bệnh nhân)
 export const patientSamplesApi = {
   getAll: async (params?: PatientTestSearchDTO): Promise<any> => {
@@ -1501,235 +1523,7 @@ export const revenueApi = {
   }
 }
 
-// Monthly Costs API - Updated to match new API spec
-export const monthlyCostsApi = {
-  // GET /monthly-costs/{id} - Get cost by ID
-  getById: async (id: number): Promise<any> => {
-    const response: AxiosResponse<any> = await api.get(`/monthly-costs/${id}`)
-    return response.data.data || response.data
-  },
-
-  // PUT /monthly-costs/{id} - Update cost
-  update: async (id: number, data: any): Promise<any> => {
-    const response: AxiosResponse<any> = await api.put(`/monthly-costs/${id}`, data)
-    return response.data.data || response.data
-  },
-
-  // DELETE /monthly-costs/{id} - Delete cost (soft delete)
-  delete: async (id: number): Promise<void> => {
-    await api.delete(`/monthly-costs/${id}`)
-  },
-
-  // POST /monthly-costs - Create new cost
-  create: async (data: any): Promise<any> => {
-    const response: AxiosResponse<any> = await api.post('/monthly-costs', data)
-    return response.data.data || response.data
-  },
-
-  // POST /monthly-costs/search - Search costs
-  search: async (params: any): Promise<PaginatedResponse<any>> => {
-    const searchParams = {
-      month: params.month,
-      year: params.year,
-      category: params.category,
-      costName: params.costName,
-      vendorName: params.vendorName,
-      isRecurring: params.isRecurring,
-      isPaid: params.isPaid,
-      page: params.page || 0,
-      size: params.size || 20,
-      sortBy: params.sortBy || 'createdAt',
-      sortDirection: params.sortDirection || 'desc'
-    }
-    
-    const response: AxiosResponse<any> = await api.post('/monthly-costs/search', searchParams)
-    
-    // Handle direct pagination response
-    if (response.data && response.data.content) {
-      return response.data
-    }
-    
-    // Handle MethodResult structure
-    const paginationData = response.data.data || response.data
-    return {
-      content: paginationData.content || [],
-      totalElements: paginationData.totalElements || 0,
-      totalPages: paginationData.totalPages || 0,
-      size: paginationData.size || searchParams.size,
-      number: paginationData.number || searchParams.page,
-      first: paginationData.first || false,
-      last: paginationData.last || false,
-      numberOfElements: paginationData.numberOfElements || 0
-    }
-  },
-
-  // POST /monthly-costs/recurring/generate/month/{month}/year/{year} - Generate recurring costs
-  generateRecurring: async (month: number, year: number): Promise<void> => {
-    await api.post(`/monthly-costs/recurring/generate/month/${month}/year/${year}`)
-  },
-
-  // POST /monthly-costs/bulk - Create multiple costs
-  createBulk: async (costs: any[]): Promise<any[]> => {
-    const response: AxiosResponse<any> = await api.post('/monthly-costs/bulk', costs)
-    return response.data.data || response.data
-  },
-
-  // DELETE /monthly-costs/bulk - Delete multiple costs
-  deleteBulk: async (ids: number[]): Promise<void> => {
-    await api.delete('/monthly-costs/bulk', { data: ids })
-  },
-
-  // PATCH /monthly-costs/{id}/mark-unpaid - Mark as unpaid
-  markUnpaid: async (id: number): Promise<any> => {
-    const response: AxiosResponse<any> = await api.patch(`/monthly-costs/${id}/mark-unpaid`)
-    return response.data.data || response.data
-  },
-
-  // PATCH /monthly-costs/{id}/mark-paid - Mark as paid
-  markPaid: async (id: number): Promise<any> => {
-    const response: AxiosResponse<any> = await api.patch(`/monthly-costs/${id}/mark-paid`)
-    return response.data.data || response.data
-  },
-
-  // PATCH /monthly-costs/{id}/activate - Activate cost
-  activate: async (id: number): Promise<void> => {
-    await api.patch(`/monthly-costs/${id}/activate`)
-  },
-
-  // PATCH /monthly-costs/unlink-from-revenue - Unlink costs from revenue
-  unlinkFromRevenue: async (ids: number[]): Promise<void> => {
-    await api.patch('/monthly-costs/unlink-from-revenue', ids)
-  },
-
-  // PATCH /monthly-costs/mark-multiple-paid - Mark multiple as paid
-  markMultiplePaid: async (ids: number[]): Promise<any[]> => {
-    const response: AxiosResponse<any> = await api.patch('/monthly-costs/mark-multiple-paid', ids)
-    return response.data.data || response.data
-  },
-
-  // PATCH /monthly-costs/link-to-revenue/{revenueId} - Link costs to revenue
-  linkToRevenue: async (revenueId: number, ids: number[]): Promise<void> => {
-    await api.patch(`/monthly-costs/link-to-revenue/${revenueId}`, ids)
-  },
-
-  // GET /monthly-costs/validate/invoice-number - Validate invoice number
-  validateInvoiceNumber: async (invoiceNumber: string): Promise<boolean> => {
-    const response: AxiosResponse<any> = await api.get('/monthly-costs/validate/invoice-number', {
-      params: { invoiceNumber }
-    })
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/validate/cost-name - Validate cost name
-  validateCostName: async (month: number, year: number, category: number, costName: string): Promise<boolean> => {
-    const response: AxiosResponse<any> = await api.get('/monthly-costs/validate/cost-name', {
-      params: { month, year, category, costName }
-    })
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/unpaid - Get unpaid costs
-  getUnpaid: async (): Promise<any[]> => {
-    const response: AxiosResponse<any> = await api.get('/monthly-costs/unpaid')
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/unlinked - Get unlinked costs
-  getUnlinked: async (): Promise<any[]> => {
-    const response: AxiosResponse<any> = await api.get('/monthly-costs/unlinked')
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/trend/year/{year} - Get cost trend by year
-  getTrendByYear: async (year: number): Promise<any[]> => {
-    const response: AxiosResponse<any> = await api.get(`/monthly-costs/trend/year/${year}`)
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/total/year/{year} - Get total cost by year
-  getTotalByYear: async (year: number): Promise<number> => {
-    const response: AxiosResponse<any> = await api.get(`/monthly-costs/total/year/${year}`)
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/total/month/{month}/year/{year} - Get total cost by month
-  getTotalByMonth: async (month: number, year: number): Promise<number> => {
-    const response: AxiosResponse<any> = await api.get(`/monthly-costs/total/month/${month}/year/${year}`)
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/total/month/{month}/year/{year}/category/{category} - Get total by category
-  getTotalByMonthCategory: async (month: number, year: number, category: number): Promise<number> => {
-    const response: AxiosResponse<any> = await api.get(`/monthly-costs/total/month/${month}/year/${year}/category/${category}`)
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/summary/year/{year} - Get summary by year
-  getSummaryByYear: async (year: number): Promise<any> => {
-    const response: AxiosResponse<any> = await api.get(`/monthly-costs/summary/year/${year}`)
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/summary/month/{month}/year/{year} - Get summary by month
-  getSummaryByMonth: async (month: number, year: number): Promise<any> => {
-    const response: AxiosResponse<any> = await api.get(`/monthly-costs/summary/month/${month}/year/${year}`)
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/revenue/{revenueId} - Get costs by revenue ID
-  getByRevenue: async (revenueId: number): Promise<any[]> => {
-    const response: AxiosResponse<any> = await api.get(`/monthly-costs/revenue/${revenueId}`)
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/recurring - Get recurring costs
-  getRecurring: async (): Promise<any[]> => {
-    const response: AxiosResponse<any> = await api.get('/monthly-costs/recurring')
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/recurring/preview/month/{month}/year/{year} - Preview recurring costs
-  previewRecurring: async (month: number, year: number): Promise<any[]> => {
-    const response: AxiosResponse<any> = await api.get(`/monthly-costs/recurring/preview/month/${month}/year/${year}`)
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/overdue - Get overdue costs
-  getOverdue: async (): Promise<any[]> => {
-    const response: AxiosResponse<any> = await api.get('/monthly-costs/overdue')
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/month/{month}/year/{year} - Get costs by month/year
-  getByMonthYear: async (month: number, year: number): Promise<any[]> => {
-    const response: AxiosResponse<any> = await api.get(`/monthly-costs/month/${month}/year/${year}`)
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/export/excel/summary/year/{year} - Export summary to Excel
-  exportSummaryToExcel: async (year: number): Promise<string> => {
-    const response: AxiosResponse<any> = await api.get(`/monthly-costs/export/excel/summary/year/${year}`)
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/export/excel/month/{month}/year/{year} - Export month to Excel
-  exportMonthToExcel: async (month: number, year: number): Promise<string> => {
-    const response: AxiosResponse<any> = await api.get(`/monthly-costs/export/excel/month/${month}/year/${year}`)
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/category/{category} - Get costs by category
-  getByCategory: async (category: number): Promise<any[]> => {
-    const response: AxiosResponse<any> = await api.get(`/monthly-costs/category/${category}`)
-    return response.data.data || response.data
-  },
-
-  // GET /monthly-costs/breakdown/month/{month}/year/{year} - Get breakdown by month
-  getBreakdownByMonth: async (month: number, year: number): Promise<any[]> => {
-    const response: AxiosResponse<any> = await api.get(`/monthly-costs/breakdown/month/${month}/year/${year}`)
-    return response.data.data || response.data
-  }
-}
+// (Removed duplicate monthlyCostsApi definition above; using the typed version below)
 
 // Users Management API
 // User System API - Updated to match new API spec
@@ -1915,50 +1709,73 @@ export const quantityRangeApi = {
 
 // Financial Reports API
 export const financialReportsApi = {
-  // GET /financial-reports/{period} - Get financial report for specific period
-  getReport: async (period: string): Promise<any> => {
+  // GET /financial-report/current-month - Get current month financial report
+  getCurrentMonth: async (): Promise<any> => {
     try {
-      console.log(`Calling financial-reports API with period: ${period}`)
-      const response: AxiosResponse<MethodResult<any>> = await api.get(`/financial-reports/${period}`)
-      console.log('Financial reports API response:', response)
+      console.log('Calling current month financial report API')
+      const response: AxiosResponse<MethodResult<any>> = await api.get('/financial-report/current-month')
+      console.log('Current month financial report API response:', response)
       return response.data.data
     } catch (error: any) {
-      console.error(`Error calling financial-reports API with period ${period}:`, error)
-      console.error('Error response:', error.response?.data)
-      console.error('Error status:', error.response?.status)
+      console.error('Error calling current month financial report API:', error)
       throw error
     }
   },
 
-  // GET /financial-reports/revenue-by-service/{period} - Get revenue breakdown by service
-  getRevenueByService: async (period: string): Promise<any[]> => {
+  // GET /financial-report/current-year - Get current year financial report
+  getCurrentYear: async (): Promise<any> => {
     try {
-      console.log(`Calling revenue-by-service API with period: ${period}`)
-      const response: AxiosResponse<MethodResult<any[]>> = await api.get(`/financial-reports/revenue-by-service/${period}`)
-      console.log('Revenue by service API response:', response)
+      console.log('Calling current year financial report API')
+      const response: AxiosResponse<MethodResult<any>> = await api.get('/financial-report/current-year')
+      console.log('Current year financial report API response:', response)
       return response.data.data
     } catch (error: any) {
-      console.error(`Error calling revenue-by-service API with period ${period}:`, error)
+      console.error('Error calling current year financial report API:', error)
       throw error
     }
   },
 
-  // GET /financial-reports/expense-breakdown/{period} - Get expense breakdown
-  getExpenseBreakdown: async (period: string): Promise<any[]> => {
-    const response: AxiosResponse<MethodResult<any[]>> = await api.get(`/financial-reports/expense-breakdown/${period}`)
-    return response.data.data
+  // GET /financial-report/monthly - Get monthly financial report
+  getMonthly: async (month: number, year: number): Promise<any> => {
+    try {
+      console.log(`Calling monthly financial report API for ${month}/${year}`)
+      const response: AxiosResponse<MethodResult<any>> = await api.get('/financial-report/monthly', {
+        params: { month, year }
+      })
+      console.log('Monthly financial report API response:', response)
+      return response.data.data
+    } catch (error: any) {
+      console.error(`Error calling monthly financial report API for ${month}/${year}:`, error)
+      throw error
+    }
   },
 
-  // GET /financial-reports/summary/{period} - Get financial summary
-  getSummary: async (period: string): Promise<any> => {
-    const response: AxiosResponse<MethodResult<any>> = await api.get(`/financial-reports/summary/${period}`)
-    return response.data.data
+  // GET /financial-report/yearly/{year} - Get yearly financial report
+  getYearly: async (year: number): Promise<any> => {
+    try {
+      console.log(`Calling yearly financial report API for ${year}`)
+      const response: AxiosResponse<MethodResult<any>> = await api.get(`/financial-report/yearly/${year}`)
+      console.log('Yearly financial report API response:', response)
+      return response.data.data
+    } catch (error: any) {
+      console.error(`Error calling yearly financial report API for ${year}:`, error)
+      throw error
+    }
   },
 
-  // GET /financial-reports/trend/{period} - Get financial trend data
-  getTrend: async (period: string): Promise<any[]> => {
-    const response: AxiosResponse<MethodResult<any[]>> = await api.get(`/financial-reports/trend/${period}`)
-    return response.data.data
+  // GET /financial-report/range - Get financial report for date range
+  getRange: async (fromMonth: number, fromYear: number, toMonth: number, toYear: number): Promise<any> => {
+    try {
+      console.log(`Calling range financial report API from ${fromMonth}/${fromYear} to ${toMonth}/${toYear}`)
+      const response: AxiosResponse<MethodResult<any>> = await api.get('/financial-report/range', {
+        params: { fromMonth, fromYear, toMonth, toYear }
+      })
+      console.log('Range financial report API response:', response)
+      return response.data.data
+    } catch (error: any) {
+      console.error(`Error calling range financial report API from ${fromMonth}/${fromYear} to ${toMonth}/${toYear}:`, error)
+      throw error
+    }
   }
 }
 
@@ -2060,6 +1877,216 @@ export class WebSocketService {
   getUnreadCount(): void {
     if (!this.stompClient || !this.isConnected) return
     this.stompClient.send('/app/notifications/unread-count')
+  }
+}
+
+// Supplier Management API
+export const supplierApi = {
+  getAll: async (): Promise<SupplierDTO[]> => {
+    const response: AxiosResponse<MethodResult<SupplierDTO[]>> = await api.get('/supplier')
+    return response.data.data
+  },
+
+  getById: async (id: number): Promise<SupplierDTO> => {
+    const response: AxiosResponse<MethodResult<SupplierDTO>> = await api.get(`/supplier/${id}`)
+    return response.data.data
+  },
+
+  create: async (supplier: Omit<SupplierDTO, 'id'>): Promise<MethodResult<SupplierDTO>> => {
+    const response: AxiosResponse<MethodResult<SupplierDTO>> = await api.post('/supplier', supplier)
+    return response.data
+  },
+
+  update: async (id: number, supplier: Omit<SupplierDTO, 'id'>): Promise<MethodResult<SupplierDTO>> => {
+    const response: AxiosResponse<MethodResult<SupplierDTO>> = await api.put(`/supplier/${id}`, supplier)
+    return response.data
+  },
+
+  delete: async (id: number): Promise<MethodResult<void>> => {
+    const response: AxiosResponse<MethodResult<void>> = await api.delete(`/supplier/${id}`)
+    return response.data
+  },
+
+  search: async (searchParams: SupplierSearchDTO): Promise<SupplierResponse> => {
+    const response: AxiosResponse<SupplierResponse> = await api.post('/supplier/search', searchParams)
+    return response.data
+  }
+}
+
+// Monthly Costs Management API
+export const monthlyCostsApi = {
+  // Basic CRUD operations
+  getById: async (id: number): Promise<MonthlyCost> => {
+    const response: AxiosResponse<MethodResult<MonthlyCost>> = await api.get(`/monthly-costs/${id}`)
+    return response.data.data
+  },
+
+  create: async (cost: MonthlyCostRequest): Promise<MonthlyCost> => {
+    const response: AxiosResponse<MethodResult<MonthlyCost>> = await api.post('/monthly-costs', cost)
+    return response.data.data
+  },
+
+  update: async (id: number, cost: MonthlyCostRequest): Promise<MonthlyCost> => {
+    const response: AxiosResponse<MethodResult<MonthlyCost>> = await api.put(`/monthly-costs/${id}`, cost)
+    return response.data.data
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await api.delete(`/monthly-costs/${id}`)
+  },
+
+  // Search and filtering
+  search: async (searchParams: MonthlyCostSearchRequest): Promise<MonthlyCostSearchResponse> => {
+    const response: AxiosResponse<MethodResult<MonthlyCostSearchResponse>> = await api.post('/monthly-costs/search', searchParams)
+    return response.data.data
+  },
+
+  getByMonthYear: async (month: number, year: number): Promise<MonthlyCost[]> => {
+    const response: AxiosResponse<MethodResult<MonthlyCost[]>> = await api.get(`/monthly-costs/month/${month}/year/${year}`)
+    return response.data.data
+  },
+
+  getByCategory: async (category: number): Promise<MonthlyCost[]> => {
+    const response: AxiosResponse<MethodResult<MonthlyCost[]>> = await api.get(`/monthly-costs/category/${category}`)
+    return response.data.data
+  },
+
+  getUnpaid: async (): Promise<MonthlyCost[]> => {
+    const response: AxiosResponse<MethodResult<MonthlyCost[]>> = await api.get('/monthly-costs/unpaid')
+    return response.data.data
+  },
+
+  getOverdue: async (): Promise<MonthlyCost[]> => {
+    const response: AxiosResponse<MethodResult<MonthlyCost[]>> = await api.get('/monthly-costs/overdue')
+    return response.data.data
+  },
+
+  getRecurring: async (): Promise<MonthlyCost[]> => {
+    const response: AxiosResponse<MethodResult<MonthlyCost[]>> = await api.get('/monthly-costs/recurring')
+    return response.data.data
+  },
+
+  getUnlinked: async (): Promise<MonthlyCost[]> => {
+    const response: AxiosResponse<MethodResult<MonthlyCost[]>> = await api.get('/monthly-costs/unlinked')
+    return response.data.data
+  },
+
+  getByRevenue: async (revenueId: number): Promise<MonthlyCost[]> => {
+    const response: AxiosResponse<MethodResult<MonthlyCost[]>> = await api.get(`/monthly-costs/revenue/${revenueId}`)
+    return response.data.data
+  },
+
+  // Payment status operations
+  markPaid: async (id: number): Promise<MonthlyCost> => {
+    const response: AxiosResponse<MethodResult<MonthlyCost>> = await api.patch(`/monthly-costs/${id}/mark-paid`)
+    return response.data.data
+  },
+
+  markUnpaid: async (id: number): Promise<MonthlyCost> => {
+    const response: AxiosResponse<MethodResult<MonthlyCost>> = await api.patch(`/monthly-costs/${id}/mark-unpaid`)
+    return response.data.data
+  },
+
+  markMultiplePaid: async (ids: number[]): Promise<MonthlyCost[]> => {
+    const response: AxiosResponse<MethodResult<MonthlyCost[]>> = await api.patch('/monthly-costs/mark-multiple-paid', ids)
+    return response.data.data
+  },
+
+  // Recurring costs
+  generateRecurring: async (month: number, year: number): Promise<void> => {
+    await api.post(`/monthly-costs/recurring/generate/month/${month}/year/${year}`)
+  },
+
+  getRecurringPreview: async (month: number, year: number): Promise<MonthlyCost[]> => {
+    const response: AxiosResponse<MethodResult<MonthlyCost[]>> = await api.get(`/monthly-costs/recurring/preview/month/${month}/year/${year}`)
+    return response.data.data
+  },
+
+  // Bulk operations
+  createBulk: async (costs: MonthlyCostRequest[]): Promise<MonthlyCost[]> => {
+    const response: AxiosResponse<MethodResult<MonthlyCost[]>> = await api.post('/monthly-costs/bulk', costs)
+    return response.data.data
+  },
+
+  deleteBulk: async (ids: number[]): Promise<void> => {
+    await api.delete('/monthly-costs/bulk', { data: ids })
+  },
+
+  // Revenue linking
+  linkToRevenue: async (revenueId: number, costIds: number[]): Promise<void> => {
+    await api.patch(`/monthly-costs/link-to-revenue/${revenueId}`, costIds)
+  },
+
+  unlinkFromRevenue: async (costIds: number[]): Promise<void> => {
+    await api.patch('/monthly-costs/unlink-from-revenue', costIds)
+  },
+
+  // Activation
+  activate: async (id: number): Promise<void> => {
+    await api.patch(`/monthly-costs/${id}/activate`)
+  },
+
+  // Validation
+  validateInvoiceNumber: async (invoiceNumber: string): Promise<boolean> => {
+    const response: AxiosResponse<MethodResult<boolean>> = await api.get('/monthly-costs/validate/invoice-number', {
+      params: { invoiceNumber }
+    })
+    return response.data.data
+  },
+
+  validateCostName: async (month: number, year: number, category: number, costName: string): Promise<boolean> => {
+    const response: AxiosResponse<MethodResult<boolean>> = await api.get('/monthly-costs/validate/cost-name', {
+      params: { month, year, category, costName }
+    })
+    return response.data.data
+  },
+
+  // Summary and analytics
+  getSummaryByMonth: async (month: number, year: number): Promise<MonthlyCostSummary> => {
+    const response: AxiosResponse<MethodResult<MonthlyCostSummary>> = await api.get(`/monthly-costs/summary/month/${month}/year/${year}`)
+    return response.data.data
+  },
+
+  getSummaryByYear: async (year: number): Promise<MonthlyCostSummary> => {
+    const response: AxiosResponse<MethodResult<MonthlyCostSummary>> = await api.get(`/monthly-costs/summary/year/${year}`)
+    return response.data.data
+  },
+
+  getTrendByYear: async (year: number): Promise<MonthlyCostTrend[]> => {
+    const response: AxiosResponse<MethodResult<MonthlyCostTrend[]>> = await api.get(`/monthly-costs/trend/year/${year}`)
+    return response.data.data
+  },
+
+  getBreakdownByMonth: async (month: number, year: number): Promise<MonthlyCostBreakdown[]> => {
+    const response: AxiosResponse<MethodResult<MonthlyCostBreakdown[]>> = await api.get(`/monthly-costs/breakdown/month/${month}/year/${year}`)
+    return response.data.data
+  },
+
+  // Totals
+  getTotalByYear: async (year: number): Promise<number> => {
+    const response: AxiosResponse<MethodResult<number>> = await api.get(`/monthly-costs/total/year/${year}`)
+    return response.data.data
+  },
+
+  getTotalByMonth: async (month: number, year: number): Promise<number> => {
+    const response: AxiosResponse<MethodResult<number>> = await api.get(`/monthly-costs/total/month/${month}/year/${year}`)
+    return response.data.data
+  },
+
+  getTotalByCategory: async (month: number, year: number, category: number): Promise<number> => {
+    const response: AxiosResponse<MethodResult<number>> = await api.get(`/monthly-costs/total/month/${month}/year/${year}/category/${category}`)
+    return response.data.data
+  },
+
+  // Export
+  exportExcelByMonth: async (month: number, year: number): Promise<string> => {
+    const response: AxiosResponse<MethodResult<string>> = await api.get(`/monthly-costs/export/excel/month/${month}/year/${year}`)
+    return response.data.data
+  },
+
+  exportExcelSummaryByYear: async (year: number): Promise<string> => {
+    const response: AxiosResponse<MethodResult<string>> = await api.get(`/monthly-costs/export/excel/summary/year/${year}`)
+    return response.data.data
   }
 }
 

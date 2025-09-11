@@ -153,6 +153,7 @@ export interface InventoryLogsDTO {
   exportId: number // ID liên quan đến xuất
   items: InventoryLogItemDTO[]
   note: string // Ghi chú
+  isPay?: boolean // Đã thanh toán (chỉ áp dụng khi nhập kho)
 }
 
 // Create/Update Request types
@@ -217,6 +218,7 @@ export interface CreateInventoryLogRequest {
   exportId: number // ID liên quan đến xuất
   items: InventoryLogItemDTO[]
   note: string // Ghi chú
+  isPay?: boolean // Đã thanh toán (chỉ cho nhập kho)
 }
 
 // Utility types for compatibility with existing code
@@ -817,3 +819,270 @@ export interface WebSocketError {
   message: string
   timestamp: string
 } 
+
+// ===== Simple Master Data Types =====
+export interface Department {
+  id: number
+  name: string
+}
+
+export interface Supplier {
+  id: number
+  name: string
+}
+
+// ===== Financial Report Types =====
+export interface FinancialReportData {
+  month: number
+  year: number
+  monthYearDisplay: string
+  totalRevenue: number
+  totalExpense: number
+  netProfit: number
+  profitMargin: number
+  revenueDetails: RevenueDetail[]
+  expenseDetails: ExpenseDetail[]
+  totalPatients: number
+  totalTests: number
+  avgRevenuePerPatient: number
+  avgCostPerTest: number
+  period?: string
+}
+
+export interface RevenueDetail {
+  revenueType: string
+  description: string
+  amount: number
+  quantity: number
+  averageValue: number
+}
+
+export interface ExpenseDetail {
+  revenueType: string
+  description: string
+  amount: number
+  quantity: number
+  averageValue: number
+}
+
+export interface MonthlyFinancialReport extends FinancialReportData {
+  month: number
+  year: number
+  dailyRevenue: number[]
+  dailyExpenses: number[]
+  revenueByService: RevenueByService[]
+  expenseBreakdown: ExpenseBreakdown[]
+}
+
+export interface YearlyFinancialReport extends FinancialReportData {
+  year: number
+  monthlyData: MonthlyFinancialReport[]
+  quarterlyData: {
+    Q1: FinancialReportData
+    Q2: FinancialReportData
+    Q3: FinancialReportData
+    Q4: FinancialReportData
+  }
+}
+
+export interface RangeFinancialReport extends FinancialReportData {
+  fromMonth: number
+  fromYear: number
+  toMonth: number
+  toYear: number
+  monthlyData: MonthlyFinancialReport[]
+  trendData: {
+    period: string
+    revenue: number
+    expenses: number
+    profit: number
+  }[]
+}
+
+export interface RevenueByService {
+  serviceId: number
+  serviceCode: string
+  serviceName: string
+  revenue: number
+  testCount: number
+  percentage: number
+  averagePrice: number
+}
+
+export interface ExpenseBreakdown {
+  categoryId: number
+  category: string
+  amount: number
+  percentage: number
+  description: string
+  subCategories?: {
+    name: string
+    amount: number
+    percentage: number
+  }[]
+}
+
+// Supplier Management Types
+export interface SupplierDTO {
+  id: number
+  name: string
+  description?: string
+  status: number // 0: inactive, 1: active
+  stringStatus?: string // "Hoạt động" or "Không hoạt động"
+  createdAt?: string
+  createdBy?: string
+  updatedAt?: string
+  updatedBy?: string
+}
+
+export interface SupplierSearchDTO {
+  keyword?: string
+  status?: number
+  pageIndex: number
+  pageSize: number
+  orderCol?: string
+  isDesc?: boolean
+  name?: string
+}
+
+export interface SupplierResponse {
+  status: boolean
+  message: string | null
+  data: {
+    content: SupplierDTO[]
+    pageable: {
+      pageNumber: number
+      pageSize: number
+      sort: {
+        empty: boolean
+        unsorted: boolean
+        sorted: boolean
+      }
+      offset: number
+      paged: boolean
+      unpaged: boolean
+    }
+    totalElements: number
+    totalPages: number
+    last: boolean
+    size: number
+    number: number
+    sort: {
+      empty: boolean
+      unsorted: boolean
+      sorted: boolean
+    }
+    numberOfElements: number
+    first: boolean
+    empty: boolean
+  }
+  totalRecord: number | null
+}
+
+// MonthlyCost interface is defined above (line 621) - removing duplicate
+
+export interface MonthlyCostRequest {
+  month: number
+  year: number
+  category: number
+  costName: string
+  description: string
+  amount: number
+  isRecurring: boolean
+  vendorName: string
+  invoiceNumber: string
+  paymentDate: string
+  dueDate: string
+  notes: string
+  validMonthYear: boolean
+  dueDateValid: boolean
+}
+
+export interface MonthlyCostSearchRequest {
+  month?: number
+  year?: number
+  category?: number
+  costName?: string
+  vendorName?: string
+  isRecurring?: boolean
+  isPaid?: boolean
+  page?: number
+  size?: number
+  sortBy?: string
+  sortDirection?: string
+}
+
+export interface MonthlyCostSearchResponse {
+  totalElements: number
+  totalPages: number
+  size: number
+  content: MonthlyCost[]
+  number: number
+  sort: {
+    empty: boolean
+    sorted: boolean
+    unsorted: boolean
+  }
+  numberOfElements: number
+  pageable: {
+    offset: number
+    sort: {
+      empty: boolean
+      sorted: boolean
+      unsorted: boolean
+    }
+    paged: boolean
+    pageNumber: number
+    pageSize: number
+    unpaged: boolean
+  }
+  first: boolean
+  last: boolean
+  empty: boolean
+}
+
+export interface MonthlyCostSummary {
+  month: number
+  year: number
+  monthYearDisplay: string
+  totalCost: number
+  formattedTotalCost: string
+  costByCategory: Record<string, number>
+  formattedCostByCategory: Record<string, string>
+  totalCostItems: number
+  paidItems: number
+  unpaidItems: number
+  overdueItems: number
+  totalPaidAmount: number
+  totalUnpaidAmount: number
+  topCategories: {
+    categoryCode: number
+    categoryName: string
+    amount: number
+    formattedAmount: string
+    percentage: number
+    itemCount: number
+  }[]
+  monthlyTrend: {
+    month: number
+    monthName: string
+    amount: number
+    formattedAmount: string
+  }[]
+}
+
+export interface MonthlyCostTrend {
+  month: number
+  monthName: string
+  amount: number
+  formattedAmount: string
+}
+
+export interface MonthlyCostBreakdown {
+  categoryCode: number
+  categoryName: string
+  amount: number
+  formattedAmount: string
+  percentage: number
+  itemCount: number
+}

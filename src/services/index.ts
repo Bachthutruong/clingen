@@ -20,6 +20,8 @@ export {
   materialsApi,
   inventoryApi,
   inventoryLogsApi,
+  departmentApi,
+  supplierApi,
   quantityRangeApi,
   default as api
 } from './api'

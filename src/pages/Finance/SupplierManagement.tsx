@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { toast } from 'react-hot-toast'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,55 +8,24 @@ import {
   Search, 
   Plus,
   Edit,
-//   Trash2,
+  Trash2,
   Eye,
-  Phone,
-  Mail,
-  MapPin,
-//   CreditCard,
-//   Calendar,
   DollarSign,
   ShoppingCart,
-//   FileText,
-  User,
-  Star,
   CheckCircle,
   AlertTriangle,
   Clock,
-//   RefreshCw,
-//   Filter
+  RefreshCw,
+  Loader2,
   ChevronLeft,
   ChevronRight,
   X
 } from 'lucide-react'
-import { formatDate, formatDateTime, formatCurrency } from '@/lib/utils'
+import { formatDate, formatCurrency } from '@/lib/utils'
+import { supplierApi } from '@/services'
+import type { SupplierDTO, SupplierSearchDTO } from '@/types/api'
 
-interface Supplier {
-  id: string
-  code: string
-  name: string
-  category: 'medical_supplies' | 'equipment' | 'chemicals' | 'services' | 'other'
-  contactPerson: string
-  phone: string
-  email: string
-  address: string
-  taxId: string
-  website?: string
-  paymentTerms: string
-  creditLimit: number
-  currentDebt: number
-  rating: number
-  status: 'active' | 'inactive' | 'suspended'
-  contractStart?: string
-  contractEnd?: string
-  lastOrderDate?: string
-  totalOrders: number
-  totalValue: number
-  notes?: string
-  createdAt: string
-  updatedAt: string
-}
-
+// Using SupplierDTO from API types
 interface PurchaseOrder {
   id: string
   orderNumber: string
@@ -80,140 +49,29 @@ interface OrderItem {
 
 const SupplierManagement: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<string>('')
-  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
+  const [selectedSupplier, setSelectedSupplier] = useState<SupplierDTO | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isAddingNew, setIsAddingNew] = useState(false)
   const [showOrders, setShowOrders] = useState(false)
   const [showDetailDialog, setShowDetailDialog] = useState(false)
   const [currentPage, setCurrentPage] = useState(0)
-  const [pageSize] = useState(10)
-  console.log(isAddingNew)
+  const [pageSize, setPageSize] = useState(10)
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  
+  // API state
+  const [suppliers, setSuppliers] = useState<SupplierDTO[]>([])
+  const [editingSupplier, setEditingSupplier] = useState<Partial<SupplierDTO>>({})
 
-  // Mock data cho nhà cung cấp
-  const [suppliers] = useState<Supplier[]>([
-    {
-      id: 'SUP001',
-      code: 'NCC001',
-      name: 'Công ty Y khoa ABC',
-      category: 'medical_supplies',
-      contactPerson: 'Nguyễn Văn An',
-      phone: '0123456789',
-      email: 'contact@ykhoa-abc.com',
-      address: '123 Đường Lê Lợi, Q1, TP.HCM',
-      taxId: '0123456789',
-      website: 'https://ykhoa-abc.com',
-      paymentTerms: '30 ngày',
-      creditLimit: 500000000,
-      currentDebt: 125000000,
-      rating: 4.8,
-      status: 'active',
-      contractStart: '2024-01-01',
-      contractEnd: '2024-12-31',
-      lastOrderDate: '2024-01-20T10:30:00',
-      totalOrders: 24,
-      totalValue: 2450000000,
-      notes: 'Nhà cung cấp chính cho thuốc thử và vật tư y tế',
-      createdAt: '2023-01-15T09:00:00',
-      updatedAt: '2024-01-20T10:30:00'
-    },
-    {
-      id: 'SUP002',
-      code: 'NCC002',
-      name: 'Thiết bị Y tế XYZ',
-      category: 'equipment',
-      contactPerson: 'Trần Thị Bình',
-      phone: '0987654321',
-      email: 'sales@tbyt-xyz.com',
-      address: '456 Đường Nguyễn Huệ, Q3, TP.HCM',
-      taxId: '0987654321',
-      paymentTerms: '45 ngày',
-      creditLimit: 800000000,
-      currentDebt: 0,
-      rating: 4.5,
-      status: 'active',
-      contractStart: '2023-06-01',
-      contractEnd: '2025-06-01',
-      lastOrderDate: '2024-01-15T14:20:00',
-      totalOrders: 12,
-      totalValue: 1850000000,
-      notes: 'Chuyên cung cấp thiết bị xét nghiệm',
-      createdAt: '2023-05-20T11:30:00',
-      updatedAt: '2024-01-15T14:20:00'
-    },
-    {
-      id: 'SUP003',
-      code: 'NCC003',
-      name: 'Hóa chất Sài Gòn',
-      category: 'chemicals',
-      contactPerson: 'Lê Văn Cường',
-      phone: '0912345678',
-      email: 'info@hoachat-sg.com',
-      address: '789 Đường Điện Biên Phủ, Q10, TP.HCM',
-      taxId: '0912345678',
-      paymentTerms: '15 ngày',
-      creditLimit: 200000000,
-      currentDebt: 45000000,
-      rating: 4.2,
-      status: 'active',
-      lastOrderDate: '2024-01-18T09:45:00',
-      totalOrders: 18,
-      totalValue: 890000000,
-      createdAt: '2023-03-10T08:15:00',
-      updatedAt: '2024-01-18T09:45:00'
-    },
-    {
-      id: 'SUP004',
-      code: 'NCC004',
-      name: 'Dịch vụ Bảo trì DEF',
-      category: 'services',
-      contactPerson: 'Phạm Thị Dung',
-      phone: '0976543210',
-      email: 'support@baotri-def.com',
-      address: '321 Đường Cách Mạng Tháng 8, Q3, TP.HCM',
-      taxId: '0976543210',
-      paymentTerms: '7 ngày',
-      creditLimit: 100000000,
-      currentDebt: 15000000,
-      rating: 4.0,
-      status: 'active',
-      lastOrderDate: '2024-01-10T16:00:00',
-      totalOrders: 36,
-      totalValue: 540000000,
-      notes: 'Bảo trì thiết bị định kỳ',
-      createdAt: '2023-02-05T10:00:00',
-      updatedAt: '2024-01-10T16:00:00'
-    },
-    {
-      id: 'SUP005',
-      code: 'NCC005',
-      name: 'Văn phòng phẩm GHI',
-      category: 'other',
-      contactPerson: 'Hoàng Văn Em',
-      phone: '0934567890',
-      email: 'order@vpp-ghi.com',
-      address: '654 Đường Võ Văn Tần, Q1, TP.HCM',
-      taxId: '0934567890',
-      paymentTerms: '30 ngày',
-      creditLimit: 50000000,
-      currentDebt: 8000000,
-      rating: 3.8,
-      status: 'inactive',
-      lastOrderDate: '2023-12-20T11:30:00',
-      totalOrders: 8,
-      totalValue: 120000000,
-      createdAt: '2023-01-01T00:00:00',
-      updatedAt: '2023-12-20T11:30:00'
-    }
-  ])
-
-  // Mock data cho đơn hàng
+  // Mock data cho đơn hàng (keeping for now as there's no order API)
   const [purchaseOrders] = useState<PurchaseOrder[]>([
     {
       id: 'PO001',
       orderNumber: 'DH-2024-0001',
-      supplierId: 'SUP001',
+      supplierId: '1',
       orderDate: '2024-01-20T10:30:00',
       expectedDate: '2024-01-25T00:00:00',
       status: 'delivered',
@@ -229,142 +87,214 @@ const SupplierManagement: React.FC = () => {
         }
       ],
       notes: 'Giao hàng đúng hạn'
-    },
-    {
-      id: 'PO002',
-      orderNumber: 'DH-2024-0002',
-      supplierId: 'SUP002',
-      orderDate: '2024-01-15T14:20:00',
-      expectedDate: '2024-01-30T00:00:00',
-      status: 'confirmed',
-      totalAmount: 450000000,
-      paidAmount: 0,
-      items: [
-        {
-          id: 'OI002',
-          productName: 'Máy xét nghiệm tự động',
-          quantity: 1,
-          unitPrice: 450000000,
-          total: 450000000
-        }
-      ]
     }
   ])
 
-  const filteredSuppliers = suppliers.filter(supplier => {
-    const matchesSearch = 
-      supplier.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      supplier.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      supplier.contactPerson.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      supplier.phone.includes(searchQuery)
-
-    const matchesCategory = !categoryFilter || supplier.category === categoryFilter
-    const matchesStatus = !statusFilter || supplier.status === statusFilter
-
-    return matchesSearch && matchesCategory && matchesStatus
-  })
-
-  const getCategoryLabel = (category: string) => {
-    switch (category) {
-      case 'medical_supplies': return 'Vật tư y tế'
-      case 'equipment': return 'Thiết bị'
-      case 'chemicals': return 'Hóa chất'
-      case 'services': return 'Dịch vụ'
-      case 'other': return 'Khác'
-      default: return category
+  // API Functions
+  const fetchSuppliers = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      
+      const searchParams: SupplierSearchDTO = {
+        keyword: searchQuery || undefined,
+        status: statusFilter ? parseInt(statusFilter) : undefined,
+        pageIndex: currentPage,
+        pageSize: pageSize,
+        isDesc: true
+      }
+      
+      console.log('Calling supplierApi.search with params:', searchParams)
+      const response = await supplierApi.search(searchParams)
+      console.log('API Response:', response)
+      
+      // Handle nested data structure: response.data.data
+      if (response.status && response.data && response.data.content && Array.isArray(response.data.content)) {
+        setSuppliers(response.data.content)
+        setTotalElements(response.data.totalElements || 0)
+        setTotalPages(response.data.totalPages || 0)
+        console.log('✅ Loaded', response.data.content.length, 'suppliers')
+      } else {
+        setSuppliers([])
+        setTotalElements(0)
+        setTotalPages(0)
+        console.log('📭 No suppliers found')
+      }
+    } catch (err) {
+      console.error('Error fetching suppliers:', err)
+      setError('Không thể tải danh sách nhà cung cấp. Vui lòng thử lại.')
+      setSuppliers([])
+    } finally {
+      setLoading(false)
     }
   }
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'medical_supplies': return 'bg-blue-100 text-blue-800'
-      case 'equipment': return 'bg-purple-100 text-purple-800'
-      case 'chemicals': return 'bg-orange-100 text-orange-800'
-      case 'services': return 'bg-green-100 text-green-800'
-      case 'other': return 'bg-gray-100 text-gray-800'
+  const handleCreateSupplier = async () => {
+    try {
+      if (!editingSupplier.name) {
+        toast.error('Vui lòng nhập tên nhà cung cấp')
+        return
+      }
+
+      const supplierData = {
+        name: editingSupplier.name,
+        description: editingSupplier.description || '',
+        status: editingSupplier.status !== undefined ? editingSupplier.status : 1
+      }
+
+      console.log('Creating supplier with data:', supplierData)
+      console.log('editingSupplier.status:', editingSupplier.status, 'Type:', typeof editingSupplier.status)
+      
+      const response = await supplierApi.create(supplierData)
+      if (response.status) {
+        toast.success('Tạo nhà cung cấp thành công!')
+        setIsAddingNew(false)
+        setEditingSupplier({})
+        await fetchSuppliers()
+      } else {
+        toast.error(response.message || 'Có lỗi xảy ra khi tạo nhà cung cấp')
+      }
+    } catch (error) {
+      console.error('Error creating supplier:', error)
+      toast.error('Có lỗi xảy ra khi tạo nhà cung cấp')
+    }
+  }
+
+  const handleUpdateSupplier = async () => {
+    try {
+      if (!selectedSupplier || !editingSupplier.name) {
+        toast.error('Vui lòng nhập tên nhà cung cấp')
+        return
+      }
+
+      const supplierData = {
+        name: editingSupplier.name,
+        description: editingSupplier.description || '',
+        status: editingSupplier.status !== undefined ? editingSupplier.status : 1
+      }
+
+      console.log('Updating supplier with data:', supplierData)
+      console.log('editingSupplier.status:', editingSupplier.status, 'Type:', typeof editingSupplier.status)
+      
+      const response = await supplierApi.update(selectedSupplier.id, supplierData)
+      if (response.status) {
+        toast.success('Cập nhật nhà cung cấp thành công!')
+        setIsEditing(false)
+        setEditingSupplier({})
+        await fetchSuppliers()
+      } else {
+        toast.error(response.message || 'Có lỗi xảy ra khi cập nhật nhà cung cấp')
+      }
+    } catch (error) {
+      console.error('Error updating supplier:', error)
+      toast.error('Có lỗi xảy ra khi cập nhật nhà cung cấp')
+    }
+  }
+
+  const handleDeleteSupplier = async (supplier: SupplierDTO) => {
+    if (confirm(`Bạn có chắc chắn muốn xóa nhà cung cấp ${supplier.name}?`)) {
+      try {
+        const response = await supplierApi.delete(supplier.id)
+        if (response.status) {
+          toast.success('Xóa nhà cung cấp thành công!')
+          await fetchSuppliers()
+        } else {
+          toast.error(response.message || 'Có lỗi xảy ra khi xóa nhà cung cấp')
+        }
+      } catch (error) {
+        console.error('Error deleting supplier:', error)
+        toast.error('Có lỗi xảy ra khi xóa nhà cung cấp')
+      }
+    }
+  }
+
+  // Effects
+  useEffect(() => {
+    fetchSuppliers()
+  }, [currentPage, pageSize, searchQuery, statusFilter])
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(0)
+  }, [searchQuery, statusFilter, pageSize])
+
+  // Client-side filtering removed - using server-side search and filtering
+
+  const getStatusColor = (status: number) => {
+    switch (status) {
+      case 1: return 'bg-green-100 text-green-800'
+      case 0: return 'bg-gray-100 text-gray-800'
       default: return 'bg-gray-100 text-gray-800'
     }
   }
 
-  const getStatusColor = (status: string) => {
+  const getStatusLabel = (status: number) => {
     switch (status) {
-      case 'active': return 'bg-green-100 text-green-800'
-      case 'inactive': return 'bg-gray-100 text-gray-800'
-      case 'suspended': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 1: return 'Hoạt động'
+      case 0: return 'Không hoạt động'
+      default: return 'Không xác định'
     }
   }
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'active': return 'Hoạt động'
-      case 'inactive': return 'Không hoạt động'
-      case 'suspended': return 'Tạm ngưng'
-      default: return status
-    }
-  }
 
-  const getRatingColor = (rating: number) => {
-    if (rating >= 4.5) return 'text-green-600'
-    if (rating >= 4.0) return 'text-yellow-600'
-    if (rating >= 3.5) return 'text-orange-600'
-    return 'text-red-600'
-  }
-
-  const handleViewSupplier = (supplier: Supplier) => {
+  const handleViewSupplier = (supplier: SupplierDTO) => {
     setSelectedSupplier(supplier)
+    setEditingSupplier({
+      ...supplier,
+      status: supplier.status || 1 // Ensure status is set
+    })
     setIsEditing(false)
     setShowOrders(false)
     setShowDetailDialog(true)
   }
 
   const handleEditSupplier = () => {
+    console.log('Editing supplier:', selectedSupplier)
+    console.log('Current editingSupplier:', editingSupplier)
     setIsEditing(true)
   }
 
   const handleSaveSupplier = () => {
-    toast.success('Lưu thông tin nhà cung cấp thành công!')
-    setIsEditing(false)
+    if (isAddingNew) {
+      handleCreateSupplier()
+    } else {
+      handleUpdateSupplier()
+    }
   }
 
-//   const handleDeleteSupplier = (supplier: Supplier) => {
-//     if (confirm(`Bạn có chắc chắn muốn xóa nhà cung cấp ${supplier.name}?`)) {
-//       alert(`Xóa nhà cung cấp ${supplier.name} thành công!`)
-//     }
-//   }
-
-  const handleViewOrders = (supplier: Supplier) => {
+  const handleViewOrders = (supplier: SupplierDTO) => {
     setSelectedSupplier(supplier)
     setShowOrders(true)
     setShowDetailDialog(true)
   }
 
-  const handleCreateOrder = (supplier: Supplier) => {
+  const handleCreateOrder = (supplier: SupplierDTO) => {
     toast(`Tạo đơn hàng mới cho ${supplier.name}`)
   }
 
+  const handleAddNew = () => {
+    setEditingSupplier({
+      name: '',
+      description: '',
+      status: 1 // Default to active
+    })
+    setIsAddingNew(true)
+    setShowDetailDialog(true)
+  }
+
   const stats = {
-    total: suppliers.length,
-    active: suppliers.filter(s => s.status === 'active').length,
-    inactive: suppliers.filter(s => s.status === 'inactive').length,
-    suspended: suppliers.filter(s => s.status === 'suspended').length,
-    totalValue: suppliers.reduce((sum, s) => sum + s.totalValue, 0),
-    totalDebt: suppliers.reduce((sum, s) => sum + s.currentDebt, 0)
+    total: totalElements,
+    active: Array.isArray(suppliers) ? suppliers?.filter(s => s.status === 1).length : 0,
+    inactive: Array.isArray(suppliers) ? suppliers?.filter(s => s.status === 0).length : 0,
+    suspended: 0, // Not available in API
+    totalValue: 0, // Not available in API
+    totalDebt: 0 // Not available in API
   }
 
-  const getSupplierOrders = (supplierId: string) => {
-    return purchaseOrders.filter(order => order.supplierId === supplierId)
+  const getSupplierOrders = (supplierId: number) => {
+    return purchaseOrders.filter(order => order.supplierId === supplierId.toString())
   }
 
-  const renderStars = (rating: number) => {
-    return Array.from({ length: 5 }, (_, index) => (
-      <Star
-        key={index}
-        size={16}
-        className={index < Math.floor(rating) ? 'text-yellow-400 fill-current' : 'text-gray-300'}
-      />
-    ))
-  }
 
   return (
     <div className="space-y-6">
@@ -381,7 +311,7 @@ const SupplierManagement: React.FC = () => {
             </div>
           </div>
           <Button 
-            onClick={() => setIsAddingNew(true)}
+            onClick={handleAddNew}
             className="bg-white text-slate-600 hover:bg-gray-100"
           >
             <Plus size={16} className="mr-2" />
@@ -456,53 +386,83 @@ const SupplierManagement: React.FC = () => {
       {/* Search and Filter */}
       <Card className="shadow-lg border-0">
         <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="md:col-span-2">
-              <div className="relative">
+          <div className="flex flex-col lg:flex-row gap-4 items-center">
+            <div className="relative flex-1">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Tìm theo tên, mã, người liên hệ, SĐT..."
+                placeholder="Tìm theo tên nhà cung cấp..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
                 />
-              </div>
             </div>
             
+            <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
             <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md"
-            >
-              <option value="">Tất cả danh mục</option>
-              <option value="medical_supplies">Vật tư y tế</option>
-              <option value="equipment">Thiết bị</option>
-              <option value="chemicals">Hóa chất</option>
-              <option value="services">Dịch vụ</option>
-              <option value="other">Khác</option>
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md w-full sm:w-auto"
+              >
+                <option value="">Tất cả trạng thái</option>
+                <option value="1">Hoạt động</option>
+                <option value="0">Không hoạt động</option>
             </select>
 
             <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md"
-            >
-              <option value="">Tất cả trạng thái</option>
-              <option value="active">Hoạt động</option>
-              <option value="inactive">Không hoạt động</option>
-              <option value="suspended">Tạm ngưng</option>
+                value={pageSize}
+                onChange={(e) => setPageSize(parseInt(e.target.value))}
+                className="px-3 py-2 border border-gray-300 rounded-md w-full sm:w-auto"
+              >
+                <option value={10}>10 / trang</option>
+                <option value={20}>20 / trang</option>
+                <option value={50}>50 / trang</option>
+                <option value={100}>100 / trang</option>
             </select>
+
+              <Button onClick={fetchSuppliers} disabled={loading}>
+                {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
+      {/* Error Message */}
+      {error && (
+        <Card className="shadow-lg border-red-200 bg-red-50">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2 text-red-600">
+              <AlertTriangle size={20} />
+              <span>{error}</span>
+              <Button variant="outline" size="sm" onClick={fetchSuppliers}>
+                Thử lại
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Supplier List - Table */}
       <Card className="shadow-lg border-0">
         <CardHeader>
-          <CardTitle>Danh sách nhà cung cấp ({filteredSuppliers.length})</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            <span>Danh sách nhà cung cấp ({totalElements} NCC)</span>
+            <div className="flex items-center space-x-2">
+              {loading && <Loader2 size={16} className="animate-spin" />}
+              <Button size="sm" onClick={fetchSuppliers} disabled={loading}>
+                <RefreshCw size={14} className="mr-1" />
+                Làm mới
+              </Button>
+            </div>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          {filteredSuppliers.length === 0 ? (
+          {loading && (!Array.isArray(suppliers) || suppliers.length === 0) ? (
+            <div className="text-center py-8">
+              <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
+              <p className="mt-4 text-gray-500">Đang tải dữ liệu...</p>
+            </div>
+          ) : !Array.isArray(suppliers) || suppliers.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               Không tìm thấy nhà cung cấp phù hợp
             </div>
@@ -511,57 +471,37 @@ const SupplierManagement: React.FC = () => {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
                   <tr>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">ID</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-900">Tên NCC</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-900">Mã NCC</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-900">Danh mục</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-900">Liên hệ</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-900">Tổng GD</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-900">Công nợ</th>
-                    <th className="px-4 py-3 text-left font-medium text-gray-900">Đánh giá</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Mô tả</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-900">Trạng thái</th>
+                    <th className="px-4 py-3 text-left font-medium text-gray-900">Ngày tạo</th>
                     <th className="px-4 py-3 text-left font-medium text-gray-900">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredSuppliers.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(supplier => (
+                  {Array.isArray(suppliers) && suppliers.map(supplier => (
                     <tr key={supplier.id} className="hover:bg-gray-50">
                       <td className="px-4 py-4">
+                        <div className="font-medium text-gray-900">#{supplier.id}</div>
+                      </td>
+                      <td className="px-4 py-4">
                         <div className="font-medium text-gray-900">{supplier.name}</div>
-                        <div className="text-xs text-gray-500">{supplier.website || 'Không có website'}</div>
                       </td>
                       <td className="px-4 py-4">
-                        <div className="font-medium text-gray-900">{supplier.code}</div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getCategoryColor(supplier.category)}`}>
-                          {getCategoryLabel(supplier.category)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="font-medium text-gray-900">{supplier.contactPerson}</div>
-                        <div className="text-xs text-gray-500">{supplier.phone}</div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="font-medium text-green-600">{formatCurrency(supplier.totalValue)}</div>
-                        <div className="text-xs text-gray-500">{supplier.totalOrders} đơn hàng</div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className={`font-medium ${supplier.currentDebt > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {formatCurrency(supplier.currentDebt)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex items-center space-x-1">
-                          {renderStars(supplier.rating)}
-                          <span className={`text-xs font-medium ${getRatingColor(supplier.rating)}`}>
-                            {supplier.rating}
-                          </span>
+                        <div className="text-sm text-gray-600">
+                          {supplier.description || 'Không có mô tả'}
                         </div>
                       </td>
                       <td className="px-4 py-4">
                         <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getStatusColor(supplier.status)}`}>
-                          {getStatusLabel(supplier.status)}
-                        </span>
+                          {supplier.stringStatus || getStatusLabel(supplier.status)}
+                          </span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="text-sm text-gray-600">
+                          {supplier.createdAt || 'N/A'}
+                        </div>
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex space-x-1">
@@ -582,6 +522,14 @@ const SupplierManagement: React.FC = () => {
                           >
                             <ShoppingCart size={12} />
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeleteSupplier(supplier)}
+                            className="text-xs text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 size={12} />
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -593,56 +541,134 @@ const SupplierManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Pagination */}
-      {filteredSuppliers.length > pageSize && (
-        <div className="flex justify-center items-center space-x-2">
+      {/* Pagination - Server-side pagination */}
+      {totalPages > 1 && (
+        <Card className="shadow-lg border-0">
+          <CardContent className="p-4">
+            <div className="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
+              {/* Pagination Info */}
+              <div className="text-sm text-gray-600">
+                Hiển thị {totalElements > 0 ? currentPage * pageSize + 1 : 0} - {Math.min((currentPage + 1) * pageSize, totalElements)} trong tổng số {totalElements} nhà cung cấp
+              </div>
+              
+              {/* Pagination Controls */}
+              <div className="flex items-center space-x-2">
           <Button
             variant="outline"
             size="sm"
             onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-            disabled={currentPage === 0}
+                  disabled={currentPage === 0 || loading}
           >
             <ChevronLeft size={16} />
             Trước
           </Button>
-          <span className="text-sm text-gray-600">
-            Trang {currentPage + 1} / {Math.ceil(filteredSuppliers.length / pageSize)}
-          </span>
+                
+                {/* Page Numbers */}
+                <div className="flex items-center space-x-1">
+                  {(() => {
+                    const pages = []
+                    const maxVisiblePages = 5
+                    let startPage = Math.max(0, currentPage - Math.floor(maxVisiblePages / 2))
+                    let endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 1)
+                    
+                    // Adjust start page if we're near the end
+                    if (endPage - startPage < maxVisiblePages - 1) {
+                      startPage = Math.max(0, endPage - maxVisiblePages + 1)
+                    }
+                    
+                    // First page
+                    if (startPage > 0) {
+                      pages.push(
+                        <Button
+                          key={0}
+                          variant={currentPage === 0 ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(0)}
+                          disabled={loading}
+                        >
+                          1
+                        </Button>
+                      )
+                      if (startPage > 1) {
+                        pages.push(<span key="ellipsis1" className="px-2 text-gray-500">...</span>)
+                      }
+                    }
+                    
+                    // Page numbers
+                    for (let i = startPage; i <= endPage; i++) {
+                      pages.push(
+                        <Button
+                          key={i}
+                          variant={currentPage === i ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(i)}
+                          disabled={loading}
+                        >
+                          {i + 1}
+                        </Button>
+                      )
+                    }
+                    
+                    // Last page
+                    if (endPage < totalPages - 1) {
+                      if (endPage < totalPages - 2) {
+                        pages.push(<span key="ellipsis2" className="px-2 text-gray-500">...</span>)
+                      }
+                      pages.push(
+                        <Button
+                          key={totalPages - 1}
+                          variant={currentPage === totalPages - 1 ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(totalPages - 1)}
+                          disabled={loading}
+                        >
+                          {totalPages}
+                        </Button>
+                      )
+                    }
+                    
+                    return pages
+                  })()}
+                </div>
+                
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setCurrentPage(Math.min(Math.ceil(filteredSuppliers.length / pageSize) - 1, currentPage + 1))}
-            disabled={currentPage >= Math.ceil(filteredSuppliers.length / pageSize) - 1}
+                  onClick={() => setCurrentPage(Math.min(totalPages - 1, currentPage + 1))}
+                  disabled={currentPage >= totalPages - 1 || loading}
           >
             Sau
             <ChevronRight size={16} />
           </Button>
         </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Detail Dialog */}
-      {showDetailDialog && selectedSupplier && (
+      {showDetailDialog && (selectedSupplier || isAddingNew) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold">
-                  {showOrders ? 'Đơn hàng' : 'Chi tiết nhà cung cấp'}
+                  {showOrders ? 'Đơn hàng' : (isAddingNew ? 'Thêm nhà cung cấp mới' : 'Chi tiết nhà cung cấp')}
                 </h2>
                 <div className="flex items-center space-x-2">
                   {!showOrders ? (
                     <>
-                      {!isEditing ? (
+                      {!isEditing && !isAddingNew ? (
                         <>
                           <Button size="sm" variant="outline" onClick={handleEditSupplier}>
                             <Edit size={14} className="mr-1" />
                             Sửa
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => handleViewOrders(selectedSupplier)}>
+                          <Button size="sm" variant="outline" onClick={() => handleViewOrders(selectedSupplier!)}>
                             <ShoppingCart size={14} className="mr-1" />
                             Đơn hàng
                           </Button>
-                          <Button size="sm" onClick={() => handleCreateOrder(selectedSupplier)}>
+                          <Button size="sm" onClick={() => handleCreateOrder(selectedSupplier!)}>
                             <Plus size={14} className="mr-1" />
                             Tạo đơn
                           </Button>
@@ -651,9 +677,17 @@ const SupplierManagement: React.FC = () => {
                         <>
                           <Button size="sm" onClick={handleSaveSupplier}>
                             <CheckCircle size={14} className="mr-1" />
-                            Lưu
+                            {isAddingNew ? 'Tạo' : 'Lưu'}
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>
+                          <Button size="sm" variant="outline" onClick={() => {
+                            setIsEditing(false)
+                            setIsAddingNew(false)
+                            setEditingSupplier({
+                              name: '',
+                              description: '',
+                              status: 1
+                            })
+                          }}>
                             Hủy
                           </Button>
                         </>
@@ -665,23 +699,32 @@ const SupplierManagement: React.FC = () => {
                         <Eye size={14} className="mr-1" />
                         Chi tiết NCC
                       </Button>
-                      <Button size="sm" onClick={() => handleCreateOrder(selectedSupplier)}>
+                      <Button size="sm" onClick={() => handleCreateOrder(selectedSupplier!)}>
                         <Plus size={14} className="mr-1" />
                         Tạo đơn
                       </Button>
                     </>
                   )}
-                  <Button size="sm" variant="outline" onClick={() => setShowDetailDialog(false)}>
+                  <Button size="sm" variant="outline" onClick={() => {
+                    setShowDetailDialog(false)
+                    setIsEditing(false)
+                    setIsAddingNew(false)
+                    setEditingSupplier({
+                      name: '',
+                      description: '',
+                      status: 1
+                    })
+                  }}>
                     <X size={14} />
                   </Button>
                 </div>
               </div>
 
-              {showOrders ? (
+              {showOrders && selectedSupplier ? (
                 <div className="space-y-4">
                   <div className="border-b pb-2">
                     <h3 className="font-semibold">{selectedSupplier.name}</h3>
-                    <p className="text-sm text-gray-600">Tổng số đơn hàng: {selectedSupplier.totalOrders}</p>
+                    <p className="text-sm text-gray-600">Đơn hàng của nhà cung cấp</p>
                   </div>
                   <div className="space-y-3 max-h-96 overflow-y-auto">
                     {getSupplierOrders(selectedSupplier.id).length === 0 ? (
@@ -734,161 +777,91 @@ const SupplierManagement: React.FC = () => {
                 <div className="space-y-4">
                   {/* Basic Info */}
                   <div className="border-b pb-4">
-                    <h3 className="font-semibold text-lg">{selectedSupplier.name}</h3>
-                    <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
+                    <h3 className="font-semibold text-lg">
+                      {isAddingNew ? 'Thông tin nhà cung cấp mới' : selectedSupplier?.name}
+                    </h3>
+                    <div className="grid grid-cols-1 gap-4 mt-3 text-sm">
                       <div>
-                        <span className="text-gray-600">Mã NCC:</span>
-                        {isEditing ? (
-                          <Input className="mt-1" defaultValue={selectedSupplier.code} />
+                        <span className="text-gray-600">Tên nhà cung cấp *:</span>
+                        {(isEditing || isAddingNew) ? (
+                          <Input 
+                            className="mt-1" 
+                            value={editingSupplier.name || ''}
+                            onChange={(e) => setEditingSupplier({...editingSupplier, name: e.target.value})}
+                            placeholder="Nhập tên nhà cung cấp"
+                          />
                         ) : (
-                          <p className="font-medium">{selectedSupplier.code}</p>
+                          <p className="font-medium">{selectedSupplier?.name}</p>
                         )}
                       </div>
                       <div>
-                        <span className="text-gray-600">Danh mục:</span>
-                        <p className="font-medium">{getCategoryLabel(selectedSupplier.category)}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Contact Info */}
-                  <div className="border-b pb-4">
-                    <h4 className="font-semibold mb-3">Thông tin liên hệ</h4>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center space-x-2">
-                        <User size={16} className="text-gray-400" />
-                        <span className="text-gray-600">Người liên hệ:</span>
-                        {isEditing ? (
-                          <Input className="flex-1" defaultValue={selectedSupplier.contactPerson} />
+                        <span className="text-gray-600">Mô tả:</span>
+                        {(isEditing || isAddingNew) ? (
+                          <textarea 
+                            className="mt-1 w-full p-2 border rounded" 
+                            rows={3}
+                            value={editingSupplier.description || ''}
+                            onChange={(e) => setEditingSupplier({...editingSupplier, description: e.target.value})}
+                            placeholder="Nhập mô tả nhà cung cấp"
+                          />
                         ) : (
-                          <span className="font-medium">{selectedSupplier.contactPerson}</span>
+                          <p className="font-medium">{selectedSupplier?.description || 'Không có mô tả'}</p>
                         )}
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <Phone size={16} className="text-gray-400" />
-                        <span className="text-gray-600">Điện thoại:</span>
-                        {isEditing ? (
-                          <Input className="flex-1" defaultValue={selectedSupplier.phone} />
+                      <div>
+                        <span className="text-gray-600">Trạng thái:</span>
+                        {(isEditing || isAddingNew) ? (
+                          <select 
+                            className="mt-1 px-3 py-2 border border-gray-300 rounded-md"
+                            value={editingSupplier.status ?? 1}
+                            onChange={(e) => {
+                              const newStatus = parseInt(e.target.value)
+                              console.log('Status changed to:', newStatus, 'Type:', typeof newStatus)
+                              setEditingSupplier({...editingSupplier, status: newStatus})
+                            }}
+                          >
+                            <option value={1}>Hoạt động</option>
+                            <option value={0}>Không hoạt động</option>
+                          </select>
                         ) : (
-                          <span className="font-medium">{selectedSupplier.phone}</span>
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Mail size={16} className="text-gray-400" />
-                        <span className="text-gray-600">Email:</span>
-                        {isEditing ? (
-                          <Input className="flex-1" defaultValue={selectedSupplier.email} />
-                        ) : (
-                          <span className="font-medium">{selectedSupplier.email}</span>
-                        )}
-                      </div>
-                      <div className="flex items-start space-x-2">
-                        <MapPin size={16} className="text-gray-400 mt-0.5" />
-                        <span className="text-gray-600">Địa chỉ:</span>
-                        {isEditing ? (
-                          <textarea className="flex-1 p-2 border rounded" defaultValue={selectedSupplier.address} />
-                        ) : (
-                          <span className="font-medium">{selectedSupplier.address}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Financial Info */}
-                  <div className="border-b pb-4">
-                    <h4 className="font-semibold mb-3">Thông tin tài chính</h4>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-600">Điều khoản TT:</span>
-                        <p className="font-medium">{selectedSupplier.paymentTerms}</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Hạn mức tín dụng:</span>
-                        <p className="font-medium">{formatCurrency(selectedSupplier.creditLimit)}</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Công nợ hiện tại:</span>
-                        <p className={`font-medium ${selectedSupplier.currentDebt > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          {formatCurrency(selectedSupplier.currentDebt)}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Mã số thuế:</span>
-                        <p className="font-medium">{selectedSupplier.taxId}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Performance */}
-                  <div className="border-b pb-4">
-                    <h4 className="font-semibold mb-3">Hiệu suất</h4>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-600">Tổng đơn hàng:</span>
-                        <p className="font-medium">{selectedSupplier.totalOrders}</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Tổng giá trị:</span>
-                        <p className="font-medium text-green-600">{formatCurrency(selectedSupplier.totalValue)}</p>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Đánh giá:</span>
-                        <div className="flex items-center space-x-1">
-                          {renderStars(selectedSupplier.rating)}
-                          <span className={`font-medium ${getRatingColor(selectedSupplier.rating)}`}>
-                            {selectedSupplier.rating}
+                          <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${getStatusColor(selectedSupplier?.status || 0)}`}>
+                            {getStatusLabel(selectedSupplier?.status || 0)}
                           </span>
-                        </div>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Đơn hàng cuối:</span>
-                        <p className="font-medium">
-                          {selectedSupplier.lastOrderDate ? formatDate(selectedSupplier.lastOrderDate) : 'Chưa có'}
-                        </p>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Contract Info */}
-                  {selectedSupplier.contractStart && (
-                    <div className="border-b pb-4">
-                      <h4 className="font-semibold mb-3">Hợp đồng</h4>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-600">Ngày bắt đầu:</span>
-                          <p className="font-medium">{formatDate(selectedSupplier.contractStart)}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Ngày kết thúc:</span>
-                          <p className="font-medium">{selectedSupplier.contractEnd ? formatDate(selectedSupplier.contractEnd) : 'Không giới hạn'}</p>
-                        </div>
+                  {/* ID Info for existing suppliers */}
+                  {!isAddingNew && selectedSupplier && (
+                  <div className="border-b pb-4">
+                      <h4 className="font-semibold mb-3">Thông tin hệ thống</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div>
+                          <span className="text-gray-600">ID:</span>
+                          <p className="font-medium">#{selectedSupplier.id}</p>
+                      </div>
+                      <div>
+                          <span className="text-gray-600">Ngày tạo:</span>
+                          <p className="font-medium">{selectedSupplier.createdAt || 'N/A'}</p>
+                      </div>
+                      <div>
+                          <span className="text-gray-600">Người tạo:</span>
+                          <p className="font-medium">{selectedSupplier.createdBy || 'N/A'}</p>
+                      </div>
+                      <div>
+                          <span className="text-gray-600">Cập nhật lần cuối:</span>
+                          <p className="font-medium">{selectedSupplier.updatedAt || 'N/A'}</p>
+                      </div>
+                      <div>
+                          <span className="text-gray-600">Người cập nhật:</span>
+                          <p className="font-medium">{selectedSupplier.updatedBy || 'N/A'}</p>
+                      </div>
                       </div>
                     </div>
-                  )}
-
-                  {/* Notes */}
-                  {selectedSupplier.notes && (
-                    <div className="border-b pb-4">
-                      <h4 className="font-semibold mb-2">Ghi chú</h4>
-                      {isEditing ? (
-                        <textarea
-                          className="w-full p-2 border rounded"
-                          rows={3}
-                          defaultValue={selectedSupplier.notes}
-                        />
-                      ) : (
-                        <p className="text-sm">{selectedSupplier.notes}</p>
                       )}
                     </div>
                   )}
-
-                  {/* Created/Updated Info */}
-                  <div className="text-sm text-gray-500">
-                    <p>Tạo: {formatDateTime(selectedSupplier.createdAt)}</p>
-                    <p>Cập nhật: {formatDateTime(selectedSupplier.updatedAt)}</p>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
