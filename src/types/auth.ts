@@ -94,7 +94,6 @@ export interface AuthContextType {
   refreshToken: string | null
   login: (credentials: LoginCredentials) => Promise<void>
   logout: () => Promise<void>
-  refreshAuthToken: () => Promise<RefreshTokenResponse>
   changePassword: (request: ChangePasswordRequest) => Promise<ChangePasswordResponse>
   getUserInfo: () => Promise<User>
   isLoading: boolean

@@ -19,7 +19,10 @@ const patientSchema = z.object({
     required_error: 'Vui lòng chọn giới tính',
     invalid_type_error: 'Vui lòng chọn giới tính',
   }).min(0).max(2),
-  phoneNumber: z.string().min(10, 'Số điện thoại phải có ít nhất 10 số'),
+  phoneNumber: z.string().optional().refine(
+    (val) => !val || val === '' || val.length >= 10,
+    { message: 'Số điện thoại phải có ít nhất 10 số' }
+  ),
   email: z.string().optional().refine(
     (val) => !val || val === '' || z.string().email().safeParse(val).success,
     { message: 'Email không hợp lệ' }
@@ -278,7 +281,7 @@ const PatientRegistration: React.FC = () => {
         birthYear: data.birthYear, // YYYY-MM-DD format from date input
         gender: Number(data.gender), // Ensure it's a number
         address: data.address?.trim() || "",
-        phoneNumber: data.phoneNumber.trim(),
+        phoneNumber: data.phoneNumber?.trim() || "",
         reasonForVisit: data.reasonForVisit?.trim() || "",
         referralSourceId: data.referralSourceId || 0,
         email: data.email?.trim() || "",
@@ -418,7 +421,7 @@ const PatientRegistration: React.FC = () => {
       const newSelection: SelectedTestType = {
         testType,
         selectedSampleId: defaultSample.id!,
-        selectedSampleName: defaultSample.name
+        selectedSampleName: defaultSample.name || 'Chưa xác định'
       }
       setSelectedTestTypes(prev => [...prev, newSelection])
     } else {
@@ -427,7 +430,7 @@ const PatientRegistration: React.FC = () => {
       const newSelection: SelectedTestType = {
         testType,
         selectedSampleId: defaultSample.id,
-        selectedSampleName: defaultSample.sampleName
+        selectedSampleName: defaultSample.sampleName || 'Chưa xác định'
       }
       setSelectedTestTypes(prev => [...prev, newSelection])
     }
@@ -692,7 +695,7 @@ const PatientRegistration: React.FC = () => {
                   <div className="space-y-2">
                     <Label htmlFor="phoneNumber" className="flex items-center space-x-2">
                       <Phone size={16} />
-                      <span>Số điện thoại *</span>
+                      <span>Số điện thoại</span>
                     </Label>
                     <Input
                       id="phoneNumber"
@@ -925,7 +928,7 @@ const PatientRegistration: React.FC = () => {
                                 const sampleId = Number(e.target.value)
                                 const sample = testSamples.find(s => s.id === sampleId) || 
                                              selected.testType.testSamples?.find(s => s.id === sampleId)
-                                const sampleName = sample ? (sample as any).name || (sample as any).sampleName : ''
+                                const sampleName = sample ? ((sample as any).name || (sample as any).sampleName || 'Chưa xác định') : 'Chưa xác định'
                                 updateSampleSelection(selected.testType.id!, sampleId, sampleName)
                               }}
                               className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
@@ -1014,7 +1017,7 @@ const PatientRegistration: React.FC = () => {
                       <div>
                         <div className="font-medium">{selected.testType.name}</div>
                         <div className="text-sm text-gray-600">
-                          Mẫu: {selected.selectedSampleName} • Mã: {selected.testType.code}
+                          Mẫu: {selected.selectedSampleName || 'Chưa chọn mẫu'} • Mã: {selected.testType.code}
                         </div>
                       </div>
                       <div className="font-medium">

@@ -31,6 +31,7 @@ import { MonthlyCostsManagement } from '@/pages/Finance/MonthlyCostsManagement'
 
 // Admin pages
 import UserManagement from '@/pages/Admin/UserManagement'
+import DepartmentManagement from '@/pages/Admin/DepartmentManagement'
 import SystemHistory from '@/pages/Admin/SystemHistory'
 import { NotificationManagement } from '@/pages/Admin/NotificationManagement'
 
@@ -276,6 +277,14 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={['admin']}>
                     <UserManagement />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="department-management"
+                element={
+                  <ProtectedRoute allowedRoles={['admin']}>
+                    <DepartmentManagement />
                   </ProtectedRoute>
                 } 
               />

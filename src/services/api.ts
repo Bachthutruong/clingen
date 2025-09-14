@@ -26,12 +26,14 @@ import type {
   PatientAPI,
   Packaging,
   Material,
+  MaterialAPIResponse,
   InventoryLogsDTO,
+  DepartmentDTO,
   MethodResult,
   PaginatedResponse,
   SearchDTO,
   PatientTestSearchDTO,
-  InventorySearchDTO,
+  InventorySearchDTO, 
   InventoryLogsSearchDTO,
   CreateTestTypeRequest,
   CreateTestSampleRequest,
@@ -69,6 +71,94 @@ const api: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
 })
+
+// Singleton pattern for refresh token to prevent multiple simultaneous calls
+let isRefreshing = false
+let refreshPromise: Promise<any> | null = null
+let refreshAttempts = 0
+const MAX_REFRESH_ATTEMPTS = 3
+
+// Function to handle redirect to login
+export const redirectToLogin = () => {
+  localStorage.removeItem(config.TOKEN_STORAGE_KEY)
+  localStorage.removeItem(config.REFRESH_TOKEN_STORAGE_KEY)
+  localStorage.removeItem(config.USER_STORAGE_KEY)
+  // Reset refresh attempts
+  refreshAttempts = 0
+  window.location.href = '/login'
+}
+
+// Function to reset refresh attempts (useful for successful login)
+export const resetRefreshAttempts = () => {
+  refreshAttempts = 0
+}
+
+// Function to handle refresh token with singleton pattern
+const handleRefreshToken = async (): Promise<string> => {
+  // Check if we've exceeded max refresh attempts
+  if (refreshAttempts >= MAX_REFRESH_ATTEMPTS) {
+    console.error('Max refresh attempts exceeded, redirecting to login')
+    redirectToLogin()
+    throw new Error('Max refresh attempts exceeded')
+  }
+
+  // If already refreshing, return the existing promise
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise
+  }
+
+  // If not refreshing, start the refresh process
+  isRefreshing = true
+  refreshAttempts++
+  refreshPromise = (async () => {
+    try {
+      const refreshToken = localStorage.getItem(config.REFRESH_TOKEN_STORAGE_KEY)
+      if (!refreshToken) {
+        throw new Error('No refresh token available')
+      }
+
+      // Use direct axios call to avoid interceptor recursion
+      const response = await axios.post(`${config.API_BASE_URL}/auth/refresh`, { refreshToken })
+      const payload = response?.data?.data ?? response.data
+      
+      const newToken = payload?.token
+      const newRefreshToken = payload?.refreshToken
+      
+      if (!newToken || !newRefreshToken) {
+        throw new Error('Invalid refresh response')
+      }
+      
+      // Update tokens in localStorage
+      localStorage.setItem(config.TOKEN_STORAGE_KEY, newToken)
+      localStorage.setItem(config.REFRESH_TOKEN_STORAGE_KEY, newRefreshToken)
+      
+      // Update axios default header
+      try {
+        (api.defaults.headers as any).common = (api.defaults.headers as any).common || {}
+        ;(api.defaults.headers as any).common['Authorization'] = `Bearer ${newToken}`
+      } catch (_) {}
+
+      // Reset refresh attempts on success
+      refreshAttempts = 0
+      return newToken
+    } catch (error) {
+      console.error('Token refresh failed:', error)
+      // Clear all auth data
+      localStorage.removeItem(config.TOKEN_STORAGE_KEY)
+      localStorage.removeItem(config.REFRESH_TOKEN_STORAGE_KEY)
+      localStorage.removeItem(config.USER_STORAGE_KEY)
+      
+      // Don't redirect here - let the calling code handle it
+      throw error
+    } finally {
+      // Reset the refreshing state
+      isRefreshing = false
+      refreshPromise = null
+    }
+  })()
+
+  return refreshPromise
+}
 
 // Interceptor để tự động thêm token vào headers
 api.interceptors.request.use(
@@ -124,40 +214,47 @@ api.interceptors.response.use(
       })
     }
     
+    // Handle 401 errors with improved logic to prevent infinite loops
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // Skip refresh for auth endpoints to prevent infinite loops
+      if (originalRequest.url?.includes('/auth/')) {
+        console.log('Skipping token refresh for auth endpoint:', originalRequest.url)
+        return Promise.reject(error)
+      }
+
+      // Skip refresh if we're already on login page
+      if (window.location.pathname === '/login') {
+        console.log('Skipping token refresh - already on login page')
+        return Promise.reject(error)
+      }
+
+      // Skip refresh if no refresh token available
+      const refreshToken = localStorage.getItem(config.REFRESH_TOKEN_STORAGE_KEY)
+      if (!refreshToken) {
+        console.log('Skipping token refresh - no refresh token available')
+        redirectToLogin()
+        return Promise.reject(error)
+      }
+
       originalRequest._retry = true
 
       try {
-        // Try to refresh token
-        const refreshToken = localStorage.getItem(config.REFRESH_TOKEN_STORAGE_KEY)
-        if (refreshToken) {
-          const response = await authApi.refresh({ refreshToken })
-          
-          // Update tokens in localStorage
-          localStorage.setItem(config.TOKEN_STORAGE_KEY, response.token)
-          localStorage.setItem(config.REFRESH_TOKEN_STORAGE_KEY, response.refreshToken)
-          
-          // Update Authorization header for future requests and the current retry
-          try {
-            // Set axios default header
-            (api.defaults.headers as any).common = (api.defaults.headers as any).common || {}
-            ;(api.defaults.headers as any).common['Authorization'] = `Bearer ${response.token}`
-          } catch (_) {}
-
-          // Ensure header exists on the original request regardless of axios version
-          originalRequest.headers = originalRequest.headers || {}
-          originalRequest.headers['Authorization'] = `Bearer ${response.token}`
-          
-          // Retry the original request
-          return api(originalRequest)
-        }
+        // Use singleton pattern to refresh token
+        const newToken = await handleRefreshToken()
+        
+        // Ensure header exists on the original request regardless of axios version
+        originalRequest.headers = originalRequest.headers || {}
+        originalRequest.headers['Authorization'] = `Bearer ${newToken}`
+        
+        // Retry the original request
+        return api(originalRequest)
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError)
-        // Clear all auth data and redirect to login
-        localStorage.removeItem(config.TOKEN_STORAGE_KEY)
-        localStorage.removeItem(config.REFRESH_TOKEN_STORAGE_KEY)
-        localStorage.removeItem(config.USER_STORAGE_KEY)
-        window.location.href = '/login'
+        // Only redirect if not already on login page
+        if (window.location.pathname !== '/login') {
+          redirectToLogin()
+        }
+        return Promise.reject(refreshError)
       }
     }
     
@@ -751,6 +848,27 @@ export const materialsApi = {
     const response: AxiosResponse<MethodResult<Material[]>> = await api.post('/material/search', searchParams)
     return transformToPaginatedResponse(response.data, searchParams.pageIndex, searchParams.pageSize)
   },
+
+  // Lấy danh sách vật tư/hóa chất theo loại cho dropdown
+  getByTypeForDropdown: async (type: number): Promise<MaterialAPIResponse[]> => {
+    try {
+      const response: AxiosResponse<MethodResult<MaterialAPIResponse[]>> = await api.get(`/material/type/${type}`)
+      
+      if (response.data && response.data.status === true && Array.isArray(response.data.data)) {
+        return response.data.data
+      }
+      
+      // Fallback nếu API trả về structure khác
+      if (Array.isArray(response.data)) {
+        return response.data
+      }
+      
+      return []
+    } catch (error) {
+      console.error('Error fetching materials by type:', error)
+      return []
+    }
+  },
 }
 
 // Inventory Logs API (Quản lý kho)
@@ -895,15 +1013,6 @@ export const inventoryLogsApi = {
 }
 
 // Master data APIs
-export const departmentApi = {
-  getAll: async (): Promise<Array<{ id: number; name: string }>> => {
-    const response: AxiosResponse<any> = await api.get('/department')
-    const payload = response.data?.data || response.data
-    if (Array.isArray(payload)) return payload
-    if (payload?.content && Array.isArray(payload.content)) return payload.content
-    return []
-  }
-}
 
 
 // Patient Test Management API (Quản lý mẫu bệnh nhân)
@@ -1592,6 +1701,54 @@ export const usersApi = {
     }
   },
 
+  // GET /api/users - Get all users with pagination and filters
+  getAll: async (params?: {
+    keyword?: string
+    pageIndex?: number
+    pageSize?: number
+    orderCol?: string
+    isDesc?: boolean
+  }): Promise<PaginatedResponse<any>> => {
+    try {
+      const searchParams = {
+        keyword: params?.keyword || '',
+        pageIndex: params?.pageIndex || 0,
+        pageSize: params?.pageSize || 10,
+        orderCol: params?.orderCol || 'createdAt',
+        isDesc: params?.isDesc !== undefined ? params.isDesc : true
+      }
+      
+      const response: AxiosResponse<MethodResult<any>> = await api.get('/api/users', { params: searchParams })
+      
+      if (response.data && response.data.status === true) {
+        // Handle new API response structure
+        if (response.data.data && typeof response.data.data === 'object') {
+          const data = response.data.data
+          const totalElements = response.data.totalRecord || 0
+          const pageSize = searchParams.pageSize
+          const currentPage = searchParams.pageIndex
+          
+          return {
+            content: Array.isArray(data) ? data : (data.content || []),
+            totalElements,
+            totalPages: Math.ceil(totalElements / pageSize),
+            size: pageSize,
+            number: currentPage,
+            first: currentPage === 0,
+            last: currentPage >= Math.ceil(totalElements / pageSize) - 1,
+            numberOfElements: Array.isArray(data) ? data.length : (data.content ? data.content.length : 0)
+          }
+        }
+      }
+      
+      // Fallback to old structure
+      return transformToPaginatedResponse(response.data, searchParams.pageIndex, searchParams.pageSize)
+    } catch (error: any) {
+      console.error('Error calling getAll users API:', error)
+      throw error
+    }
+  },
+
   // Legacy methods for backward compatibility
   // GET /users - Get all users with pagination and filters
   getUsers: async (params?: {
@@ -2087,6 +2244,396 @@ export const monthlyCostsApi = {
   exportExcelSummaryByYear: async (year: number): Promise<string> => {
     const response: AxiosResponse<MethodResult<string>> = await api.get(`/monthly-costs/export/excel/summary/year/${year}`)
     return response.data.data
+  }
+}
+
+// Department Management API
+export const departmentApi = {
+  // GET /department - Get all departments
+  getAll: async (): Promise<DepartmentDTO[]> => {
+    try {
+      const response: AxiosResponse<MethodResult<DepartmentDTO[]>> = await api.get('/department')
+      
+      if (response.data && response.data.status === true) {
+        return Array.isArray(response.data.data) ? response.data.data : []
+      }
+      
+      return []
+    } catch (error: any) {
+      console.error('Error calling getAll departments API:', error)
+      throw error
+    }
+  },
+
+  // GET /department/{id} - Get department by ID
+  getById: async (id: number): Promise<DepartmentDTO> => {
+    try {
+      const response: AxiosResponse<MethodResult<DepartmentDTO>> = await api.get(`/department/${id}`)
+      return response.data.data
+    } catch (error: any) {
+      console.error(`Error calling getById department API with id ${id}:`, error)
+      throw error
+    }
+  },
+
+  // POST /department - Create new department
+  create: async (departmentData: Omit<DepartmentDTO, 'id'>): Promise<DepartmentDTO> => {
+    try {
+      const response: AxiosResponse<MethodResult<DepartmentDTO>> = await api.post('/department', departmentData)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error calling create department API:', error)
+      throw error
+    }
+  },
+
+  // PUT /department/{id} - Update department
+  update: async (id: number, departmentData: Omit<DepartmentDTO, 'id'>): Promise<DepartmentDTO> => {
+    try {
+      const response: AxiosResponse<MethodResult<DepartmentDTO>> = await api.put(`/department/${id}`, departmentData)
+      return response.data.data
+    } catch (error: any) {
+      console.error(`Error calling update department API with id ${id}:`, error)
+      throw error
+    }
+  },
+
+  // DELETE /department/{id} - Delete department
+  delete: async (id: number): Promise<void> => {
+    try {
+      await api.delete(`/department/${id}`)
+    } catch (error: any) {
+      console.error(`Error calling delete department API with id ${id}:`, error)
+      throw error
+    }
+  },
+
+  // POST /department/search - Search departments with pagination
+  search: async (searchParams: SearchDTO): Promise<PaginatedResponse<DepartmentDTO>> => {
+    try {
+      const response: AxiosResponse<MethodResult<any>> = await api.post('/department/search', searchParams)
+      
+      if (response.data && response.data.status === true) {
+        const data = response.data.data
+        const totalElements = response.data.totalRecord || 0
+        const pageSize = searchParams.pageSize || 10
+        const currentPage = searchParams.pageIndex || 0
+        
+        return {
+          content: Array.isArray(data) ? data : (data.content || []),
+          totalElements,
+          totalPages: Math.ceil(totalElements / pageSize),
+          size: pageSize,
+          number: currentPage,
+          first: currentPage === 0,
+          last: currentPage >= Math.ceil(totalElements / pageSize) - 1,
+          numberOfElements: Array.isArray(data) ? data.length : (data.content ? data.content.length : 0)
+        }
+      }
+      
+      // Fallback to old structure
+      return transformToPaginatedResponse(response.data, searchParams.pageIndex || 0, searchParams.pageSize || 10)
+    } catch (error: any) {
+      console.error('Error calling search departments API:', error)
+      throw error
+    }
+  }
+}
+
+// Dashboard API
+export const dashboardApi = {
+  // GET /dashboard/today - Get today's statistics
+  getTodayStats: async (): Promise<{
+    date: string
+    totalPatients: number
+    totalRevenue: number
+    completedTests: number
+    totalTests: number
+    completionRate: number
+    avgRevenuePerPatient: number
+    avgRevenuePerTest: number
+  }> => {
+    try {
+      const response: AxiosResponse<MethodResult<{
+        date: string
+        totalPatients: number
+        totalRevenue: number
+        completedTests: number
+        totalTests: number
+        completionRate: number
+        avgRevenuePerPatient: number
+        avgRevenuePerTest: number
+      }>> = await api.get('/dashboard/today')
+      
+      if (response.data && response.data.status === true) {
+        return response.data.data
+      }
+      
+      // Fallback structure
+      return {
+        date: new Date().toISOString().split('T')[0],
+        totalPatients: 0,
+        totalRevenue: 0,
+        completedTests: 0,
+        totalTests: 0,
+        completionRate: 0,
+        avgRevenuePerPatient: 0,
+        avgRevenuePerTest: 0
+      }
+    } catch (error: any) {
+      console.error('Error calling getTodayStats API:', error)
+      // Return default values on error
+      return {
+        date: new Date().toISOString().split('T')[0],
+        totalPatients: 0,
+        totalRevenue: 0,
+        completedTests: 0,
+        totalTests: 0,
+        completionRate: 0,
+        avgRevenuePerPatient: 0,
+        avgRevenuePerTest: 0
+      }
+    }
+  }
+}
+
+// System Log API
+export const systemLogApi = {
+  // GET /system-log - Get all logs with pagination
+  getAll: async (params?: { page?: number; size?: number }): Promise<PaginatedResponse<any>> => {
+    try {
+      const response: AxiosResponse<MethodResult<PaginatedResponse<any>>> = await api.get('/system-log', { params })
+      if (response.data && response.data.status === true) {
+        return response.data.data
+      }
+      return { content: [], totalElements: 0, totalPages: 0, size: 20, number: 0, first: true, last: true, numberOfElements: 0 }
+    } catch (error: any) {
+      console.error('Error calling systemLogApi.getAll:', error)
+      return { content: [], totalElements: 0, totalPages: 0, size: 20, number: 0, first: true, last: true, numberOfElements: 0 }
+    }
+  },
+
+  // POST /system-log - Create system log manually
+  create: async (logData: {
+    action: string
+    actionDescription?: string
+    module?: string
+    targetId?: string
+    targetName?: string
+    requestData?: string
+    result?: string
+    errorMessage?: string
+  }): Promise<any> => {
+    try {
+      const response: AxiosResponse<MethodResult<any>> = await api.post('/system-log', logData)
+      if (response.data && response.data.status === true) {
+        return response.data.data
+      }
+      return null
+    } catch (error: any) {
+      console.error('Error calling systemLogApi.create:', error)
+      throw error
+    }
+  },
+
+  // POST /system-log/search - Search system logs
+  search: async (searchParams: {
+    keyword?: string
+    status?: number
+    pageIndex?: number
+    pageSize?: number
+    orderCol?: string
+    isDesc?: boolean
+    username?: string
+    fullName?: string
+    role?: number
+    action?: string
+    module?: string
+    result?: string
+    startDate?: string
+    endDate?: string
+    targetId?: string
+  }): Promise<PaginatedResponse<any>> => {
+    try {
+      const response: AxiosResponse<MethodResult<PaginatedResponse<any>>> = await api.post('/system-log/search', searchParams)
+      if (response.data && response.data.status === true) {
+        return response.data.data
+      }
+      return { content: [], totalElements: 0, totalPages: 0, size: 20, number: 0, first: true, last: true, numberOfElements: 0 }
+    } catch (error: any) {
+      console.error('Error calling systemLogApi.search:', error)
+      return { content: [], totalElements: 0, totalPages: 0, size: 20, number: 0, first: true, last: true, numberOfElements: 0 }
+    }
+  },
+
+  // GET /system-log/{id} - Get log details by ID
+  getById: async (id: number): Promise<any> => {
+    try {
+      const response: AxiosResponse<MethodResult<any>> = await api.get(`/system-log/${id}`)
+      if (response.data && response.data.status === true) {
+        return response.data.data
+      }
+      return null
+    } catch (error: any) {
+      console.error('Error calling systemLogApi.getById:', error)
+      throw error
+    }
+  },
+
+  // GET /system-log/user/{username} - Get logs by user
+  getByUser: async (username: string, params?: { page?: number; size?: number }): Promise<PaginatedResponse<any>> => {
+    try {
+      const response: AxiosResponse<MethodResult<PaginatedResponse<any>>> = await api.get(`/system-log/user/${username}`, { params })
+      if (response.data && response.data.status === true) {
+        return response.data.data
+      }
+      return { content: [], totalElements: 0, totalPages: 0, size: 20, number: 0, first: true, last: true, numberOfElements: 0 }
+    } catch (error: any) {
+      console.error('Error calling systemLogApi.getByUser:', error)
+      return { content: [], totalElements: 0, totalPages: 0, size: 20, number: 0, first: true, last: true, numberOfElements: 0 }
+    }
+  },
+
+  // GET /system-log/user/{username}/recent - Get recent logs by user
+  getRecentByUser: async (username: string): Promise<any[]> => {
+    try {
+      const response: AxiosResponse<MethodResult<any[]>> = await api.get(`/system-log/user/${username}/recent`)
+      if (response.data && response.data.status === true) {
+        return response.data.data
+      }
+      return []
+    } catch (error: any) {
+      console.error('Error calling systemLogApi.getRecentByUser:', error)
+      return []
+    }
+  },
+
+  // GET /system-log/target/{targetId} - Get logs by target
+  getByTarget: async (targetId: string, module: string, params?: { page?: number; size?: number }): Promise<PaginatedResponse<any>> => {
+    try {
+      const response: AxiosResponse<MethodResult<PaginatedResponse<any>>> = await api.get(`/system-log/target/${targetId}`, { 
+        params: { module, ...params }
+      })
+      if (response.data && response.data.status === true) {
+        return response.data.data
+      }
+      return { content: [], totalElements: 0, totalPages: 0, size: 20, number: 0, first: true, last: true, numberOfElements: 0 }
+    } catch (error: any) {
+      console.error('Error calling systemLogApi.getByTarget:', error)
+      return { content: [], totalElements: 0, totalPages: 0, size: 20, number: 0, first: true, last: true, numberOfElements: 0 }
+    }
+  },
+
+  // GET /system-log/stats/users - Get user statistics
+  getStatsUsers: async (startDate: string, endDate: string): Promise<any> => {
+    try {
+      const response: AxiosResponse<MethodResult<any>> = await api.get('/system-log/stats/users', {
+        params: { startDate, endDate }
+      })
+      if (response.data && response.data.status === true) {
+        return response.data.data
+      }
+      return null
+    } catch (error: any) {
+      console.error('Error calling systemLogApi.getStatsUsers:', error)
+      return null
+    }
+  },
+
+  // GET /system-log/stats/overall - Get overall statistics
+  getStatsOverall: async (startDate: string, endDate: string): Promise<any> => {
+    try {
+      const response: AxiosResponse<MethodResult<any>> = await api.get('/system-log/stats/overall', {
+        params: { startDate, endDate }
+      })
+      if (response.data && response.data.status === true) {
+        return response.data.data
+      }
+      return null
+    } catch (error: any) {
+      console.error('Error calling systemLogApi.getStatsOverall:', error)
+      return null
+    }
+  },
+
+  // GET /system-log/stats/modules - Get module statistics
+  getStatsModules: async (startDate: string, endDate: string): Promise<any> => {
+    try {
+      const response: AxiosResponse<MethodResult<any>> = await api.get('/system-log/stats/modules', {
+        params: { startDate, endDate }
+      })
+      if (response.data && response.data.status === true) {
+        return response.data.data
+      }
+      return null
+    } catch (error: any) {
+      console.error('Error calling systemLogApi.getStatsModules:', error)
+      return null
+    }
+  },
+
+  // GET /system-log/stats/actions - Get action statistics
+  getStatsActions: async (startDate: string, endDate: string): Promise<any> => {
+    try {
+      const response: AxiosResponse<MethodResult<any>> = await api.get('/system-log/stats/actions', {
+        params: { startDate, endDate }
+      })
+      if (response.data && response.data.status === true) {
+        return response.data.data
+      }
+      return null
+    } catch (error: any) {
+      console.error('Error calling systemLogApi.getStatsActions:', error)
+      return null
+    }
+  },
+
+  // GET /system-log/my-logs - Get current user logs
+  getMyLogs: async (username?: string, params?: { page?: number; size?: number }): Promise<PaginatedResponse<any>> => {
+    try {
+      const response: AxiosResponse<MethodResult<PaginatedResponse<any>>> = await api.get('/system-log/my-logs', {
+        params: { username, ...params }
+      })
+      if (response.data && response.data.status === true) {
+        return response.data.data
+      }
+      return { content: [], totalElements: 0, totalPages: 0, size: 20, number: 0, first: true, last: true, numberOfElements: 0 }
+    } catch (error: any) {
+      console.error('Error calling systemLogApi.getMyLogs:', error)
+      return { content: [], totalElements: 0, totalPages: 0, size: 20, number: 0, first: true, last: true, numberOfElements: 0 }
+    }
+  },
+
+  // GET /system-log/date-range - Get logs by date range
+  getByDateRange: async (startDate: string, endDate: string, params?: { page?: number; size?: number }): Promise<PaginatedResponse<any>> => {
+    try {
+      const response: AxiosResponse<MethodResult<PaginatedResponse<any>>> = await api.get('/system-log/date-range', {
+        params: { startDate, endDate, ...params }
+      })
+      if (response.data && response.data.status === true) {
+        return response.data.data
+      }
+      return { content: [], totalElements: 0, totalPages: 0, size: 20, number: 0, first: true, last: true, numberOfElements: 0 }
+    } catch (error: any) {
+      console.error('Error calling systemLogApi.getByDateRange:', error)
+      return { content: [], totalElements: 0, totalPages: 0, size: 20, number: 0, first: true, last: true, numberOfElements: 0 }
+    }
+  },
+
+  // DELETE /system-log/cleanup - Clean up old logs (Admin only)
+  cleanup: async (daysToKeep: number = 90): Promise<any> => {
+    try {
+      const response: AxiosResponse<MethodResult<any>> = await api.delete('/system-log/cleanup', {
+        params: { daysToKeep }
+      })
+      if (response.data && response.data.status === true) {
+        return response.data.data
+      }
+      return null
+    } catch (error: any) {
+      console.error('Error calling systemLogApi.cleanup:', error)
+      throw error
+    }
   }
 }
 

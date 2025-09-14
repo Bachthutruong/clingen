@@ -8,27 +8,16 @@ import {
   Search, 
   Plus, 
   Trash2, 
-  ShoppingCart,
-  User,
   Loader2,
   AlertCircle,
   X,
   Settings,
   Edit,
-  
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
-import { testTypesApi, patientsApi, testSamplesApi, patientSamplesApi } from '@/services'
-import type { TestType, PatientAPI, TestSample, CreateTestTypeRequest } from '@/types/api'
+import { testTypesApi, testSamplesApi } from '@/services'
+import type { TestType, TestSample, CreateTestTypeRequest } from '@/types/api'
 import { toast } from 'react-hot-toast'
-
-interface SelectedService {
-  testType: TestType
-  selectedSampleIds: number[]
-  selectedSampleNames: string[]
-  availableSamples: TestSample[]
-  price: number
-}
 
 interface NewTestTypeForm {
   name: string
@@ -37,15 +26,11 @@ interface NewTestTypeForm {
   price: number
   status: number
   testSampleIds: number[]
+  classPathTemplate?: string
 }
 
 const ServiceSelection: React.FC = () => {
-  const [selectedPatient, setSelectedPatient] = useState<PatientAPI | null>(null)
-  const [searchPatientQuery, setSearchPatientQuery] = useState('')
   const [searchServiceQuery, setSearchServiceQuery] = useState('')
-  const [selectedServices, setSelectedServices] = useState<SelectedService[]>([])
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [addingService, setAddingService] = useState<number | null>(null)
 
   // Modal state for adding new test type
   const [showAddModal, setShowAddModal] = useState(false)
@@ -56,7 +41,8 @@ const ServiceSelection: React.FC = () => {
     description: '',
     price: 0,
     status: 1,
-    testSampleIds: []
+    testSampleIds: [],
+    classPathTemplate: ''
   })
 
   // Modal state for editing test type
@@ -69,7 +55,8 @@ const ServiceSelection: React.FC = () => {
     description: '',
     price: 0,
     status: 1,
-    testSampleIds: []
+    testSampleIds: [],
+    classPathTemplate: ''
   })
 
   // Delete confirmation state
@@ -82,11 +69,9 @@ const ServiceSelection: React.FC = () => {
 
   // API state
   const [testTypes, setTestTypes] = useState<TestType[]>([])
-  const [patients, setPatients] = useState<PatientAPI[]>([])
   const [testSamples, setTestSamples] = useState<TestSample[]>([])
   
   const [loadingTestTypes, setLoadingTestTypes] = useState(true)
-  const [loadingPatients, setLoadingPatients] = useState(false)
   const [loadingTestSamples, setLoadingTestSamples] = useState(false)
   
   // Pagination state
@@ -178,15 +163,6 @@ const ServiceSelection: React.FC = () => {
     }
   }
 
-  // Search patients when query changes
-  useEffect(() => {
-    if (searchPatientQuery.trim()) {
-      searchPatients()
-    } else {
-      setPatients([])
-    }
-  }, [searchPatientQuery])
-
   // Debug edit modal data
   useEffect(() => {
     if (showEditModal && editingTestType) {
@@ -195,22 +171,6 @@ const ServiceSelection: React.FC = () => {
       console.log('Edit Modal opened - Editing test type:', editingTestType)
     }
   }, [showEditModal, editingTestType, editTestTypeForm, testSamples])
-
-  const searchPatients = async () => {
-    try {
-      setLoadingPatients(true)
-      const response = await patientsApi.getAll({ 
-        keyword: searchPatientQuery,
-        pageSize: 10,
-        status: 1 // Active only
-      })
-      setPatients(response.content)
-    } catch (error) {
-      console.error('Error searching patients:', error)
-    } finally {
-      setLoadingPatients(false)
-    }
-  }
 
   // Setup default data
   const setupDefaultData = async () => {
@@ -313,135 +273,6 @@ const ServiceSelection: React.FC = () => {
 
 
 
-  const addService = (testType: TestType) => {
-    // Prevent double-click
-    if (addingService === testType.id) {
-      return
-    }
-    
-    setAddingService(testType.id!)
-    
-    // Check if this test type is already selected
-    const existingService = selectedServices.find(s => s.testType.id === testType.id)
-    if (existingService) {
-      toast.error('Loại xét nghiệm này đã được chọn!')
-      setAddingService(null)
-      return
-    }
-
-    // Hiển thị tất cả mẫu trong hệ thống để có thể chọn thêm
-    const allAvailableSamples = (Array.isArray(testSamples) ? testSamples : [])
-
-    if (allAvailableSamples.length === 0) {
-      toast.error('Hệ thống chưa có mẫu xét nghiệm nào! Vui lòng thiết lập dữ liệu mặc định.')
-      setAddingService(null)
-      return
-    }
-
-    // Mặc định chọn sẵn các mẫu đã cấu hình cho test type này từ testSamples API
-    const defaultSamples = testType.testSamples || []
-    const defaultSampleIds = defaultSamples.map(s => s.id)
-    const defaultSampleNames = defaultSamples.map(s => s.sampleName)
-
-    const basePrice = testType.price || 100000
-    
-    const newService = {
-      testType,
-      selectedSampleIds: [...defaultSampleIds], // Mặc định tick sẵn
-      selectedSampleNames: [...defaultSampleNames],
-      availableSamples: allAvailableSamples, // Hiển thị tất cả để chọn thêm
-      price: basePrice
-    }
-
-    // Double check để tránh duplicate
-    setSelectedServices(prev => {
-      const exists = prev.find(s => s.testType.id === testType.id)
-      if (exists) {
-        return prev // Không thêm nếu đã tồn tại
-      }
-      return [...prev, newService]
-    })
-
-    toast.success(`Đã thêm ${testType.name} vào danh sách!`)
-    
-    // Reset adding state after a short delay
-    setTimeout(() => {
-      setAddingService(null)
-    }, 500)
-  }
-
-  const removeService = (testTypeId: number) => {
-    setSelectedServices(prev => prev.filter(s => s.testType.id !== testTypeId))
-  }
-
-  const updateSampleSelection = (testTypeId: number, sampleId: number, isSelected: boolean) => {
-    const sample = (Array.isArray(testSamples) ? testSamples : []).find(s => s.id === sampleId)
-    
-    setSelectedServices(prev =>
-      prev.map(s =>
-        s.testType.id === testTypeId
-          ? { 
-              ...s, 
-              selectedSampleIds: isSelected 
-                ? [...s.selectedSampleIds, sampleId]
-                : s.selectedSampleIds.filter(id => id !== sampleId),
-              selectedSampleNames: isSelected
-                ? [...s.selectedSampleNames, sample?.name || '']
-                : s.selectedSampleNames.filter(name => name !== sample?.name)
-            }
-          : s
-      )
-    )
-  }
-
-  const calculateTotal = () => {
-    return selectedServices.reduce((sum, service) => sum + service.price, 0)
-  }
-
-  const handleSubmit = async () => {
-    if (!selectedPatient || selectedServices.length === 0) {
-      toast.error('Vui lòng chọn bệnh nhân và ít nhất một dịch vụ xét nghiệm!')
-      return
-    }
-
-    // Check if all services have selected samples
-    const invalidServices = selectedServices.filter(s => s.selectedSampleIds.length === 0)
-    if (invalidServices.length > 0) {
-      toast.error('Vui lòng chọn ít nhất một mẫu cho tất cả các loại xét nghiệm!')
-      return
-    }
-
-    setIsSubmitting(true)
-    try {
-      // Create patient samples using the patientSamplesApi - flatten multiple samples
-      const allTestTypes = selectedServices.flatMap(s => 
-        s.selectedSampleIds.map(sampleId => ({
-          testTypeId: s.testType.id!,
-          selectedSampleId: sampleId,
-          priority: 'NORMAL'
-        }))
-      )
-      
-      const sampleData = {
-        patientId: selectedPatient.id!,
-        testTypes: allTestTypes
-      }
-      
-      await patientSamplesApi.createSamplesForPatient(sampleData)
-      
-      toast.success(`Đã đăng ký xét nghiệm thành công cho bệnh nhân ${selectedPatient.fullName}!`)
-      
-      // Reset form
-      setSelectedServices([])
-      setSelectedPatient(null)
-      setSearchPatientQuery('')
-    } catch (error) {
-      console.error('Error submitting registration:', error)
-      toast.error('Có lỗi xảy ra, vui lòng thử lại!')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
 
   // Handle form input changes
   const handleFormChange = (field: keyof NewTestTypeForm, value: any) => {
@@ -512,7 +343,8 @@ const ServiceSelection: React.FC = () => {
         description: newTestTypeForm.description.trim(),
         price: newTestTypeForm.price,
         status: newTestTypeForm.status,
-        testSampleIds: newTestTypeForm.testSampleIds
+        testSampleIds: newTestTypeForm.testSampleIds,
+        classPathTemplate: newTestTypeForm.classPathTemplate?.trim() || undefined
       }
 
       const newTestType = await testTypesApi.create(createData)
@@ -528,7 +360,8 @@ const ServiceSelection: React.FC = () => {
         description: '',
         price: 0,
         status: 1,
-        testSampleIds: []
+        testSampleIds: [],
+        classPathTemplate: ''
       })
       setShowAddModal(false)
       
@@ -548,10 +381,11 @@ const ServiceSelection: React.FC = () => {
     
     // Extract sample IDs from testSamples array (new API format) or fallback to testSampleIds (old format)
     const sampleIds = testType.testSamples 
-      ? testType.testSamples.map(s => s.id) 
+      ? testType.testSamples.map(s => s.id).filter(id => id !== undefined) as number[]
       : (testType.testSampleIds || [])
     
     console.log('Sample IDs for editing:', sampleIds)
+    console.log('Test samples from API:', testType.testSamples)
     
     setEditTestTypeForm({
       name: testType.name,
@@ -559,7 +393,8 @@ const ServiceSelection: React.FC = () => {
       description: testType.description || '',
       price: testType.price,
       status: testType.status,
-      testSampleIds: sampleIds
+      testSampleIds: sampleIds,
+      classPathTemplate: testType.classPathTemplate || ''
     })
     setShowEditModal(true)
   }
@@ -594,7 +429,8 @@ const ServiceSelection: React.FC = () => {
         description: editTestTypeForm.description.trim(),
         price: editTestTypeForm.price,
         status: editTestTypeForm.status,
-        testSampleIds: editTestTypeForm.testSampleIds
+        testSampleIds: editTestTypeForm.testSampleIds,
+        classPathTemplate: editTestTypeForm.classPathTemplate?.trim() || undefined
       }
 
       await testTypesApi.update(editingTestType.id!, updateData)
@@ -609,7 +445,8 @@ const ServiceSelection: React.FC = () => {
         description: '',
         price: 0,
         status: 1,
-        testSampleIds: []
+        testSampleIds: [],
+        classPathTemplate: ''
       })
       setEditingTestType(null)
       setShowEditModal(false)
@@ -663,8 +500,8 @@ const ServiceSelection: React.FC = () => {
               <TestTube size={24} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Dịch vụ xét nghiệm</h1>
-              <p className="text-green-100">Chọn dịch vụ xét nghiệm cho bệnh nhân</p>
+              <h1 className="text-2xl font-bold">Quản lý dịch vụ xét nghiệm</h1>
+              <p className="text-green-100">Quản lý các loại xét nghiệm trong hệ thống</p>
             </div>
           </div>
           <Button
@@ -700,9 +537,9 @@ const ServiceSelection: React.FC = () => {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {/* Service Selection */}
-        <div className="lg:col-span-2 flex flex-col">
+        <div className="flex flex-col">
           <Card className="shadow-lg border-0 flex flex-col h-auto min-h-0">
             <CardHeader>
               <div className="flex justify-between items-center">
@@ -748,14 +585,11 @@ const ServiceSelection: React.FC = () => {
                   {filteredTestTypes.map(testType => {
                     // Hiển thị mẫu mặc định cho test type này từ testSamples API
                     const defaultSamples = testType.testSamples || []
-                    const isSelected = selectedServices.some(s => s.testType.id === testType.id)
                     
                     return (
                       <div
                         key={testType.id}
-                        className={`p-4 border rounded-lg hover:shadow-md transition-shadow relative ${
-                          isSelected ? 'border-green-500 bg-green-50' : ''
-                        }`}
+                        className="p-4 border rounded-lg hover:shadow-md transition-shadow relative"
                       >
                         {/* Action Buttons - Top Right */}
                         <div className="absolute top-3 right-3 flex gap-1">
@@ -794,31 +628,20 @@ const ServiceSelection: React.FC = () => {
                             Mẫu mặc định: {defaultSamples.map((s: any) => s.sampleName).join(', ') || 'Chưa cấu hình'}
                           </div>
 
+                          {/* Class Path Template */}
+                          {testType.classPathTemplate && (
+                            <div className="text-xs text-blue-600 mb-3">
+                              Template: {testType.classPathTemplate}
+                            </div>
+                          )}
+
                           <div className="flex justify-between items-center">
                             <div className="font-semibold text-green-600">
                               {formatCurrency(testType.price || 100000)}
                             </div>
-                            <Button
-                              size="sm"
-                              onClick={() => addService(testType)}
-                              disabled={isSelected || addingService === testType.id}
-                            >
-                              {isSelected ? (
-                                <>
-                                  <span className="text-xs">Đã chọn</span>
-                                </>
-                              ) : addingService === testType.id ? (
-                                <>
-                                  <Loader2 size={16} className="mr-1 animate-spin" />
-                                  <span className="text-xs">Đang thêm...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Plus size={16} className="mr-1" />
-                                  Chọn
-                                </>
-                              )}
-                            </Button>
+                            <div className="text-xs text-gray-500">
+                              {testType.status === 1 ? 'Hoạt động' : 'Không hoạt động'}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -908,162 +731,6 @@ const ServiceSelection: React.FC = () => {
             </CardContent>
           </Card>
         </div>
-
-        {/* Patient Selection */}
-        <div className="lg:col-span-1">
-          <Card className="shadow-lg border-0">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <User size={20} className="text-blue-600" />
-                <span>Chọn bệnh nhân</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Tìm bệnh nhân..."
-                  value={searchPatientQuery}
-                  onChange={(e) => setSearchPatientQuery(e.target.value)}
-                  className="pl-10"
-                />
-                {loadingPatients && (
-                  <Loader2 className="absolute right-3 top-3 h-4 w-4 animate-spin text-gray-400" />
-                )}
-              </div>
-
-              {selectedPatient ? (
-                <div className="p-4 bg-blue-50 rounded-lg border-2 border-blue-200">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-semibold text-blue-900">{selectedPatient.fullName}</h3>
-                      <p className="text-sm text-blue-700">SĐT: {selectedPatient.phoneNumber}</p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedPatient(null)}
-                    >
-                      Đổi
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="max-h-60 overflow-y-auto space-y-2">
-                  {patients.map(patient => (
-                    <div
-                      key={patient.id}
-                      className="p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
-                      onClick={() => setSelectedPatient(patient)}
-                    >
-                      <div className="font-medium">{patient.fullName}</div>
-                      <div className="text-sm text-gray-600">
-                        {patient.phoneNumber}
-                      </div>
-                    </div>
-                  ))}
-                  {patients.length === 0 && searchPatientQuery && !loadingPatients && (
-                    <p className="text-gray-500 text-center py-4">
-                      Không tìm thấy bệnh nhân
-                    </p>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Selected Services Summary */}
-          <Card className="shadow-lg border-0 mt-6">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <ShoppingCart size={20} className="text-green-600" />
-                <span>Dịch vụ đã chọn</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {selectedServices.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">
-                  Chưa chọn dịch vụ nào
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {selectedServices.map((item, index) => (
-                    <div key={`${item.testType.id}-${index}`} className="p-3 bg-gray-50 rounded-lg space-y-2">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="font-medium text-sm">{item.testType.name}</div>
-                          <div className="text-xs text-gray-600">
-                            {formatCurrency(item.price)}
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-6 w-6 p-0 text-red-500 hover:bg-red-50"
-                          onClick={() => removeService(item.testType.id!)}
-                        >
-                          <Trash2 size={12} />
-                        </Button>
-                      </div>
-                      
-                      {/* Sample Selection */}
-                      <div>
-                        <Label className="text-xs text-gray-700">Chọn mẫu (có thể chọn nhiều):</Label>
-                        <div className="text-xs text-gray-500 mb-1">Mẫu mặc định đã được chọn sẵn, bạn có thể thêm/bỏ tùy ý</div>
-                        <div className="mt-1 space-y-1 max-h-24 overflow-y-auto border rounded-md p-2">
-                          {item.availableSamples.map(sample => {
-                            const isDefault = item.testType.testSamples?.some(s => s.id === sample.id) || false
-                            return (
-                              <label key={sample.id} className="flex items-center space-x-2 text-xs">
-                                <input
-                                  type="checkbox"
-                                  checked={item.selectedSampleIds.includes(sample.id!)}
-                                  onChange={(e) => updateSampleSelection(item.testType.id!, sample.id!, e.target.checked)}
-                                  className="rounded border-gray-300"
-                                />
-                                <span className={isDefault ? "font-medium text-blue-700" : ""}>
-                                  {sample.name}
-                                  {isDefault && <span className="text-blue-500 ml-1">(mặc định)</span>}
-                                </span>
-                              </label>
-                            )
-                          })}
-                        </div>
-                        {item.selectedSampleNames.length > 0 && (
-                          <div className="text-xs text-green-600 mt-1">
-                            ✓ Đã chọn: {item.selectedSampleNames.join(', ')}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  
-                  <div className="border-t pt-3">
-                    <div className="flex justify-between items-center font-semibold">
-                      <span>Tổng cộng:</span>
-                      <span className="text-green-600">{formatCurrency(calculateTotal())}</span>
-                    </div>
-                  </div>
-                  
-                  <Button
-                    className="w-full"
-                    onClick={handleSubmit}
-                    disabled={isSubmitting || !selectedPatient}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 size={16} className="mr-2 animate-spin" />
-                        Đang xử lý...
-                      </>
-                    ) : (
-                      'Đăng ký xét nghiệm'
-                    )}
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
       </div>
 
       {/* Add Test Type Modal */}
@@ -1141,6 +808,17 @@ const ServiceSelection: React.FC = () => {
                     <option value={1}>Hoạt động</option>
                     <option value={0}>Không hoạt động</option>
                   </select>
+                </div>
+
+                {/* Class Path Template */}
+                <div>
+                  <Label htmlFor="classPathTemplate">Mẫu Class Path (tùy chọn)</Label>
+                  <Input
+                    id="classPathTemplate"
+                    placeholder="VD: com.example.lab.TestType1"
+                    value={newTestTypeForm.classPathTemplate || ''}
+                    onChange={(e) => handleFormChange('classPathTemplate', e.target.value)}
+                  />
                 </div>
 
                 {/* Test Samples */}
@@ -1278,6 +956,17 @@ const ServiceSelection: React.FC = () => {
                     <option value={1}>Hoạt động</option>
                     <option value={0}>Không hoạt động</option>
                   </select>
+                </div>
+
+                {/* Class Path Template */}
+                <div>
+                  <Label htmlFor="edit-classPathTemplate">Mẫu Class Path (tùy chọn)</Label>
+                  <Input
+                    id="edit-classPathTemplate"
+                    placeholder="VD: com.example.lab.TestType1"
+                    value={editTestTypeForm.classPathTemplate || ''}
+                    onChange={(e) => handleEditFormChange('classPathTemplate', e.target.value)}
+                  />
                 </div>
 
                 {/* Test Samples */}

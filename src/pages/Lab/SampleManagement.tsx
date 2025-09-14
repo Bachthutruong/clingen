@@ -237,7 +237,7 @@ const SampleManagement: React.FC = () => {
       if (patientSampleKeyword) {
         filteredSamples = mockPatientSamples.filter(sample => 
           sample.fullName.toLowerCase().includes(patientSampleKeyword.toLowerCase()) ||
-          sample.phoneNumber.includes(patientSampleKeyword)
+          (sample.phoneNumber && sample.phoneNumber.includes(patientSampleKeyword))
         )
       }
       
@@ -744,7 +744,7 @@ const SampleManagement: React.FC = () => {
                 <option value="">Chọn bệnh nhân</option>
                 {patients.map(patient => (
                   <option key={patient.id} value={patient.id}>
-                    {patient.fullName} - {patient.phoneNumber}
+                    {patient.fullName} - {patient.phoneNumber || 'Chưa có SĐT'}
                   </option>
                 ))}
               </select>
@@ -860,7 +860,7 @@ const SampleManagement: React.FC = () => {
                   <div className="flex items-center justify-between mb-2">
                     <div>
                       <span className="font-medium">{patientSample.fullName}</span>
-                      <span className="ml-2 text-sm text-gray-600">{patientSample.phoneNumber}</span>
+                      <span className="ml-2 text-sm text-gray-600">{patientSample.phoneNumber || 'Chưa có SĐT'}</span>
                     </div>
                     {getStatusBadge((patientSample as any).status || 0)}
                   </div>

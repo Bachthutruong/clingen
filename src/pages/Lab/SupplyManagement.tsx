@@ -54,7 +54,6 @@ const SupplyManagement: React.FC = () => {
   const [newMaterial, setNewMaterial] = useState({
     name: '',
     code: '',
-    quantity: 0,
     packagingId: 0,
     importTime: '',
     expiryTime: '',
@@ -296,7 +295,7 @@ const SupplyManagement: React.FC = () => {
       const updateData = {
         name: selectedMaterial.name,
         code: selectedMaterial.code,
-        quantity: selectedMaterial.quantity || 0,
+        quantity: 0, // Keep quantity as 0 since we removed the field
         packagingId: selectedMaterial.packagingId,
         importTime: selectedMaterial.importTime,
         expiryTime: selectedMaterial.expiryTime || undefined,
@@ -395,7 +394,7 @@ const SupplyManagement: React.FC = () => {
       await materialsApi.create({
         name: newMaterial.name,
         code: newMaterial.code,
-        quantity: newMaterial.quantity,
+        quantity: 0, // Default quantity to 0
         packagingId: newMaterial.packagingId,
         importTime: newMaterial.importTime || new Date().toISOString(),
         expiryTime: newMaterial.expiryTime,
@@ -406,7 +405,6 @@ const SupplyManagement: React.FC = () => {
       setNewMaterial({
         name: '',
         code: '',
-        quantity: 0,
         packagingId: 0,
         importTime: '',
         expiryTime: '',
@@ -586,7 +584,6 @@ const SupplyManagement: React.FC = () => {
                       <th className="text-left p-3 font-semibold">Mã</th>
                       <th className="text-left p-3 font-semibold">Tên vật tư</th>
                       <th className="text-left p-3 font-semibold">Loại</th>
-                      <th className="text-left p-3 font-semibold">Số lượng</th>
                       <th className="text-left p-3 font-semibold">Đóng gói</th>
                       <th className="text-left p-3 font-semibold">Trạng thái</th>
                       <th className="text-left p-3 font-semibold">Hết hạn</th>
@@ -596,7 +593,7 @@ const SupplyManagement: React.FC = () => {
                   <tbody>
                     {!Array.isArray(materials) || materials.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="text-center py-8 text-gray-500">
+                        <td colSpan={7} className="text-center py-8 text-gray-500">
                           Không tìm thấy vật tư phù hợp
                         </td>
                       </tr>
@@ -609,7 +606,6 @@ const SupplyManagement: React.FC = () => {
                             <td className="p-3 font-mono text-sm">{material.code}</td>
                             <td className="p-3 font-medium">{material.name}</td>
                             <td className="p-3 text-sm">{getMaterialTypeLabel(typeof material.type === 'string' ? parseInt(material.type as unknown as string) : material.type)}</td>
-                            <td className="p-3 text-sm font-medium">{material.quantity}</td>
                             <td className="p-3 text-sm">{getPackagingName(material.packagingId as unknown as number | string)}</td>
                             <td className="p-3">
                               <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${stockStatus.color}`}>
@@ -785,33 +781,20 @@ const SupplyManagement: React.FC = () => {
                         </div>
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label>Số lượng</Label>
-                          <Input
-                            type="number"
-                            value={selectedMaterial.quantity}
-                            onChange={(e) => setSelectedMaterial({
-                              ...selectedMaterial,
-                              quantity: parseInt(e.target.value) || 0
-                            })}
-                          />
-                        </div>
-                        <div>
-                          <Label>Loại *</Label>
-                          <select
-                            value={selectedMaterial.type || ''}
-                            onChange={(e) => setSelectedMaterial({
-                              ...selectedMaterial,
-                              type: parseInt(e.target.value)
-                            })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          >
-                            <option value="">Chọn loại vật tư</option>
-                            <option value={1}>Hoá chất</option>
-                            <option value={2}>Vật tư</option>
-                          </select>
-                        </div>
+                      <div>
+                        <Label>Loại *</Label>
+                        <select
+                          value={selectedMaterial.type || ''}
+                          onChange={(e) => setSelectedMaterial({
+                            ...selectedMaterial,
+                            type: parseInt(e.target.value)
+                          })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        >
+                          <option value="">Chọn loại vật tư</option>
+                          <option value={1}>Hoá chất</option>
+                          <option value={2}>Vật tư</option>
+                        </select>
                       </div>
                       
                       <div>
@@ -871,10 +854,6 @@ const SupplyManagement: React.FC = () => {
                         <div>
                           <span className="text-gray-600">Loại:</span>
                           <p className="font-medium">{getMaterialTypeLabel(typeof selectedMaterial.type === 'string' ? parseInt(selectedMaterial.type as unknown as string) : selectedMaterial.type)}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Số lượng:</span>
-                          <p className="font-medium">{selectedMaterial.quantity}</p>
                         </div>
                         <div>
                           <span className="text-gray-600">Đóng gói:</span>
@@ -1034,15 +1013,7 @@ const SupplyManagement: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <Label>Số lượng</Label>
-                    <Input
-                      type="number"
-                      value={newMaterial.quantity || ''}
-                      onChange={(e) => setNewMaterial({ ...newMaterial, quantity: parseInt(e.target.value) || 0 })}
-                    />
-                  </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Loại *</Label>
                     <select

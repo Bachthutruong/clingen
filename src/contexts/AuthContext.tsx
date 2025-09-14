@@ -7,7 +7,7 @@ import type {
   // RefreshTokenRequest,
   ChangePasswordRequest 
 } from '@/types/auth'
-import { authApi } from '@/services/api'
+import { authApi, resetRefreshAttempts } from '@/services/api'
 import { config } from '@/config'
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -42,23 +42,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setRefreshToken(storedRefreshToken)
           setUser(JSON.parse(storedUser))
           
-          // Verify token is still valid by getting user info
-          await getUserInfo()
+          // Don't verify token here to avoid infinite redirect loop
+          // API interceptor will handle token refresh when needed
         } catch (error) {
-          console.error('Invalid stored auth data or token expired:', error)
-          // Try to refresh token
-          try {
-            await refreshAuthToken()
-          } catch (refreshError) {
-            console.error('Token refresh failed:', refreshError)
-            // Clear invalid data
-            localStorage.removeItem(config.TOKEN_STORAGE_KEY)
-            localStorage.removeItem(config.REFRESH_TOKEN_STORAGE_KEY)
-            localStorage.removeItem(config.USER_STORAGE_KEY)
-            setToken(null)
-            setRefreshToken(null)
-            setUser(null)
-          }
+          console.error('Invalid stored auth data:', error)
+          // Clear invalid data
+          localStorage.removeItem(config.TOKEN_STORAGE_KEY)
+          localStorage.removeItem(config.REFRESH_TOKEN_STORAGE_KEY)
+          localStorage.removeItem(config.USER_STORAGE_KEY)
+          setToken(null)
+          setRefreshToken(null)
+          setUser(null)
         }
       }
       setIsLoading(false)
@@ -80,6 +74,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.setItem(config.TOKEN_STORAGE_KEY, response.token)
       localStorage.setItem(config.REFRESH_TOKEN_STORAGE_KEY, response.refreshToken)
       localStorage.setItem(config.USER_STORAGE_KEY, JSON.stringify(response.user))
+
+      // Reset refresh attempts on successful login
+      resetRefreshAttempts()
 
       toast.success('Đăng nhập thành công!')
     } catch (error) {
@@ -111,33 +108,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }
 
-  const refreshAuthToken = async () => {
-    if (!refreshToken) {
-      throw new Error('No refresh token available')
-    }
-
-    try {
-      const response = await authApi.refresh({ refreshToken })
-      
-      setToken(response.token)
-      setRefreshToken(response.refreshToken)
-      
-      localStorage.setItem(config.TOKEN_STORAGE_KEY, response.token)
-      localStorage.setItem(config.REFRESH_TOKEN_STORAGE_KEY, response.refreshToken)
-      
-      return response
-    } catch (error) {
-      console.error('Token refresh failed:', error)
-      // Clear invalid tokens
-      setToken(null)
-      setRefreshToken(null)
-      setUser(null)
-      localStorage.removeItem(config.TOKEN_STORAGE_KEY)
-      localStorage.removeItem(config.REFRESH_TOKEN_STORAGE_KEY)
-      localStorage.removeItem(config.USER_STORAGE_KEY)
-      throw error
-    }
-  }
 
   const changePassword = async (request: ChangePasswordRequest) => {
     try {
@@ -177,7 +147,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     refreshToken,
     login,
     logout,
-    refreshAuthToken,
     changePassword,
     getUserInfo,
     isLoading,

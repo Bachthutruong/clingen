@@ -23,6 +23,8 @@ export {
   departmentApi,
   supplierApi,
   quantityRangeApi,
+  dashboardApi,
+  systemLogApi,
   default as api
 } from './api'
 
@@ -66,7 +68,8 @@ export type {
   MonthlyCostSearchParams,
   MonthlyCostSummary,
   MonthlyCostTrend,
-  MonthlyCostBreakdown
+  MonthlyCostBreakdown,
+  DepartmentDTO
 } from '@/types/api'
 
 export type {

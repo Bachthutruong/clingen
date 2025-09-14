@@ -22,7 +22,7 @@ import {
   X
 } from 'lucide-react'
 import { formatCurrency, formatDateTime } from '@/lib/utils'
-import { inventoryApi, inventoryLogsApi, departmentApi, supplierApi } from '@/services'
+import { inventoryApi, inventoryLogsApi, departmentApi, supplierApi, materialsApi } from '@/services'
 import { getMaterialTypeLabel } from '@/types/api'
 import type { 
   InventoryItem, 
@@ -30,7 +30,8 @@ import type {
   InventorySearchRequest,
   InventoryLogSearchRequest,
   CreateInventoryLogRequest,
-  PaginatedResponse 
+  PaginatedResponse,
+  MaterialAPIResponse
 } from '@/types/api'
 
 const InventoryManagement: React.FC = () => {
@@ -46,6 +47,8 @@ const InventoryManagement: React.FC = () => {
   const [pageSize] = useState(20)
   const [departments, setDepartments] = useState<Array<{id:number;name:string}>>([])
   const [suppliers, setSuppliers] = useState<Array<{id:number;name:string}>>([])
+  const [materialsByType, setMaterialsByType] = useState<{[key: number]: MaterialAPIResponse[]}>({})
+  const [loadingMaterials, setLoadingMaterials] = useState<{[key: number]: boolean}>({})
 
   // API State
   const [inventoryData, setInventoryData] = useState<PaginatedResponse<InventoryItem> | null>(null)
@@ -65,6 +68,7 @@ const InventoryManagement: React.FC = () => {
     logType: number
     exportType: number
     exportId: number
+    isPay?: boolean
     items: Array<{
       type: number
       materialId: number
@@ -176,9 +180,29 @@ const InventoryManagement: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTab, logsKeyword, logsType, logsFromDate, logsToDate, logsPage])
 
+  // Fetch materials by type
+  const fetchMaterialsByType = async (type: number) => {
+    if (materialsByType[type]) {
+      return // Already loaded
+    }
+
+    try {
+      setLoadingMaterials(prev => ({ ...prev, [type]: true }))
+      const materials = await materialsApi.getByTypeForDropdown(type)
+      setMaterialsByType(prev => ({ ...prev, [type]: materials }))
+    } catch (error) {
+      console.error(`Error fetching materials for type ${type}:`, error)
+      setMaterialsByType(prev => ({ ...prev, [type]: [] }))
+    } finally {
+      setLoadingMaterials(prev => ({ ...prev, [type]: false }))
+    }
+  }
+
   useEffect(() => {
     // Preload master data
-    departmentApi.getAll().then(setDepartments).catch(() => setDepartments([]))
+    departmentApi.getAll().then(depts => {
+      setDepartments(depts.map(dept => ({ id: dept.id!, name: dept.name })))
+    }).catch(() => setDepartments([]))
     supplierApi.getAll().then(setSuppliers).catch(() => setSuppliers([]))
   }, [])
 
@@ -244,6 +268,10 @@ const InventoryManagement: React.FC = () => {
       items: []
     })
     setIsAddingNew(true)
+    
+    // Preload materials for both types
+    fetchMaterialsByType(1) // Hóa chất
+    fetchMaterialsByType(2) // Vật tư
   }
 
   const handleSubmitImportExport = async () => {
@@ -255,7 +283,7 @@ const InventoryManagement: React.FC = () => {
     // Validate items
     for (const item of logForm.items) {
       if (item.materialId <= 0) {
-        toast.error('Vui lòng nhập ID vật tư hợp lệ')
+        toast.error('Vui lòng chọn vật tư/hóa chất')
         return
       }
       if (item.quantity <= 0) {
@@ -269,7 +297,7 @@ const InventoryManagement: React.FC = () => {
       
       const logData: CreateInventoryLogRequest = {
         logType: logForm.logType,
-        exportType: logForm.logType === 1 ? 2 : 1, // import->supplier(2), export->department(1)
+        exportType: logForm.exportType,
         exportId: logForm.exportId,
         note: logForm.note,
         items: logForm.items.map(item => ({
@@ -281,7 +309,7 @@ const InventoryManagement: React.FC = () => {
           amount: item.amount || 0,
           note: item.note || ''
         })),
-        isPay: logForm.logType === 1 ? (logForm as any).isPay === true : undefined
+        isPay: logForm.logType === 1 ? logForm.isPay : undefined
       }
 
       console.log('Submitting inventory log:', logData)
@@ -1038,15 +1066,15 @@ const InventoryManagement: React.FC = () => {
                   <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
                   <p className="mt-2 text-gray-500">Đang tải dữ liệu...</p>
                 </div>
-              ) : !logsTabData || !(Array.isArray((logsTabData as any).content) || Array.isArray(logsTabData as any)) ||
-                (Array.isArray((logsTabData as any).content) ? (logsTabData as any).content.length === 0 : Array.isArray(logsTabData as any) ? (logsTabData as any).length === 0 : true) ? (
+              ) : !logsTabData || !(Array.isArray(logsTabData.content) || Array.isArray(logsTabData)) ||
+                (Array.isArray(logsTabData.content) ? logsTabData.content.length === 0 : Array.isArray(logsTabData) ? logsTabData.length === 0 : true) ? (
                 <div className="text-center py-8 text-gray-500">
                   <History size={48} className="mx-auto mb-4 text-gray-300" />
                   <p>Không có dữ liệu</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {(Array.isArray((logsTabData as any).content) ? (logsTabData as any).content : Array.isArray(logsTabData as any) ? (logsTabData as any) : []).map((log: any) => (
+                  {(Array.isArray(logsTabData.content) ? logsTabData.content : Array.isArray(logsTabData) ? logsTabData : []).map((log: any) => (
                     <div key={(log as any).id || Math.random()} className="p-3 border rounded-lg">
                       <div className="flex justify-between items-start">
                         <div className="flex items-center space-x-2">
@@ -1057,28 +1085,28 @@ const InventoryManagement: React.FC = () => {
                           )}
                           <span className="font-medium">{log.logType === 1 ? 'Nhập kho' : 'Xuất kho'}</span>
                         </div>
-                        {typeof (log as any).createdAt === 'string' && (
-                          <div className="text-sm text-gray-600">{formatDateTime((log as any).createdAt)}</div>
+                        {typeof log.createdAt === 'string' && (
+                          <div className="text-sm text-gray-600">{formatDateTime(log.createdAt)}</div>
                         )}
                       </div>
                       {log.note && (
                         <p className="text-sm text-gray-700 mt-1">{log.note}</p>
                       )}
-                      {typeof (log as any).isPay === 'boolean' && (
+                      {typeof log.isPay === 'boolean' && (
                         <div className="text-xs mt-1">
-                          Trạng thái thanh toán: {(log as any).isPay ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                          Trạng thái thanh toán: {log.isPay ? 'Đã thanh toán' : 'Chưa thanh toán'}
                         </div>
                       )}
                     </div>
                   ))}
 
-                  {typeof (logsTabData as any).totalPages === 'number' && (logsTabData as any).totalPages > 1 && (
+                  {typeof logsTabData.totalPages === 'number' && logsTabData.totalPages > 1 && (
                     <div className="flex justify-center items-center space-x-2 pt-2">
                       <Button variant="outline" onClick={() => setLogsPage(Math.max(0, logsPage - 1))} disabled={logsPage === 0}>
                         Trước
                       </Button>
-                      <span className="text-sm text-gray-600">Trang {logsPage + 1} / {(logsTabData as any).totalPages}</span>
-                      <Button variant="outline" onClick={() => setLogsPage(Math.min((logsTabData as any).totalPages - 1, logsPage + 1))} disabled={logsPage >= (logsTabData as any).totalPages - 1}>
+                      <span className="text-sm text-gray-600">Trang {logsPage + 1} / {logsTabData.totalPages}</span>
+                      <Button variant="outline" onClick={() => setLogsPage(Math.min(logsTabData.totalPages - 1, logsPage + 1))} disabled={logsPage >= logsTabData.totalPages - 1}>
                         Sau
                       </Button>
                     </div>
@@ -1116,7 +1144,14 @@ const InventoryManagement: React.FC = () => {
                     <Label>Loại giao dịch *</Label>
                     <select
                       value={logForm.logType}
-                      onChange={(e) => setLogForm({ ...logForm, logType: parseInt(e.target.value) })}
+                      onChange={(e) => {
+                        const newLogType = parseInt(e.target.value)
+                        setLogForm({ 
+                          ...logForm, 
+                          logType: newLogType,
+                          exportType: newLogType === 1 ? 2 : 1 // Auto set exportType
+                        })
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md"
                       disabled={submitting}
                     >
@@ -1142,7 +1177,6 @@ const InventoryManagement: React.FC = () => {
                 </div>
 
                 {/* Auto set exportType by logType: import -> supplier (2), export -> department (1) */}
-                {(() => { logForm.exportType = logForm.logType === 1 ? 2 : 1; return null })()}
 
                 <div>
                   <Label>Ghi chú</Label>
@@ -1159,8 +1193,8 @@ const InventoryManagement: React.FC = () => {
                     <label className="inline-flex items-center space-x-2">
                       <input
                         type="checkbox"
-                        checked={(logForm as any).isPay || false}
-                        onChange={(e) => setLogForm({ ...(logForm as any), isPay: e.target.checked })}
+                        checked={logForm.isPay || false}
+                        onChange={(e) => setLogForm({ ...logForm, isPay: e.target.checked })}
                         className="h-4 w-4"
                       />
                       <span>Đã thanh toán</span>
@@ -1179,8 +1213,12 @@ const InventoryManagement: React.FC = () => {
                             value={item.type}
                             onChange={(e) => {
                               const newItems = [...logForm.items]
-                              newItems[index].type = parseInt(e.target.value)
+                              const newType = parseInt(e.target.value)
+                              newItems[index].type = newType
+                              newItems[index].materialId = 0 // Reset material selection
                               setLogForm({ ...logForm, items: newItems })
+                              // Fetch materials for the new type
+                              fetchMaterialsByType(newType)
                             }}
                             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                             disabled={submitting}
@@ -1190,18 +1228,49 @@ const InventoryManagement: React.FC = () => {
                           </select>
                         </div>
                         <div>
-                          <Label className="text-sm">ID Vật tư</Label>
-                          <Input
-                            type="number"
-                            value={item.materialId}
-                            onChange={(e) => {
-                              const newItems = [...logForm.items]
-                              newItems[index].materialId = parseInt(e.target.value) || 0
-                              setLogForm({ ...logForm, items: newItems })
-                            }}
-                            className="text-sm"
-                            disabled={submitting}
-                          />
+                          <Label className="text-sm">Vật tư/Hóa chất</Label>
+                          <div className="relative">
+                            <select
+                              value={item.materialId}
+                              onChange={(e) => {
+                                const newItems = [...logForm.items]
+                                newItems[index].materialId = parseInt(e.target.value) || 0
+                                setLogForm({ ...logForm, items: newItems })
+                              }}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                              disabled={submitting || loadingMaterials[item.type]}
+                              onFocus={() => fetchMaterialsByType(item.type)}
+                            >
+                              <option value={0}>
+                                {loadingMaterials[item.type] ? 'Đang tải...' : 'Chọn vật tư/hóa chất'}
+                              </option>
+                              {materialsByType[item.type]?.map((material) => (
+                                <option key={material.id} value={material.id}>
+                                  {material.name} ({material.code})
+                                </option>
+                              ))}
+                            </select>
+                            {loadingMaterials[item.type] && (
+                              <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                                <Loader2 size={14} className="animate-spin text-gray-400" />
+                              </div>
+                            )}
+                          </div>
+                          {item.materialId > 0 && materialsByType[item.type] && (
+                            <div className="mt-1 text-xs text-gray-600">
+                              {(() => {
+                                const selectedMaterial = materialsByType[item.type].find(m => m.id === item.materialId)
+                                return selectedMaterial ? (
+                                  <span>
+                                    Đã chọn: <span className="font-medium">{selectedMaterial.name}</span>
+                                    {selectedMaterial.description && (
+                                      <span className="block text-gray-500">{selectedMaterial.description}</span>
+                                    )}
+                                  </span>
+                                ) : null
+                              })()}
+                            </div>
+                          )}
                         </div>
                         <div>
                           <Label className="text-sm">Số lượng</Label>
@@ -1237,18 +1306,21 @@ const InventoryManagement: React.FC = () => {
                       size="sm"
                       variant="outline"
                       onClick={() => {
+                        const newItem = {
+                          type: 1,
+                          materialId: 0,
+                          quantity: 0,
+                          expiryDate: '',
+                          unitPrice: 0,
+                          amount: 0,
+                          note: ''
+                        }
                         setLogForm({
                           ...logForm,
-                          items: [...logForm.items, {
-                            type: 1,
-                            materialId: 0,
-                            quantity: 0,
-                            expiryDate: '',
-                            unitPrice: 0,
-                            amount: 0,
-                            note: ''
-                          }]
+                          items: [...logForm.items, newItem]
                         })
+                        // Fetch materials for the default type (1 - Hóa chất)
+                        fetchMaterialsByType(1)
                       }}
                       disabled={submitting}
                     >

@@ -7,7 +7,6 @@ import {
   TestTube, 
   TrendingUp,
   UserCheck,
-  Clock,
   CheckCircle,
   AlertCircle,
   Calendar,
@@ -19,15 +18,19 @@ import {
   Sparkles
 } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { patientsApi, patientSamplesApi, revenueApi, notificationApi, WebSocketService } from '@/services/api'
+import { dashboardApi, notificationApi, WebSocketService } from '@/services/api'
 import RoleTest from '@/components/RoleTest'
 
 interface DashboardStats {
-  todayRegistrations: number
-  todayRevenue: number
-  pendingTests: number
-  completedTests: number
+  date: string
   totalPatients: number
+  totalRevenue: number
+  completedTests: number
+  totalTests: number
+  completionRate: number
+  avgRevenuePerPatient: number
+  avgRevenuePerTest: number
+  pendingTests: number
   monthlyGrowth: number
 }
 
@@ -37,11 +40,15 @@ const Dashboard: React.FC = () => {
   const [notifications, setNotifications] = useState<any[]>([])
   const [unreadCount, setUnreadCount] = useState<number>(0)
   const [stats, setStats] = useState<DashboardStats>({
-    todayRegistrations: 0,
-    todayRevenue: 0,
-    pendingTests: 0,
-    completedTests: 0,
+    date: new Date().toISOString().split('T')[0],
     totalPatients: 0,
+    totalRevenue: 0,
+    completedTests: 0,
+    totalTests: 0,
+    completionRate: 0,
+    avgRevenuePerPatient: 0,
+    avgRevenuePerTest: 0,
+    pendingTests: 0,
     monthlyGrowth: 0
   })
   const [isLoading, setIsLoading] = useState(true)
@@ -86,180 +93,47 @@ const Dashboard: React.FC = () => {
     const loadStats = async () => {
       setIsLoading(true)
       try {
-        // Load real data from APIs
-        console.log('Loading dashboard data...')
+        console.log('Loading dashboard data from /dashboard/today API...')
         
-        console.log('Making API calls...')
-        
-        let patientsResponse, patientSamplesResponse, revenueResponse
-        
-        try {
-          patientsResponse = await patientsApi.getAll({ pageIndex: 0, pageSize: 1 })
-          console.log('Patients API response:', patientsResponse)
-        } catch (error) {
-          console.error('Error fetching patients:', error)
-          patientsResponse = { totalElements: 0, content: [] }
-        }
-        
-        try {
-          patientSamplesResponse = await patientSamplesApi.getAll({ pageIndex: 0, pageSize: 100 })
-          console.log('Patient samples API response:', patientSamplesResponse)
-        } catch (error) {
-          console.error('Error fetching patient samples:', error)
-          patientSamplesResponse = { content: [] }
-        }
-        
-        try {
-          // Set default time parameters for revenue API
-          const currentDate = new Date()
-          const currentMonth = currentDate.getMonth() + 1
-          const currentYear = currentDate.getFullYear()
-          
-          // Calculate first and last day of the month
-          const firstDay = new Date(currentYear, currentMonth - 1, 1)
-          const lastDay = new Date(currentYear, currentMonth, 0)
-          
-          // Format dates as DD/MM/YYYY
-          const formatDate = (date: Date) => {
-            const day = date.getDate().toString().padStart(2, '0')
-            const month = (date.getMonth() + 1).toString().padStart(2, '0')
-            const year = date.getFullYear()
-            return `${day}/${month}/${year}`
-          }
-          
-          const revenueParams = {
-            keyword: "",
-            status: 0,
-            pageIndex: 0,
-            pageSize: 100,
-            orderCol: "createdAt",
-            isDesc: true,
-            filterType: 'MONTH',
-            fromDate: formatDate(firstDay),
-            toDate: formatDate(lastDay),
-            month: currentMonth,
-            year: currentYear,
-            testTypeId: 0,
-            referralSourceId: ""
-          }
-          
-          console.log('Revenue API params:', revenueParams)
-          revenueResponse = await revenueApi.search(revenueParams)
-          console.log('Revenue API response:', revenueResponse)
-        } catch (error) {
-          console.error('Error fetching revenue:', error)
-          console.log('Revenue API failed, using fallback data')
-          revenueResponse = { content: [] }
-        }
-        
-        console.log('API responses loaded:')
-        console.log('Patients:', patientsResponse)
-        console.log('Patient samples:', patientSamplesResponse)
-        console.log('Revenue:', revenueResponse)
-
-        // Calculate today's date
-        const today = new Date().toISOString().split('T')[0]
-        console.log('Today date:', today)
-        console.log('Today date type:', typeof today)
-        
-        // Calculate stats from real data
-        const totalPatients = patientsResponse.totalElements || 0
-        const allSamples = patientSamplesResponse.content || patientSamplesResponse || []
-        
-        let pendingTests = 0
-        let completedTests = 0
-        try {
-          pendingTests = allSamples.filter((sample: any) => sample.status === 0 || sample.status === 1).length
-          completedTests = allSamples.filter((sample: any) => sample.status === 3).length
-        } catch (error) {
-          console.error('Error calculating test stats:', error)
-        }
-        
-        // Calculate today's registrations (patients created today)
-        let todayRegistrations = 0
-        try {
-          todayRegistrations = allSamples.filter((sample: any) => {
-            const sampleDate = new Date(sample.createdAt || sample.registrationDate).toISOString().split('T')[0]
-            return sampleDate === today
-          }).length
-        } catch (error) {
-          console.error('Error calculating today registrations:', error)
-        }
-
-        // Calculate today's revenue
-        console.log('Revenue response:', revenueResponse)
-        console.log('Revenue response type:', typeof revenueResponse)
-        console.log('Revenue response keys:', Object.keys(revenueResponse || {}))
-        console.log('Revenue content:', revenueResponse.content)
-        console.log('Revenue content type:', typeof revenueResponse.content)
-        if (revenueResponse.content) {
-          console.log('Revenue content length:', revenueResponse.content.length)
-          if (revenueResponse.content.length > 0) {
-            console.log('First revenue item:', revenueResponse.content[0])
-            console.log('First revenue item keys:', Object.keys(revenueResponse.content[0] || {}))
-          }
-        } else {
-          console.log('No revenue content found')
-        }
-        
-        let todayRevenue = 0
-        if (revenueResponse?.content && Array.isArray(revenueResponse.content)) {
-          todayRevenue = revenueResponse.content.reduce((total: number, revenue: any) => {
-            try {
-              console.log('Processing revenue item:', revenue)
-              
-              // Try different date fields
-              let revenueDate = null
-              console.log('Revenue item date fields:', {
-                registrationDate: revenue.registrationDate,
-                createdAt: revenue.createdAt,
-                date: revenue.date
-              })
-              
-              if (revenue.registrationDate) {
-                revenueDate = new Date(revenue.registrationDate).toISOString().split('T')[0]
-              } else if (revenue.createdAt) {
-                revenueDate = new Date(revenue.createdAt).toISOString().split('T')[0]
-              } else if (revenue.date) {
-                revenueDate = new Date(revenue.date).toISOString().split('T')[0]
-              }
-              
-              if (revenueDate) {
-                console.log('Revenue date:', revenueDate, 'Today:', today, 'Match:', revenueDate === today)
-                const amount = Number(revenue.amount) || 0
-                console.log('Revenue amount:', revenue.amount, 'Parsed amount:', amount)
-                return revenueDate === today ? total + amount : total
-              } else {
-                console.log('No valid date found for revenue item:', revenue)
-                return total
-              }
-            } catch (error) {
-              console.error('Error processing revenue item:', error, revenue)
-              return total
-            }
-          }, 0)
-        }
-
-        // Calculate monthly growth (simplified)
-        const monthlyGrowth = 15.2 // This would need more complex calculation
-
-        setStats({
-          todayRegistrations,
-          todayRevenue,
-          pendingTests,
-          completedTests,
-          totalPatients,
-          monthlyGrowth
+        // Load today's stats from the new API
+        const todayStats = await dashboardApi.getTodayStats()
+        console.log('Today stats from API:', todayStats)
+        console.log('API Response structure:', {
+          totalPatients: todayStats.totalPatients,
+          totalRevenue: todayStats.totalRevenue,
+          completedTests: todayStats.completedTests,
+          totalTests: todayStats.totalTests
         })
+        
+        // Set stats from API response
+        const newStats = {
+          date: todayStats.date,
+          totalPatients: todayStats.totalPatients,
+          totalRevenue: todayStats.totalRevenue,
+          completedTests: todayStats.completedTests,
+          totalTests: todayStats.totalTests,
+          completionRate: todayStats.completionRate,
+          avgRevenuePerPatient: todayStats.avgRevenuePerPatient,
+          avgRevenuePerTest: todayStats.avgRevenuePerTest,
+          pendingTests: todayStats.totalTests - todayStats.completedTests, // Calculate pending tests
+          monthlyGrowth: 15.2 // This would need more complex calculation
+        }
+        
+        console.log('Setting stats to:', newStats)
+        setStats(newStats)
       } catch (error) {
         console.error('Error loading dashboard stats:', error)
         // Fallback to default values
         setStats({
-          todayRegistrations: 0,
-          todayRevenue: 0,
-          pendingTests: 0,
-          completedTests: 0,
+          date: new Date().toISOString().split('T')[0],
           totalPatients: 0,
+          totalRevenue: 0,
+          completedTests: 0,
+          totalTests: 0,
+          completionRate: 0,
+          avgRevenuePerPatient: 0,
+          avgRevenuePerTest: 0,
+          pendingTests: 0,
           monthlyGrowth: 0
         })
       } finally {
@@ -286,9 +160,9 @@ const Dashboard: React.FC = () => {
   const getStatsForRole = () => {
     const baseStats = [
       {
-        title: 'Đăng ký hôm nay',
-        value: stats.todayRegistrations,
-        icon: <UserCheck className="h-8 w-8 text-blue-600" />,
+        title: 'Số lượng bệnh nhân hôm nay',
+        value: stats.totalPatients,
+        icon: <Users className="h-8 w-8 text-blue-600" />,
         color: 'from-blue-500 to-blue-600',
         bgColor: 'bg-blue-50',
         borderColor: 'border-blue-200',
@@ -297,8 +171,8 @@ const Dashboard: React.FC = () => {
         trendUp: true
       },
       {
-        title: 'Doanh thu hôm nay',
-        value: formatCurrency(stats.todayRevenue),
+        title: 'Tổng doanh thu hôm nay',
+        value: formatCurrency(stats.totalRevenue),
         icon: <DollarSign className="h-8 w-8 text-green-600" />,
         color: 'from-green-500 to-green-600',
         bgColor: 'bg-green-50',
@@ -308,18 +182,7 @@ const Dashboard: React.FC = () => {
         trendUp: true
       },
       {
-        title: 'Xét nghiệm chờ',
-        value: stats.pendingTests,
-        icon: <Clock className="h-8 w-8 text-orange-600" />,
-        color: 'from-orange-500 to-orange-600',
-        bgColor: 'bg-orange-50',
-        borderColor: 'border-orange-200',
-        roles: ['admin', 'lab_technician'],
-        trend: '-5%',
-        trendUp: false
-      },
-      {
-        title: 'Xét nghiệm hoàn thành',
+        title: 'Xét nghiệm hoàn thành hôm nay',
         value: stats.completedTests,
         icon: <CheckCircle className="h-8 w-8 text-emerald-600" />,
         color: 'from-emerald-500 to-emerald-600',
@@ -327,17 +190,6 @@ const Dashboard: React.FC = () => {
         borderColor: 'border-emerald-200',
         roles: ['admin', 'lab_technician'],
         trend: '+15%',
-        trendUp: true
-      },
-      {
-        title: 'Tổng bệnh nhân',
-        value: stats.totalPatients,
-        icon: <Users className="h-8 w-8 text-purple-600" />,
-        color: 'from-purple-500 to-purple-600',
-        bgColor: 'bg-purple-50',
-        borderColor: 'border-purple-200',
-        roles: ['admin', 'receptionist', 'lab_technician'],
-        trend: '+3.2%',
         trendUp: true
       }
     ]
@@ -395,8 +247,8 @@ const Dashboard: React.FC = () => {
           <div className="h-12 bg-gradient-to-r from-blue-400 to-blue-600 rounded-2xl w-1/3 mb-4"></div>
           <div className="h-6 bg-gradient-to-r from-blue-300 to-blue-500 rounded-xl w-1/2"></div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-          {[...Array(5)].map((_, i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(3)].map((_, i) => (
             <div key={i} className="animate-pulse">
               <div className="h-40 bg-gradient-to-r from-gray-200 to-gray-300 rounded-2xl"></div>
             </div>
@@ -439,23 +291,23 @@ const Dashboard: React.FC = () => {
           {/* Quick stats in welcome section */}
           <div className="grid grid-cols-3 gap-4 mt-6">
             <div className="text-center p-4 bg-white/10 rounded-2xl backdrop-blur-sm">
-              <p className="text-2xl font-bold">{stats.todayRegistrations}</p>
-              <p className="text-blue-100 text-sm">Đăng ký hôm nay</p>
+              <p className="text-2xl font-bold">{stats.totalPatients}</p>
+              <p className="text-blue-100 text-sm">Bệnh nhân hôm nay</p>
             </div>
             <div className="text-center p-4 bg-white/10 rounded-2xl backdrop-blur-sm">
-              <p className="text-2xl font-bold">{formatCurrency(stats.todayRevenue)}</p>
-              <p className="text-blue-100 text-sm">Doanh thu</p>
+              <p className="text-2xl font-bold">{formatCurrency(stats.totalRevenue)}</p>
+              <p className="text-blue-100 text-sm">Doanh thu hôm nay</p>
             </div>
             <div className="text-center p-4 bg-white/10 rounded-2xl backdrop-blur-sm">
-              <p className="text-2xl font-bold">{stats.pendingTests}</p>
-              <p className="text-blue-100 text-sm">Xét nghiệm chờ</p>
+              <p className="text-2xl font-bold">{stats.completedTests}</p>
+              <p className="text-blue-100 text-sm">Xét nghiệm hoàn thành</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Enhanced Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {getStatsForRole().map((stat, index) => (
           <Card key={index} className="group bg-white shadow-lg hover:shadow-2xl transition-all duration-500 border-0 overflow-hidden transform hover:-translate-y-2">
             <div className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${stat.color}`}></div>

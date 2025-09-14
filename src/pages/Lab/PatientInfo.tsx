@@ -33,7 +33,7 @@ interface PatientDetail {
 }
 
 interface PatientWithDetails extends PatientAPI {
-  details: PatientDetail[]
+  details: (PatientDetail & { barcode: string })[]
   createdAt?: string
   createdBy?: string
   updatedAt?: string

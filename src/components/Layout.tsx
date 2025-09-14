@@ -66,7 +66,7 @@ const menuItems: MenuItem[] = [
       { label: 'Thông tin bệnh nhân', path: '/lab/patient-info', roles: ['admin', 'lab_technician'] },
       { label: 'Dịch vụ xét nghiệm', path: '/lab/service-selection', roles: ['admin', 'lab_technician'] },
       { label: 'Trạng thái mẫu', path: '/lab/sample-status', roles: ['admin', 'lab_technician'] },
-      { label: 'Kết quả xét nghiệm', path: '/lab/test-results', roles: ['admin', 'lab_technician'] },
+      // { label: 'Kết quả xét nghiệm', path: '/lab/test-results', roles: ['admin', 'lab_technician'] },
       { label: 'Quản lý vật tư', path: '/lab/supply-management', roles: ['admin', 'lab_technician'] },
       { label: 'Quản lý quy cách đóng gói', path: '/lab/packaging-management', roles: ['admin', 'lab_technician'] },
       { label: 'Quản lý kho', path: '/lab/inventory-management', roles: ['admin', 'lab_technician'] },
@@ -93,6 +93,7 @@ const menuItems: MenuItem[] = [
     roles: ['admin'],
     subItems: [
       { label: 'Quản lý tài khoản', path: '/admin/user-management', roles: ['admin'] },
+      { label: 'Quản lý phòng ban', path: '/admin/department-management', roles: ['admin'] },
       { label: 'Quản lý thông báo', path: '/admin/notification-management', roles: ['admin'] },
       { label: 'Lịch sử hệ thống', path: '/admin/system-history', roles: ['admin'] }
     ]

@@ -29,6 +29,14 @@ import { formatDateTime } from '@/lib/utils'
 import { patientSamplesApi } from '@/services'
 import type { PatientTestSearchDTO } from '@/types/api'
 
+// Import images
+import anhnenImg from '@/assets/Anhnen.png'
+import headerImg from '@/assets/header.png'
+import watermaskImg from '@/assets/watermask.png'
+import logoClinicImg from '@/assets/logo_clinic.jpg'
+import logoSvgClinicImg from '@/assets/logo_svg_clinic.svg'
+import reactImg from '@/assets/react.svg'
+
 // Interface cho API response thực tế
 interface SampleTestResponse {
   status: boolean
@@ -131,6 +139,49 @@ const SampleStatus: React.FC = () => {
       .replace(/>/g, '&gt;')
       .replace(/\"/g, '&quot;')
       .replace(/'/g, '&#039;')
+
+  // Helper function to fix image paths
+  const fixImagePaths = (html: string) => {
+    return html.replace(/<img[^>]+>/g, (match) => {
+      return match.replace(/src="([^"]*)"/g, (srcMatch, src) => {
+        console.log('Processing image src:', src) // Debug log
+        
+        // If src is data URL, keep it
+        if (src.startsWith('data:')) {
+          return srcMatch
+        }
+        
+        // Map API server paths to local assets
+        const imageMap: { [key: string]: string } = {
+          'Anhnen.png': anhnenImg,
+          'header.png': headerImg, 
+          'watermask.png': watermaskImg,
+          'logo_clinic.jpg': logoClinicImg,
+          'logo_svg_clinic.svg': logoSvgClinicImg,
+          'react.svg': reactImg
+        }
+        
+        // Check if it's an API server path
+        if (src.includes('/api/pk/v1/static/')) {
+          const fileName = src.split('/').pop() || src
+          if (imageMap[fileName]) {
+            console.log('Mapping API path to local asset:', src, '->', imageMap[fileName])
+            return `src="${imageMap[fileName]}"`
+          }
+        }
+        
+        // Check if it's a known image name (for direct file names)
+        const fileName = src.split('/').pop() || src
+        if (imageMap[fileName]) {
+          console.log('Mapping file name to local asset:', fileName, '->', imageMap[fileName])
+          return `src="${imageMap[fileName]}"`
+        }
+        
+        // For other paths, keep as is
+        return srcMatch
+      }).replace(/<img/g, '<img style="max-width: 100%; height: auto; display: block; margin: 10px 0;"')
+    })
+  }
 
   // Fetch patient samples from API
   const fetchSamples = async () => {
@@ -376,6 +427,63 @@ const SampleStatus: React.FC = () => {
   //   setShowConfirmDialog(true)
   // }
 
+  // Load existing result from API
+  const loadExistingResult = async (sampleId: number) => {
+    try {
+      setIsUploading(true)
+      
+      // Try to get result from patient-test API first
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://pk.caduceus.vn/api/pk/v1'}/patient-test/${sampleId}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+          }
+        })
+        
+        if (response.ok) {
+          const result = await response.json()
+          if (result.html) {
+            setUploadedHtml(result.html)
+            toast.success('Đã tải kết quả từ hệ thống!')
+            return
+          }
+        }
+      } catch (error) {
+        console.log('No result found in patient-test API, trying result API...')
+      }
+      
+      // Fallback: Try the result API with empty file parameter
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://pk.caduceus.vn/api/pk/v1'}/patient-test/result/${sampleId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: JSON.stringify({
+          file: '' // Empty file parameter to get existing result
+        })
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        if (result.status && result.data) {
+          setUploadedHtml(result.data)
+          toast.success('Đã tải kết quả từ hệ thống!')
+        } else {
+          setUploadedHtml('<div class="result-placeholder">Chưa có kết quả xét nghiệm</div>')
+        }
+      } else {
+        setUploadedHtml('<div class="result-placeholder">Không thể tải kết quả từ hệ thống</div>')
+      }
+    } catch (error) {
+      console.error('Error loading existing result:', error)
+      setUploadedHtml('<div class="result-placeholder">Lỗi khi tải kết quả</div>')
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
   // Handle file upload for results
   const handleFileUpload = async (file: File, sampleId: number) => {
     try {
@@ -465,6 +573,42 @@ const SampleStatus: React.FC = () => {
     } catch (error) {
       console.error('Error saving HTML:', error)
       toast.error('Có lỗi xảy ra khi lưu kết quả')
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  // Approve result - call API to approve the test result
+  const handleApproveResult = async (sampleId: number) => {
+    try {
+      setIsUploading(true)
+      
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://pk.caduceus.vn/api/pk/v1'}/patient-test`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: JSON.stringify({
+          patientTestId: sampleId,
+          html: uploadedHtml
+        })
+      })
+      
+      if (response.ok) {
+        toast.success('Phê duyệt kết quả thành công!')
+        setShowResultUploadDialog(false)
+        setUploadedHtml('')
+        setIsEditingHtml(false)
+        setShowCodeView(false)
+        await fetchSamples() // Refresh data
+      } else {
+        const errorData = await response.json()
+        toast.error(errorData.message || 'Lỗi khi phê duyệt kết quả')
+      }
+    } catch (error) {
+      console.error('Error approving result:', error)
+      toast.error('Có lỗi xảy ra khi phê duyệt kết quả')
     } finally {
       setIsUploading(false)
     }
@@ -777,6 +921,27 @@ const SampleStatus: React.FC = () => {
                             </Button>
                           )}
                           
+                          {sample.status === 'completed' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={async () => {
+                                setSelectedSample(sample)
+                                setShowResultUploadDialog(true)
+                                await loadExistingResult(parseInt(sample.id))
+                              }}
+                              className="text-xs"
+                              disabled={isUploading}
+                            >
+                              {isUploading ? (
+                                <Loader2 size={12} className="mr-1 animate-spin" />
+                              ) : (
+                                <Eye size={12} className="mr-1" />
+                              )}
+                              Xem kết quả
+                            </Button>
+                          )}
+                          
                           {/* {sample.status !== 'completed' && sample.status !== 'rejected' && (
                             <Button
                               size="sm"
@@ -1082,12 +1247,12 @@ const SampleStatus: React.FC = () => {
 
       {/* Removed Confirm Dialog */}
 
-      {/* Result Upload Dialog */}
+      {/* Result Upload Dialog - Expanded and Improved */}
       {showResultUploadDialog && selectedSample && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg w-full max-w-6xl max-h-[90vh] overflow-hidden">
-            <div className="flex justify-between items-center p-4 border-b">
-              <h3 className="text-lg font-semibold">Nhập kết quả xét nghiệm - {selectedSample.sampleCode}</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 z-50">
+          <div className="bg-white rounded-lg w-full max-w-7xl h-[95vh] overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b bg-gray-50">
+              <h3 className="text-xl font-semibold">Nhập kết quả xét nghiệm - {selectedSample.sampleCode}</h3>
               <Button
                 variant="outline"
                 size="sm"
@@ -1095,24 +1260,25 @@ const SampleStatus: React.FC = () => {
                   setShowResultUploadDialog(false)
                   setUploadedHtml('')
                   setIsEditingHtml(false)
+                  setShowCodeView(false)
                 }}
               >
                 <X size={16} />
               </Button>
             </div>
             
-            <div className="p-4 space-y-4">
+            <div className="flex-1 p-6 space-y-4 overflow-hidden">
               {!uploadedHtml ? (
                 <div
-                  className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors"
+                  className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-gray-400 transition-colors h-full flex flex-col items-center justify-center"
                   onDrop={(e) => handleDrop(e, parseInt(selectedSample.id))}
                   onDragOver={handleDragOver}
                 >
-                  <FileText size={48} className="mx-auto text-gray-400 mb-4" />
-                  <p className="text-lg font-medium text-gray-600 mb-2">
+                  <FileText size={64} className="mx-auto text-gray-400 mb-6" />
+                  <p className="text-xl font-medium text-gray-600 mb-3">
                     Kéo thả file Excel vào đây
                   </p>
-                  <p className="text-sm text-gray-500 mb-4">
+                  <p className="text-sm text-gray-500 mb-6">
                     Hoặc click để chọn file (.xlsx, .xls)
                   </p>
                   <input
@@ -1128,6 +1294,7 @@ const SampleStatus: React.FC = () => {
                     id="file-upload"
                   />
                   <Button
+                    size="lg"
                     onClick={() => {
                       const el = document.getElementById('file-upload') as HTMLInputElement | null
                       if (el) el.value = ''
@@ -1137,7 +1304,7 @@ const SampleStatus: React.FC = () => {
                   >
                     {isUploading ? (
                       <>
-                        <Loader2 size={16} className="mr-2 animate-spin" />
+                        <Loader2 size={20} className="mr-2 animate-spin" />
                         Đang xử lý...
                       </>
                     ) : (
@@ -1146,59 +1313,136 @@ const SampleStatus: React.FC = () => {
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-4 h-full flex flex-col">
                   <div className="flex justify-between items-center">
-                    <h4 className="font-medium">Kết quả HTML từ file Excel:</h4>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setIsEditingHtml(!isEditingHtml)}
-                      >
-                        {isEditingHtml ? 'Xem kết quả' : 'Chỉnh sửa'}
-                      </Button>
+                    <h4 className="font-medium text-lg">
+                      {selectedSample?.status === 'completed' ? 'Kết quả xét nghiệm (Đã phê duyệt)' : 'Kết quả xét nghiệm:'}
+                    </h4>
+                    <div className="flex gap-3">
+                      {selectedSample?.status !== 'completed' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setIsEditingHtml(!isEditingHtml)}
+                        >
+                          {isEditingHtml ? 'Xem kết quả' : 'Chỉnh sửa Word'}
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => setShowCodeView(!showCodeView)}>
                         {showCodeView ? 'Ẩn mã HTML' : 'Xem mã HTML'}
                       </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => handleSaveHtml(parseInt(selectedSample.id))}
-                        disabled={isUploading}
-                      >
-                        {isUploading ? (
-                          <>
-                            <Loader2 size={14} className="mr-1 animate-spin" />
-                            Đang lưu...
-                          </>
-                        ) : (
-                          <>
-                            <Save size={14} className="mr-1" />
-                            Lưu kết quả
-                          </>
-                        )}
-                      </Button>
+                      {selectedSample?.status !== 'completed' && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleSaveHtml(parseInt(selectedSample.id))}
+                            disabled={isUploading}
+                          >
+                            {isUploading ? (
+                              <>
+                                <Loader2 size={14} className="mr-1 animate-spin" />
+                                Đang lưu...
+                              </>
+                            ) : (
+                              <>
+                                <Save size={14} className="mr-1" />
+                                Lưu kết quả
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleApproveResult(parseInt(selectedSample.id))}
+                            disabled={isUploading || !uploadedHtml}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            <CheckCircle size={14} className="mr-1" />
+                            Phê duyệt
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                   
-                  {showCodeView ? (
-                    <pre className="max-h-96 overflow-auto border rounded-md p-3 bg-gray-50 text-sm">
-                      <code ref={codeRef as any} className="language-xml">
-                        {escapeHtmlForCode(uploadedHtml)}
-                      </code>
-                    </pre>
-                  ) : isEditingHtml ? (
-                    <textarea
-                      value={uploadedHtml}
-                      onChange={(e) => setUploadedHtml(e.target.value)}
-                      className="w-full h-96 p-3 border border-gray-300 rounded-md font-mono text-sm"
-                      placeholder="Chỉnh sửa HTML kết quả..."
-                    />
-                  ) : (
-                    <div 
-                      className="border border-gray-300 rounded-md p-4 max-h-96 overflow-y-auto"
-                      dangerouslySetInnerHTML={{ __html: uploadedHtml }}
-                    />
-                  )}
+                  <div className="flex-1 overflow-hidden">
+                    {showCodeView ? (
+                      <pre className="h-full overflow-auto border rounded-md p-4 bg-gray-50 text-sm">
+                        <code ref={codeRef as any} className="language-xml">
+                          {escapeHtmlForCode(uploadedHtml)}
+                        </code>
+                      </pre>
+                    ) : (isEditingHtml && selectedSample?.status !== 'completed') ? (
+                      <div className="h-full flex flex-col">
+                        <div className="mb-2 text-sm text-gray-600">
+                          Chỉnh sửa nội dung như Word (HTML sẽ được cập nhật tự động):
+                        </div>
+                        <div
+                          contentEditable
+                          suppressContentEditableWarning
+                          className="flex-1 p-4 border border-gray-300 rounded-md overflow-y-auto bg-white"
+                          style={{ 
+                            minHeight: '500px',
+                            fontFamily: 'Times New Roman, serif',
+                            fontSize: '14px',
+                            lineHeight: '1.6',
+                            wordBreak: 'break-word',
+                            whiteSpace: 'pre-wrap',
+                            overflowWrap: 'break-word'
+                          }}
+                          dangerouslySetInnerHTML={{ __html: fixImagePaths(uploadedHtml) }}
+                          onInput={(e) => {
+                            // Debounce input to prevent jumping
+                            clearTimeout((window as any).htmlEditTimeout)
+                            ;(window as any).htmlEditTimeout = setTimeout(() => {
+                              const newContent = e.currentTarget.innerHTML
+                              setUploadedHtml(newContent)
+                            }, 100)
+                          }}
+                          onKeyDown={(e) => {
+                            // Prevent default behavior for certain keys that cause jumping
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault()
+                              document.execCommand('insertHTML', false, '<br>')
+                            }
+                          }}
+                          onCompositionStart={(e) => {
+                            // Prevent input handling during composition (Vietnamese typing)
+                            e.currentTarget.setAttribute('data-composing', 'true')
+                          }}
+                          onCompositionEnd={(e) => {
+                            // Re-enable input handling after composition
+                            e.currentTarget.removeAttribute('data-composing')
+                            const newContent = e.currentTarget.innerHTML
+                            setUploadedHtml(newContent)
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="h-full flex flex-col">
+                        {selectedSample?.status === 'completed' && (
+                          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
+                            <div className="flex items-center text-green-800">
+                              <CheckCircle size={16} className="mr-2" />
+                              <span className="font-medium">Kết quả đã được phê duyệt</span>
+                            </div>
+                            <p className="text-sm text-green-700 mt-1">
+                              Kết quả này đã được phê duyệt và không thể chỉnh sửa
+                            </p>
+                          </div>
+                        )}
+                        <div 
+                          className="flex-1 overflow-y-auto border border-gray-300 rounded-md p-6 bg-white"
+                          style={{
+                            fontFamily: 'Times New Roman, serif',
+                            fontSize: '14px',
+                            lineHeight: '1.6'
+                          }}
+                          dangerouslySetInnerHTML={{ __html: fixImagePaths(uploadedHtml) }}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

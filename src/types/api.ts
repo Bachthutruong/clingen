@@ -16,6 +16,13 @@ export interface SearchDTO {
   isDesc?: boolean
 }
 
+// Department DTOs
+export interface DepartmentDTO {
+  id?: number
+  name: string
+  description?: string
+}
+
 export interface PatientTestSearchDTO extends SearchDTO {
   testSampleId?: number
   testTypeId?: number
@@ -60,6 +67,7 @@ export interface TestTypeDTO {
   status: number // Trạng thái: 0 không hoạt động, 1 hoạt động
   testSampleIds: number[] // array<integer> Items integer int64
   testSamples?: TestTypeTestSampleDTO[] // Danh sách mẫu xét nghiệm kèm theo
+  classPathTemplate?: string // Mẫu class path (tùy chọn)
 }
 
 // Test Sample DTO
@@ -91,6 +99,16 @@ export interface ReferralSourceTestTypeDTO {
   testPriceConfigs: TestPriceConfigDTO[]
 }
 
+// Patient Service Detail DTO
+export interface PatientServiceDetailDTO {
+  id: number
+  testTypeName: string // Tên dịch vụ kiểm tra
+  testSampleName: string // Tên mẫu xét nghiệm
+  price: number // Giá dịch vụ
+  status: number // Trạng thái dịch vụ
+  barcode: string // Mã vạch
+}
+
 // Patient DTO
 export interface PatientInfoDTO {
   id?: number
@@ -98,14 +116,17 @@ export interface PatientInfoDTO {
   birthYear: string // Năm sinh - date format
   gender: number // Giới tính: 0 nữ, 1 nam, 2 khác
   address?: string // Địa chỉ nơi cư trú
-  phoneNumber: string // Số điện thoại liên hệ
+  phoneNumber?: string // Số điện thoại liên hệ
   reasonForVisit?: string // Lý do đến khám
   referralSourceId?: number // Nguồn đến (ví dụ: tự đến, giới thiệu, chuyển viện) - int64
+  referralSourceName?: string // Tên nguồn gửi
+  referralSourceCode?: string // Mã nguồn gửi
   email?: string // Địa chỉ email
   guardianName?: string // Tên người bảo lãnh
   guardianRelationship?: string // Quan hệ với người bệnh (ví dụ: cha, mẹ, anh chị em)
   guardianPhoneNumber?: string // Số điện thoại của người bảo lãnh
   typeTests: PatientTestDTO[] // Danh sách dịch vụ xét nghiệm
+  details?: PatientServiceDetailDTO[] // Chi tiết các dịch vụ đã thực hiện
 }
 
 export interface PatientTestDTO {
@@ -133,6 +154,16 @@ export interface MaterialDTO {
   importTime: string // Thời gian nhập kho - date-time
   expiryTime?: string // Hạn sử dụng - date-time
   type: number // Loại: 1 - hóa chất, 2 - vật tư - int32
+}
+
+// Material API Response for dropdown selection
+export interface MaterialAPIResponse {
+  id: number
+  name: string
+  code: string
+  type: number
+  status?: number
+  description?: string
 }
 
 // Inventory Log DTO - Updated to match new API spec
@@ -164,6 +195,7 @@ export interface CreateTestTypeRequest {
   price: number
   status: number
   testSampleIds: number[]
+  classPathTemplate?: string
 }
 
 export interface CreateTestSampleRequest {

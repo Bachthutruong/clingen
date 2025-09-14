@@ -27,7 +27,11 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
-  FileCheck
+  FileCheck,
+  TestTube,
+  DollarSign,
+  Barcode,
+  Activity
 } from 'lucide-react'
 import { patientsApi, referralSourcesApi } from '@/services'
 import { getGenderLabel } from '@/types/api'
@@ -338,6 +342,25 @@ const PatientList: React.FC = () => {
     if (age < 18) return { label: 'Trẻ em', color: 'bg-green-100 text-green-800' }
     if (age < 60) return { label: 'Người lớn', color: 'bg-blue-100 text-blue-800' }
     return { label: 'Người cao tuổi', color: 'bg-orange-100 text-orange-800' }
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount)
+  }
+
+  const getServiceStatusLabel = (status: number) => {
+    switch (status) {
+      case 0: return { label: 'Chưa thực hiện', color: 'bg-gray-100 text-gray-800', icon: Clock }
+      case 1: return { label: 'Đang thực hiện', color: 'bg-yellow-100 text-yellow-800', icon: Activity }
+      case 2: return { label: 'Hoàn thành', color: 'bg-green-100 text-green-800', icon: CheckCircle }
+      case 3: return { label: 'Từ chối', color: 'bg-red-100 text-red-800', icon: AlertCircle }
+      default: return { label: 'Không xác định', color: 'bg-gray-100 text-gray-800', icon: Clock }
+    }
   }
 
   // Mock function to generate test result status (for demo purposes)
@@ -842,6 +865,43 @@ const PatientList: React.FC = () => {
                               )}
                             </div>
                           )}
+
+                          {/* Services in Mobile View */}
+                          {patient.details && patient.details.length > 0 && (
+                            <div className="pt-2 border-t">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <TestTube size={14} className="text-indigo-600" />
+                                <p className="text-xs text-gray-500">Dịch vụ đã thực hiện:</p>
+                              </div>
+                              <div className="space-y-2">
+                                {patient.details.slice(0, 2).map((service, serviceIndex) => {
+                                  const statusInfo = getServiceStatusLabel(service.status)
+                                  const StatusIcon = statusInfo.icon
+                                  
+                                  return (
+                                    <div key={service.id || serviceIndex} className="bg-gray-50 rounded p-2 text-xs">
+                                      <div className="flex items-center justify-between mb-1">
+                                        <span className="font-medium text-gray-900 truncate">{service.testTypeName}</span>
+                                        <span className={`inline-flex items-center px-1.5 py-0.5 text-xs rounded-full ${statusInfo.color}`}>
+                                          <StatusIcon size={10} className="mr-1" />
+                                          {statusInfo.label}
+                                        </span>
+                                      </div>
+                                      <div className="text-gray-600">
+                                        <p>Mẫu: {service.testSampleName}</p>
+                                        <p>Giá: {formatCurrency(service.price)}</p>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                                {patient.details.length > 2 && (
+                                  <p className="text-xs text-gray-500 text-center">
+                                    +{patient.details.length - 2} dịch vụ khác
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -973,6 +1033,92 @@ const PatientList: React.FC = () => {
                       </>
                     )}
                   </div>
+
+                  {/* Services Section */}
+                  {selectedPatient.details && selectedPatient.details.length > 0 && (
+                    <div className="mt-6 pt-6 border-t border-gray-200">
+                      <div className="flex items-center space-x-2 mb-4">
+                        <TestTube className="h-5 w-5 text-indigo-600" />
+                        <h3 className="text-lg font-semibold text-gray-900">Danh sách dịch vụ đã thực hiện</h3>
+                      </div>
+                      <div className="space-y-3">
+                        {selectedPatient.details.map((service, index) => {
+                          const statusInfo = getServiceStatusLabel(service.status)
+                          const StatusIcon = statusInfo.icon
+                          
+                          return (
+                            <div key={service.id || index} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-2 mb-2">
+                                    <h4 className="font-medium text-gray-900">{service.testTypeName}</h4>
+                                    <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${statusInfo.color}`}>
+                                      <StatusIcon size={12} className="mr-1" />
+                                      {statusInfo.label}
+                                    </span>
+                                  </div>
+                                  
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                    <div className="flex items-center space-x-2 text-gray-600">
+                                      <TestTube size={14} />
+                                      <span>Mẫu: {service.testSampleName}</span>
+                                    </div>
+                                    
+                                    <div className="flex items-center space-x-2 text-gray-600">
+                                      <Barcode size={14} />
+                                      <span>Mã vạch: {service.barcode}</span>
+                                    </div>
+                                    
+                                    <div className="flex items-center space-x-2 text-gray-600">
+                                      <DollarSign size={14} />
+                                      <span>Giá: {formatCurrency(service.price)}</span>
+                                    </div>
+                                    
+                                    <div className="flex items-center space-x-2 text-gray-600">
+                                      <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded">
+                                        ID: {service.id}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      
+                      {/* Service Summary */}
+                      <div className="mt-4 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Activity className="h-5 w-5 text-indigo-600" />
+                            <span className="font-medium text-indigo-900">Tổng kết dịch vụ</span>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm text-indigo-700">
+                              Tổng số dịch vụ: <span className="font-semibold">{selectedPatient.details.length}</span>
+                            </p>
+                            <p className="text-sm text-indigo-700">
+                              Tổng giá trị: <span className="font-semibold">
+                                {formatCurrency(selectedPatient.details.reduce((sum, service) => sum + service.price, 0))}
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* No Services Message */}
+                  {(!selectedPatient.details || selectedPatient.details.length === 0) && (
+                    <div className="mt-6 pt-6 border-t border-gray-200">
+                      <div className="text-center py-8">
+                        <TestTube className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">Chưa có dịch vụ nào</h3>
+                        <p className="text-gray-500">Bệnh nhân chưa thực hiện dịch vụ xét nghiệm nào</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="flex justify-end space-x-3 p-6 border-t bg-gray-50">
                   <Button onClick={() => setViewModalOpen(false)} variant="outline">
@@ -1053,7 +1199,7 @@ const PatientList: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="phoneNumber">Số điện thoại *</Label>
+                      <Label htmlFor="phoneNumber">Số điện thoại</Label>
                       <Input
                         id="phoneNumber"
                         value={editFormData.phoneNumber || ''}
