@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label'
 import { 
   Package, 
   Search, 
-  Edit3, 
   TrendingUp,
   TrendingDown,
   AlertTriangle,
@@ -21,11 +20,10 @@ import {
   Save,
   X
 } from 'lucide-react'
-import { formatCurrency, formatDateTime } from '@/lib/utils'
+import { formatDateTime } from '@/lib/utils'
 import { inventoryApi, inventoryLogsApi, departmentApi, supplierApi, materialsApi } from '@/services'
-import { getMaterialTypeLabel } from '@/types/api'
+import { transformToPaginatedResponse } from '@/services'
 import type { 
-  InventoryItem, 
   InventoryLogsDTO,
   InventorySearchRequest,
   InventoryLogSearchRequest,
@@ -39,10 +37,15 @@ const InventoryManagement: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [materialTypeFilter, setMaterialTypeFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
-  const [isEditing, setIsEditing] = useState(false)
+  const [selectedItem, setSelectedItem] = useState<any>(null)
   const [isAddingNew, setIsAddingNew] = useState(false)
-  const [showLogs, setShowLogs] = useState(false)
+  const [showItemDialog, setShowItemDialog] = useState(false)
+  const [showLogsDialog, setShowLogsDialog] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState<any>(null)
+  const [itemLogs, setItemLogs] = useState<any[]>([])
+  const [loadingItemLogs, setLoadingItemLogs] = useState(false)
+  const [unpaidStats, setUnpaidStats] = useState<any>(null)
   const [currentPage, setCurrentPage] = useState(0)
   const [pageSize] = useState(20)
   const [departments, setDepartments] = useState<Array<{id:number;name:string}>>([])
@@ -51,8 +54,7 @@ const InventoryManagement: React.FC = () => {
   const [loadingMaterials, setLoadingMaterials] = useState<{[key: number]: boolean}>({})
 
   // API State
-  const [inventoryData, setInventoryData] = useState<PaginatedResponse<InventoryItem> | null>(null)
-  const [inventoryLogs, setInventoryLogs] = useState<PaginatedResponse<InventoryLogsDTO> | null>(null)
+  const [inventoryData, setInventoryData] = useState<any>(null)
   const [logsTabData, setLogsTabData] = useState<PaginatedResponse<InventoryLogsDTO> | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingLogs, setLoadingLogs] = useState(false)
@@ -61,7 +63,6 @@ const InventoryManagement: React.FC = () => {
   const [logsError, setLogsError] = useState<string | null>(null)
 
   // Form States
-
   const [logForm, setLogForm] = useState<{
     quantity: number
     note: string
@@ -87,6 +88,14 @@ const InventoryManagement: React.FC = () => {
     items: []
   })
 
+  // Logs tab state & loader
+  const [logsKeyword, setLogsKeyword] = useState('')
+  const [logsType, setLogsType] = useState<string>('')
+  const [logsFromDate, setLogsFromDate] = useState('')
+  const [logsToDate, setLogsToDate] = useState('')
+  const [logsPage, setLogsPage] = useState(0)
+  const [logsPageSize, setLogsPageSize] = useState(20)
+
   // Fetch inventory items
   const fetchInventoryItems = async () => {
     try {
@@ -99,11 +108,11 @@ const InventoryManagement: React.FC = () => {
         status: statusFilter ? parseInt(statusFilter) : undefined,
         pageIndex: currentPage,
         pageSize: pageSize,
-        // orderCol: 'name',
         isDesc: false
       }
 
       const response = await inventoryApi.search(searchParams)
+      console.log('🔍 Inventory API response:', response)
       setInventoryData(response)
     } catch (err) {
       console.error('Error fetching inventory items:', err)
@@ -112,33 +121,6 @@ const InventoryManagement: React.FC = () => {
       setLoading(false)
     }
   }
-
-  // Fetch inventory logs
-  const fetchInventoryLogs = async () => {
-    try {
-      const searchParams: InventoryLogSearchRequest = {
-        keyword: '',
-        status: 1,
-        pageIndex: 0,
-        pageSize: 50,
-        // orderCol: 'createdAt',
-        isDesc: true
-      }
-
-      const response = await inventoryLogsApi.search(searchParams)
-      setInventoryLogs(response)
-    } catch (err) {
-      console.error('Error fetching inventory logs:', err)
-    }
-  }
-
-  // Logs tab state & loader
-  const [logsKeyword, setLogsKeyword] = useState('')
-  const [logsType, setLogsType] = useState<string>('')
-  const [logsFromDate, setLogsFromDate] = useState('')
-  const [logsToDate, setLogsToDate] = useState('')
-  const [logsPage, setLogsPage] = useState(0)
-  const [logsPageSize] = useState(20)
 
   const fetchLogsTab = async () => {
     try {
@@ -154,6 +136,7 @@ const InventoryManagement: React.FC = () => {
         toDate: logsToDate || undefined
       }
       const response = await inventoryLogsApi.search(params)
+      console.log('🔍 Logs API response:', response)
       setLogsTabData(response)
     } catch (err) {
       console.error('Error fetching logs tab:', err)
@@ -168,17 +151,16 @@ const InventoryManagement: React.FC = () => {
   }, [currentPage, searchQuery, materialTypeFilter, statusFilter])
 
   useEffect(() => {
-    if (selectedItem?.id) {
-      fetchInventoryLogs()
-    }
-  }, [selectedItem])
-
-  useEffect(() => {
     if (currentTab === 'logs') {
       fetchLogsTab()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTab, logsKeyword, logsType, logsFromDate, logsToDate, logsPage])
+  }, [currentTab, logsKeyword, logsType, logsFromDate, logsToDate, logsPage, logsPageSize])
+
+  // Load logs data on component mount
+  useEffect(() => {
+      fetchLogsTab()
+  }, [])
 
   // Fetch materials by type
   const fetchMaterialsByType = async (type: number) => {
@@ -198,20 +180,34 @@ const InventoryManagement: React.FC = () => {
     }
   }
 
+  // Fetch unpaid statistics
+  const fetchUnpaidStats = async () => {
+    try {
+      const stats = await inventoryApi.getUnpaidStatistics()
+      setUnpaidStats(stats)
+    } catch (error) {
+      console.error('Error fetching unpaid stats:', error)
+    }
+  }
+
   useEffect(() => {
     // Preload master data
     departmentApi.getAll().then(depts => {
       setDepartments(depts.map(dept => ({ id: dept.id!, name: dept.name })))
     }).catch(() => setDepartments([]))
     supplierApi.getAll().then(setSuppliers).catch(() => setSuppliers([]))
+    
+    // Fetch unpaid statistics
+    fetchUnpaidStats()
   }, [])
 
-  const getStockStatus = (item: InventoryItem) => {
-    if (item.currentStock <= 0) {
+  const getStockStatus = (item: any) => {
+    const quantity = item.quantity || 0
+    if (quantity <= 0) {
       return { status: 'OUT_OF_STOCK', label: 'Hết hàng', color: 'bg-red-100 text-red-800' }
-    } else if (item.currentStock <= item.minStock) {
+    } else if (quantity <= 5) { // Assume low stock threshold is 5
       return { status: 'LOW_STOCK', label: 'Sắp hết', color: 'bg-yellow-100 text-yellow-800' }
-    } else if (item.currentStock >= item.maxStock) {
+    } else if (quantity >= 50) { // Assume over stock threshold is 50
       return { status: 'OVER_STOCK', label: 'Dư thừa', color: 'bg-blue-100 text-blue-800' }
     } else {
       return { status: 'NORMAL', label: 'Bình thường', color: 'bg-green-100 text-green-800' }
@@ -227,36 +223,10 @@ const InventoryManagement: React.FC = () => {
     }
   }
 
-
-
-  const handleViewItem = (item: InventoryItem) => {
+  const handleViewItem = (item: any) => {
     setSelectedItem(item)
-    setShowLogs(false)
-    setIsEditing(false)
+    setShowItemDialog(true)
   }
-
-  const handleEditItem = () => {
-    setIsEditing(true)
-  }
-
-  const handleSaveItem = async () => {
-    if (!selectedItem) return
-
-    try {
-      setSubmitting(true)
-      
-      // Note: Inventory items are read-only, updates should be done through inventory logs
-      toast.success('Vật tư kho chỉ có thể xem, không thể chỉnh sửa trực tiếp. Sử dụng nhập/xuất kho để cập nhật.')
-      setIsEditing(false)
-      await fetchInventoryItems()
-    } catch (error) {
-      console.error('Error updating item:', error)
-      toast.error('Có lỗi xảy ra khi cập nhật vật tư')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
 
   const handleImportExport = (type: 'import' | 'export') => {
     setLogForm({
@@ -317,7 +287,7 @@ const InventoryManagement: React.FC = () => {
       
       toast.success(logForm.logType === 1 ? 'Nhập kho thành công!' : 'Xuất kho thành công!')
       setIsAddingNew(false)
-      await fetchInventoryLogs()
+      await fetchLogsTab()
       
       // Reset form
       setLogForm({
@@ -351,9 +321,9 @@ const InventoryManagement: React.FC = () => {
         exportId: 1, // Default department ID
         items: [{
           type: 1, // 1 - hóa chất, 2 - vật tư
-          materialId: selectedItem.id!,
+          materialId: selectedItem.materialId, // Use materialId instead of id
           quantity: logForm.quantity,
-          expiryDate: '', // Default expiry date
+          expiryDate: selectedItem.expiryDate || '', // Use item's expiry date
           unitPrice: 0, // Default unit price
           amount: 0, // Default amount
           note: logForm.note || ''
@@ -374,7 +344,7 @@ const InventoryManagement: React.FC = () => {
       })
       
       await fetchInventoryItems()
-      await fetchInventoryLogs()
+      await fetchLogsTab()
     } catch (error) {
       console.error('Error creating log:', error)
       toast.error(`Có lỗi xảy ra khi ${type === 'import' ? 'nhập' : 'xuất'} kho`)
@@ -383,13 +353,144 @@ const InventoryManagement: React.FC = () => {
     }
   }
 
-  const handleViewLogs = () => {
-    setShowLogs(true)
+  const fetchItemLogs = async (item: any) => {
+    try {
+      setLoadingItemLogs(true)
+      console.log('🔍 Fetching logs for item:', item)
+      
+      const searchParams: InventoryLogSearchRequest = {
+        pageIndex: 0,
+        pageSize: 100, // Get more logs for the dialog
+        orderCol: 'createdAt',
+        isDesc: true
+        // Note: materialId filter not available in current API
+      }
+      
+      const response = await inventoryLogsApi.search(searchParams)
+      console.log('📊 Raw logs response:', response)
+      
+      const logsData = transformToPaginatedResponse(response, 0, 100)
+      console.log('📋 Transformed logs data:', logsData)
+      
+      // Filter logs by materialId in frontend since API doesn't support it
+      const filteredLogs = (logsData.content || []).filter((log: any) => {
+        const hasMaterial = log.logDetails && Array.isArray(log.logDetails) && 
+          log.logDetails.some((detail: any) => detail.materialId === item.materialId)
+        console.log(`🔍 Log ${log.id}: hasMaterial=${hasMaterial}, materialId=${item.materialId}`, log.logDetails)
+        return hasMaterial
+      })
+      
+      console.log('✅ Filtered logs for item:', filteredLogs)
+      setItemLogs(filteredLogs)
+    } catch (error) {
+      console.error('Error fetching item logs:', error)
+      setItemLogs([])
+    } finally {
+      setLoadingItemLogs(false)
+    }
+  }
+
+  const handleViewLogs = (item: any) => {
+    setSelectedItem(item)
+    setShowItemDialog(false) // Close item dialog
+    setShowLogsDialog(true)
+    fetchItemLogs(item)
+  }
+
+  const handleDeleteLog = (log: any) => {
+    setItemToDelete(log)
+    setShowDeleteDialog(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!itemToDelete) return
+
+    try {
+      setSubmitting(true)
+      await inventoryLogsApi.delete(itemToDelete.id)
+      toast.success('Xóa giao dịch thành công!')
+      
+      // Refresh logs
+      if (selectedItem) {
+        await fetchItemLogs(selectedItem)
+      }
+      await fetchLogsTab()
+    } catch (error) {
+      console.error('Error deleting log:', error)
+      toast.error('Có lỗi xảy ra khi xóa giao dịch')
+    } finally {
+      setSubmitting(false)
+      setShowDeleteDialog(false)
+      setItemToDelete(null)
+    }
+  }
+
+  const handleUpdateLog = async (log: any) => {
+    try {
+      setSubmitting(true)
+      
+      // Validate required fields
+      if (!log.id) {
+        toast.error('Không tìm thấy ID giao dịch')
+        return
+      }
+      
+      if (!log.logDetails || !Array.isArray(log.logDetails) || log.logDetails.length === 0) {
+        toast.error('Giao dịch phải có ít nhất một vật tư')
+        return
+      }
+      
+      // Prepare update data according to API spec
+      const updateData = {
+        logType: log.logType,
+        exportType: log.exportType || 1, // Default to department
+        exportId: log.exportId || 1, // Default export ID
+        items: log.logDetails.map((detail: any) => ({
+          type: detail.materialType,
+          materialId: detail.materialId,
+          quantity: detail.quantity,
+          expiryDate: detail.expiryDate || '',
+          unitPrice: detail.unitPrice || 0,
+          amount: detail.amount || 0,
+          note: detail.note || ''
+        })),
+        note: log.note || '',
+        isPay: log.isPay
+      }
+      
+      // Remove undefined values to avoid API errors
+      Object.keys(updateData).forEach(key => {
+        if ((updateData as any)[key] === undefined) {
+          delete (updateData as any)[key]
+        }
+      })
+      
+      console.log('Updating log with data:', updateData)
+      await inventoryLogsApi.update(log.id, updateData)
+      toast.success('Cập nhật giao dịch thành công!')
+      
+      // Refresh logs
+      if (selectedItem) {
+        await fetchItemLogs(selectedItem)
+      }
+      await fetchLogsTab()
+    } catch (error: any) {
+      console.error('Error updating log:', error)
+      const errorMessage = error?.response?.data?.message || error?.message || 'Có lỗi xảy ra khi cập nhật giao dịch'
+      toast.error(errorMessage)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleSearch = () => {
     setCurrentPage(0)
     fetchInventoryItems()
+  }
+
+  const handleLogsSearch = () => {
+    setLogsPage(0)
+    fetchLogsTab()
   }
 
   // Ensure inventoryItems is always an array
@@ -399,23 +500,34 @@ const InventoryManagement: React.FC = () => {
       ? inventoryData 
       : []
   
-  const logs = Array.isArray(inventoryLogs?.content) 
-    ? inventoryLogs.content 
-    : Array.isArray(inventoryLogs) 
-      ? inventoryLogs 
+  // Debug logging
+  console.log('🔍 Inventory data:', inventoryData)
+  console.log('🔍 Inventory items:', inventoryItems)
+  console.log('🔍 Inventory items length:', inventoryItems.length)
+  
+  // Get logs from logsTabData instead of inventoryLogs
+  const logs = Array.isArray(logsTabData?.content) 
+    ? logsTabData.content 
+    : Array.isArray(logsTabData) 
+      ? logsTabData 
       : []
+
+  // Debug logging for logs
+  console.log('🔍 Logs tab data:', logsTabData)
+  console.log('🔍 Logs array:', logs)
+  console.log('🔍 Logs length:', logs.length)
 
   // Calculate statistics - with additional safety checks
   const stats = {
     total: inventoryItems.length,
-    lowStock: inventoryItems.filter(item => item && getStockStatus(item).status === 'LOW_STOCK').length,
-    outOfStock: inventoryItems.filter(item => item && getStockStatus(item).status === 'OUT_OF_STOCK').length,
-    normal: inventoryItems.filter(item => item && getStockStatus(item).status === 'NORMAL').length,
-    totalValue: inventoryItems.reduce((sum, item) => {
-      if (!item || typeof item.currentStock !== 'number' || typeof item.unitPrice !== 'number') {
+    lowStock: inventoryItems.filter((item: any) => item && getStockStatus(item).status === 'LOW_STOCK').length,
+    outOfStock: inventoryItems.filter((item: any) => item && getStockStatus(item).status === 'OUT_OF_STOCK').length,
+    normal: inventoryItems.filter((item: any) => item && getStockStatus(item).status === 'NORMAL').length,
+    totalQuantity: inventoryItems.reduce((sum: number, item: any) => {
+      if (!item || typeof item.quantity !== 'number') {
         return sum
       }
-      return sum + (item.currentStock * item.unitPrice)
+      return sum + item.quantity
     }, 0)
   }
 
@@ -549,8 +661,8 @@ const InventoryManagement: React.FC = () => {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-gray-600">Tổng giá trị</p>
-                <p className="text-lg font-bold text-emerald-600">{formatCurrency(stats.totalValue)}</p>
+                <p className="text-xs text-gray-600">Tổng số lượng</p>
+                <p className="text-lg font-bold text-emerald-600">{stats.totalQuantity}</p>
               </div>
               <TrendingUp className="h-6 w-6 text-emerald-600" />
             </div>
@@ -600,14 +712,19 @@ const InventoryManagement: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Inventory Items List */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
+          {/* Inventory Items Table */}
               <Card className="shadow-lg border-0">
                 <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
                     <span>Danh sách vật tư ({inventoryItems.length})</span>
                     {loading && <Loader2 size={16} className="animate-spin" />}
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-500">
+                    Trang {currentPage + 1} / {inventoryData?.totalPages || 1}
+                  </span>
+                </div>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -616,388 +733,71 @@ const InventoryManagement: React.FC = () => {
                       <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
                       <p className="mt-4 text-gray-500">Đang tải dữ liệu...</p>
                     </div>
-                  ) : inventoryItems.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="border-b bg-gray-50">
+                          <th className="text-left p-3 font-semibold">Mã</th>
+                          <th className="text-left p-3 font-semibold">Tên vật tư</th>
+                          <th className="text-left p-3 font-semibold">Số lượng</th>
+                          <th className="text-left p-3 font-semibold">Ngày nhập</th>
+                          <th className="text-left p-3 font-semibold">Ngày hết hạn</th>
+                          <th className="text-left p-3 font-semibold">Trạng thái</th>
+                          <th className="text-left p-3 font-semibold">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inventoryItems.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="text-center py-8 text-gray-500">
                       Không tìm thấy vật tư phù hợp
-                    </div>
+                            </td>
+                          </tr>
                   ) : (
-                    <div className="space-y-4 max-h-96 overflow-y-auto">
-                      {inventoryItems.map(item => {
+                          inventoryItems.map((item: any) => {
                         if (!item) return null
                         const stockStatus = getStockStatus(item)
                         
                         return (
-                          <Card key={item.id} className="border hover:shadow-md transition-shadow cursor-pointer"
-                                onClick={() => handleViewItem(item)}>
-                            <CardContent className="p-4">
-                              <div className="flex justify-between items-start mb-3">
-                                <div className="flex-1">
-                                  <h3 className="font-semibold text-lg">{item.name}</h3>
-                                  <p className="text-sm text-gray-600">Mã: {item.code}</p>
-                                  <p className="text-sm text-gray-600">
-                                    Loại: {getMaterialTypeLabel(item.materialType)}
-                                  </p>
-                                  <div className="flex items-center space-x-2 mt-2">
+                              <tr key={item.id} className="border-b hover:bg-gray-50 transition-colors">
+                                <td className="p-3 font-mono text-sm">{item.code}</td>
+                                <td className="p-3 font-medium">{item.materialName}</td>
+                                <td className="p-3 text-sm">
+                                  <span className="font-bold text-lg text-emerald-600">{item.quantity}</span>
+                                </td>
+                                <td className="p-3 text-sm">{item.importDate}</td>
+                                <td className="p-3 text-sm">{item.expiryDate}</td>
+                                <td className="p-3">
                                     <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${stockStatus.color}`}>
                                       {getStatusIcon(stockStatus.status)}
                                       <span className="ml-1">{stockStatus.label}</span>
                                     </span>
-                                  </div>
-                                </div>
-                              </div>
-                              
-                              <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
-                                  <span className="text-gray-600">Tồn kho:</span>
-                                  <p className="font-medium">{item.currentStock} {item.unit}</p>
-                                </div>
-                                <div>
-                                  <span className="text-gray-600">Đơn giá:</span>
-                                  <p className="font-medium">{formatCurrency(item.unitPrice)}</p>
-                                </div>
-                                <div>
-                                  <span className="text-gray-600">Tối thiểu:</span>
-                                  <p className="font-medium">{item.minStock} {item.unit}</p>
-                                </div>
-                                <div>
-                                  <span className="text-gray-600">Tối đa:</span>
-                                  <p className="font-medium">{item.maxStock} {item.unit}</p>
-                                </div>
-                              </div>
-
-                              {item.location && (
-                                <div className="mt-2 text-sm">
-                                  <span className="text-gray-600">Vị trí:</span>
-                                  <span className="ml-1 font-medium">{item.location}</span>
-                                </div>
-                              )}
-                            </CardContent>
-                          </Card>
-                        )
-                      })}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Item Details / Stock Transaction */}
-            <div>
-              <Card className="shadow-lg border-0">
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>{showLogs ? 'Lịch sử nhập xuất' : 'Chi tiết vật tư'}</span>
-                    {selectedItem && (
-                      <div className="flex space-x-2">
-                        {!showLogs ? (
-                          <>
-                            {!isEditing ? (
-                              <>
-                                <Button size="sm" variant="outline" onClick={handleEditItem}>
-                                  <Edit3 size={14} className="mr-1" />
-                                  Sửa
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={handleViewLogs}>
-                                  <History size={14} className="mr-1" />
-                                  Lịch sử
-                                </Button>
-                              </>
-                            ) : (
-                              <>
-                                <Button size="sm" onClick={handleSaveItem} disabled={submitting}>
-                                  {submitting ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Save size={14} className="mr-1" />}
-                                  Lưu
-                                </Button>
-                                <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>
-                                  <X size={14} className="mr-1" />
-                                  Hủy
-                                </Button>
-                              </>
-                            )}
-                          </>
-                        ) : (
-                          <Button size="sm" variant="outline" onClick={() => setShowLogs(false)}>
-                            <Eye size={14} className="mr-1" />
-                            Chi tiết
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {selectedItem ? (
-                    showLogs ? (
-                      <div className="space-y-4">
-                        <div className="border-b pb-2">
-                          <h3 className="font-semibold">{selectedItem.name}</h3>
-                          <p className="text-sm text-gray-600">Lịch sử nhập xuất kho</p>
-                        </div>
-                        <div className="space-y-3 max-h-96 overflow-y-auto">
-                          {logs.length === 0 ? (
-                            <div className="text-center py-8 text-gray-500">
-                              Chưa có giao dịch nào
-                            </div>
-                          ) : (
-                            logs.map(log => (
-                              <div key={log.id} className="p-3 border rounded-lg">
-                                <div className="flex justify-between items-start mb-2">
-                                  <div className="flex items-center space-x-2">
-                                    {log.logType === 1 ? (
-                                      <ArrowUpCircle size={16} className="text-green-600" />
-                                    ) : (
-                                      <ArrowDownCircle size={16} className="text-red-600" />
-                                    )}
-                                    <span className="font-medium">
-                                      {log.logType === 1 ? 'Nhập kho' : 'Xuất kho'}
-                                    </span>
-                                  </div>
-                                  <div className="text-right text-sm">
-                                    <p className="font-bold">{log.quantity} {selectedItem.unit}</p>
-                                    <p className="text-gray-600">{formatDateTime(log.createdAt!)}</p>
-                                  </div>
-                                </div>
-                                {log.reason && (
-                                  <p className="text-sm text-gray-600 mb-1">
-                                    <span className="font-medium">Lý do:</span> {log.reason}
-                                  </p>
-                                )}
-                                {log.note && (
-                                  <p className="text-sm text-gray-600">
-                                    <span className="font-medium">Ghi chú:</span> {log.note}
-                                  </p>
-                                )}
-                                {log.createdBy && (
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    Người thực hiện: {log.createdBy}
-                                  </p>
-                                )}
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {/* Basic Info */}
-                        <div className="border-b pb-4">
-                          <h3 className="font-semibold text-lg">{selectedItem.name}</h3>
-                          <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
-                            <div>
-                              <span className="text-gray-600">Mã:</span>
-                              {isEditing ? (
-                                <Input 
-                                  className="mt-1" 
-                                  value={selectedItem.code}
-                                  onChange={(e) => setSelectedItem({...selectedItem, code: e.target.value})}
-                                />
-                              ) : (
-                                <p className="font-medium">{selectedItem.code}</p>
-                              )}
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Đơn vị:</span>
-                              {isEditing ? (
-                                <Input 
-                                  className="mt-1" 
-                                  value={selectedItem.unit}
-                                  onChange={(e) => setSelectedItem({...selectedItem, unit: e.target.value})}
-                                />
-                              ) : (
-                                <p className="font-medium">{selectedItem.unit}</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Stock Info */}
-                        <div className="border-b pb-4">
-                          <h4 className="font-semibold mb-3">Thông tin tồn kho</h4>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-600">Tồn kho hiện tại:</span>
-                              <p className="font-bold text-2xl text-emerald-600">
-                                {selectedItem.currentStock} {selectedItem.unit}
-                              </p>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Trạng thái:</span>
-                              <div className="mt-1">
-                                {(() => {
-                                  const status = getStockStatus(selectedItem)
-                                  return (
-                                    <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${status.color}`}>
-                                      {getStatusIcon(status.status)}
-                                      <span className="ml-1">{status.label}</span>
-                                    </span>
-                                  )
-                                })()}
-                              </div>
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Tối thiểu:</span>
-                              {isEditing ? (
-                                <Input 
-                                  type="number"
-                                  className="mt-1" 
-                                  value={selectedItem.minStock}
-                                  onChange={(e) => setSelectedItem({...selectedItem, minStock: parseInt(e.target.value) || 0})}
-                                />
-                              ) : (
-                                <p className="font-medium">{selectedItem.minStock} {selectedItem.unit}</p>
-                              )}
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Tối đa:</span>
-                              {isEditing ? (
-                                <Input 
-                                  type="number"
-                                  className="mt-1" 
-                                  value={selectedItem.maxStock}
-                                  onChange={(e) => setSelectedItem({...selectedItem, maxStock: parseInt(e.target.value) || 0})}
-                                />
-                              ) : (
-                                <p className="font-medium">{selectedItem.maxStock} {selectedItem.unit}</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Price, Location, and Dates */}
-                        <div className="border-b pb-4">
-                          <h4 className="font-semibold mb-3">Thông tin khác</h4>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-600">Đơn giá:</span>
-                              {isEditing ? (
-                                <Input 
-                                  type="number"
-                                  className="mt-1" 
-                                  value={selectedItem.unitPrice}
-                                  onChange={(e) => setSelectedItem({...selectedItem, unitPrice: parseFloat(e.target.value) || 0})}
-                                />
-                              ) : (
-                                <p className="font-medium">{formatCurrency(selectedItem.unitPrice)}</p>
-                              )}
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Vị trí:</span>
-                              {isEditing ? (
-                                <Input 
-                                  className="mt-1" 
-                                  value={selectedItem.location || ''}
-                                  onChange={(e) => setSelectedItem({...selectedItem, location: e.target.value})}
-                                />
-                              ) : (
-                                <p className="font-medium">{selectedItem.location || 'Chưa xác định'}</p>
-                              )}
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Loại vật tư:</span>
-                              {isEditing ? (
-                                <select 
-                                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" 
-                                  value={selectedItem.materialType}
-                                  onChange={(e) => setSelectedItem({...selectedItem, materialType: parseInt(e.target.value)})}
-                                >
-                                  <option value={0}>Thuốc thử</option>
-                                  <option value={1}>Thiết bị</option>
-                                  <option value={2}>Vật tư tiêu hao</option>
-                                  <option value={3}>Hóa chất</option>
-                                  <option value={4}>An toàn</option>
-                                  <option value={5}>Khác</option>
-                                </select>
-                              ) : (
-                                <p className="font-medium">{getMaterialTypeLabel(selectedItem.materialType)}</p>
-                              )}
-                            </div>
-                            <div>
-                              <span className="text-gray-600">Ngày nhập:</span>
-                              {isEditing ? (
-                                <Input 
-                                  type="date"
-                                  className="mt-1" 
-                                  value={selectedItem.importDate?.split('T')[0] || ''}
-                                  onChange={(e) => setSelectedItem({...selectedItem, importDate: e.target.value})}
-                                />
-                              ) : (
-                                <p className="font-medium">{selectedItem.importDate ? new Date(selectedItem.importDate).toLocaleDateString('vi-VN') : 'Chưa có'}</p>
-                              )}
-                            </div>
-                            <div className="col-span-2">
-                              <span className="text-gray-600">Ngày hết hạn:</span>
-                              {isEditing ? (
-                                <Input 
-                                  type="date"
-                                  className="mt-1" 
-                                  value={selectedItem.expiryDate?.split('T')[0] || ''}
-                                  onChange={(e) => setSelectedItem({...selectedItem, expiryDate: e.target.value})}
-                                />
-                              ) : (
-                                <p className="font-medium">{selectedItem.expiryDate ? new Date(selectedItem.expiryDate).toLocaleDateString('vi-VN') : 'Không giới hạn'}</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Stock Transaction Form */}
-                        {!isEditing && (
-                          <div>
-                            <h4 className="font-semibold mb-3">Nhập/Xuất kho</h4>
-                            <div className="space-y-3">
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <Label>Số lượng</Label>
-                                  <Input
-                                    type="number"
-                                    value={logForm.quantity}
-                                    onChange={(e) => setLogForm({...logForm, quantity: parseInt(e.target.value) || 0})}
-                                    placeholder="Nhập số lượng"
-                                  />
-                                </div>
-                                <div>
-                                  <Label>Ghi chú</Label>
-                                  <Input
-                                    value={logForm.note}
-                                    onChange={(e) => setLogForm({...logForm, note: e.target.value})}
-                                    placeholder="Ghi chú nhập/xuất"
-                                  />
-                                </div>
-                              </div>
-                              <div className="flex space-x-2">
+                                </td>
+                                <td className="p-3">
+                                  <div className="flex space-x-1">
                                 <Button 
-                                  onClick={() => handleStockTransaction('import')}
-                                  disabled={submitting || logForm.quantity <= 0}
-                                  className="flex-1"
-                                >
-                                  <ArrowUpCircle size={16} className="mr-1" />
-                                  Nhập kho
-                                </Button>
-                                <Button 
-                                  onClick={() => handleStockTransaction('export')}
-                                  disabled={submitting || logForm.quantity <= 0}
                                   variant="outline"
-                                  className="flex-1"
+                                      size="sm"
+                                      onClick={() => handleViewItem(item)}
+                                      title="Xem chi tiết"
                                 >
-                                  <ArrowDownCircle size={16} className="mr-1" />
-                                  Xuất kho
+                                      <Eye size={14} />
                                 </Button>
                               </div>
-                            </div>
-                          </div>
+                                </td>
+                              </tr>
+                            )
+                          })
                         )}
+                      </tbody>
+                    </table>
                       </div>
-                    )
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <Package size={48} className="mx-auto mb-4 text-gray-300" />
-                      <p>Chọn một vật tư để xem chi tiết</p>
-                    </div>
+                </>
                   )}
                 </CardContent>
               </Card>
-            </div>
-          </div>
 
           {/* Pagination */}
           {inventoryData && inventoryData.totalPages > 1 && (
@@ -1030,7 +830,7 @@ const InventoryManagement: React.FC = () => {
               <CardDescription>Lọc theo từ khóa, loại log và khoảng ngày</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
                 <div className="md:col-span-2">
                   <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -1038,6 +838,7 @@ const InventoryManagement: React.FC = () => {
                       placeholder="Tìm kiếm theo ghi chú..."
                       value={logsKeyword}
                       onChange={(e) => setLogsKeyword(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleLogsSearch()}
                       className="pl-10"
                     />
                   </div>
@@ -1055,10 +856,60 @@ const InventoryManagement: React.FC = () => {
                   <Input type="date" value={logsFromDate} onChange={(e) => { setLogsFromDate(e.target.value); setLogsPage(0) }} />
                   <Input type="date" value={logsToDate} onChange={(e) => { setLogsToDate(e.target.value); setLogsPage(0) }} />
                 </div>
+                <div className="flex space-x-2">
+                  <select
+                    value={logsPageSize}
+                    onChange={(e) => { setLogsPageSize(parseInt(e.target.value)); setLogsPage(0) }}
+                    className="px-3 py-2 border border-gray-300 rounded-md"
+                  >
+                    <option value={10}>10/trang</option>
+                    <option value={20}>20/trang</option>
+                    <option value={50}>50/trang</option>
+                    <option value={100}>100/trang</option>
+                  </select>
+                  <Button
+                    onClick={handleLogsSearch}
+                    className="bg-blue-600 hover:bg-blue-700"
+                    size="sm"
+                  >
+                    <Search size={16} />
+                  </Button>
+                </div>
               </div>
 
               {logsError && (
                 <div className="text-red-600 mb-3">{logsError}</div>
+              )}
+
+              {/* Unpaid Statistics */}
+              {unpaidStats && (
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Thống kê chưa thanh toán</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                        <div className="text-2xl font-bold text-yellow-600">
+                          {unpaidStats.totalUnpaid || 0}
+                        </div>
+                        <div className="text-sm text-gray-600">Tổng giao dịch chưa thanh toán</div>
+                      </div>
+                      <div className="text-center p-4 bg-red-50 rounded-lg">
+                        <div className="text-2xl font-bold text-red-600">
+                          {unpaidStats.totalAmount || 0}
+                        </div>
+                        <div className="text-sm text-gray-600">Tổng số tiền chưa thanh toán</div>
+                      </div>
+                      <div className="text-center p-4 bg-blue-50 rounded-lg">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {unpaidStats.importUnpaid || 0}
+                        </div>
+                        <div className="text-sm text-gray-600">Nhập kho chưa thanh toán</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
 
               {loadingLogs ? (
@@ -1066,52 +917,116 @@ const InventoryManagement: React.FC = () => {
                   <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
                   <p className="mt-2 text-gray-500">Đang tải dữ liệu...</p>
                 </div>
-              ) : !logsTabData || !(Array.isArray(logsTabData.content) || Array.isArray(logsTabData)) ||
-                (Array.isArray(logsTabData.content) ? logsTabData.content.length === 0 : Array.isArray(logsTabData) ? logsTabData.length === 0 : true) ? (
+              ) : logs.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <History size={48} className="mx-auto mb-4 text-gray-300" />
                   <p>Không có dữ liệu</p>
                 </div>
               ) : (
+                <>
+                  {/* Pagination Info */}
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="text-sm text-gray-600">
+                      Hiển thị {logs.length} / {logsTabData?.totalElements || 0} giao dịch
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      Trang {logsPage + 1} / {logsTabData?.totalPages || 1}
+                    </div>
+                  </div>
                 <div className="space-y-3">
-                  {(Array.isArray(logsTabData.content) ? logsTabData.content : Array.isArray(logsTabData) ? logsTabData : []).map((log: any) => (
-                    <div key={(log as any).id || Math.random()} className="p-3 border rounded-lg">
-                      <div className="flex justify-between items-start">
+                    {logs.map((log: any) => (
+                      <div key={log.id || Math.random()} className="p-4 border rounded-lg bg-white shadow-sm">
+                        <div className="flex justify-between items-start mb-3">
                         <div className="flex items-center space-x-2">
                           {log.logType === 1 ? (
                             <ArrowUpCircle size={16} className="text-green-600" />
                           ) : (
                             <ArrowDownCircle size={16} className="text-red-600" />
                           )}
-                          <span className="font-medium">{log.logType === 1 ? 'Nhập kho' : 'Xuất kho'}</span>
+                            <span className="font-medium text-lg">{log.logType === 1 ? 'Nhập kho' : 'Xuất kho'}</span>
+                            <span className="text-sm text-gray-500">#{log.id}</span>
                         </div>
-                        {typeof log.createdAt === 'string' && (
-                          <div className="text-sm text-gray-600">{formatDateTime(log.createdAt)}</div>
-                        )}
+                          <div className="text-right text-sm text-gray-600">
+                            <div>{formatDateTime(log.createdAt)}</div>
+                            <div>Bởi: {log.createdBy}</div>
+                          </div>
+                        </div>
+                        
+                        <div className="mb-3">
+                          <div className="text-sm text-gray-600 mb-1">
+                            <span className="font-medium">Tổng số lượng:</span> {log.totalQuantity}
+                          </div>
+                          {log.name && (
+                            <div className="text-sm text-gray-600 mb-1">
+                              <span className="font-medium">Phòng ban:</span> {log.name}
+                            </div>
+                          )}
+                          {typeof log.isPay === 'boolean' && (
+                            <div className="text-sm text-gray-600 mb-1">
+                              <span className="font-medium">Thanh toán:</span> 
+                              <span className={`ml-1 ${log.isPay ? 'text-green-600' : 'text-red-600'}`}>
+                                {log.isPay ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                              </span>
                       </div>
+                          )}
                       {log.note && (
-                        <p className="text-sm text-gray-700 mt-1">{log.note}</p>
+                            <div className="text-sm text-gray-600">
+                              <span className="font-medium">Ghi chú:</span> {log.note}
+                            </div>
                       )}
-                      {typeof log.isPay === 'boolean' && (
-                        <div className="text-xs mt-1">
-                          Trạng thái thanh toán: {log.isPay ? 'Đã thanh toán' : 'Chưa thanh toán'}
                         </div>
+
+                        {/* Log Details */}
+                        {log.logDetails && Array.isArray(log.logDetails) && log.logDetails.length > 0 && (
+                          <div className="border-t pt-3">
+                            <div className="text-sm font-medium text-gray-700 mb-2">Chi tiết vật tư:</div>
+                            <div className="space-y-2">
+                              {log.logDetails.map((detail: any, index: number) => (
+                                <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
+                                  <div className="flex-1">
+                                    <div className="font-medium">{detail.materialName}</div>
+                                    <div className="text-gray-600">Mã: {detail.materialCode}</div>
+                                    {detail.expiryDate && (
+                                      <div className="text-gray-600">Hết hạn: {detail.expiryDate}</div>
+                                    )}
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="font-medium">{detail.quantity} {detail.materialType === 1 ? 'Hóa chất' : 'Vật tư'}</div>
+                                    {detail.note && (
+                                      <div className="text-xs text-gray-500">{detail.note}</div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                       )}
                     </div>
                   ))}
 
-                  {typeof logsTabData.totalPages === 'number' && logsTabData.totalPages > 1 && (
-                    <div className="flex justify-center items-center space-x-2 pt-2">
-                      <Button variant="outline" onClick={() => setLogsPage(Math.max(0, logsPage - 1))} disabled={logsPage === 0}>
+                    {logsTabData && typeof logsTabData.totalPages === 'number' && logsTabData.totalPages > 1 && (
+                      <div className="flex justify-center items-center space-x-2 pt-4 border-t">
+                        <Button 
+                          variant="outline" 
+                          onClick={() => setLogsPage(Math.max(0, logsPage - 1))} 
+                          disabled={logsPage === 0 || loadingLogs}
+                        >
                         Trước
                       </Button>
-                      <span className="text-sm text-gray-600">Trang {logsPage + 1} / {logsTabData.totalPages}</span>
-                      <Button variant="outline" onClick={() => setLogsPage(Math.min(logsTabData.totalPages - 1, logsPage + 1))} disabled={logsPage >= logsTabData.totalPages - 1}>
+                        <span className="text-sm text-gray-600">
+                          Trang {logsPage + 1} / {logsTabData.totalPages}
+                        </span>
+                        <Button 
+                          variant="outline" 
+                          onClick={() => setLogsPage(Math.min(logsTabData.totalPages - 1, logsPage + 1))} 
+                          disabled={logsPage >= logsTabData.totalPages - 1 || loadingLogs}
+                        >
                         Sau
                       </Button>
                     </div>
                   )}
                 </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -1206,7 +1121,7 @@ const InventoryManagement: React.FC = () => {
                   <Label className="text-lg font-semibold">Danh sách vật tư</Label>
                   <div className="space-y-2 mt-2">
                     {logForm.items.map((item, index) => (
-                      <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-2 p-3 border rounded">
+                      <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-2 p-3 border rounded">
                         <div>
                           <Label className="text-sm">Loại hàng hóa</Label>
                           <select
@@ -1231,12 +1146,12 @@ const InventoryManagement: React.FC = () => {
                           <Label className="text-sm">Vật tư/Hóa chất</Label>
                           <div className="relative">
                             <select
-                              value={item.materialId}
-                              onChange={(e) => {
-                                const newItems = [...logForm.items]
-                                newItems[index].materialId = parseInt(e.target.value) || 0
-                                setLogForm({ ...logForm, items: newItems })
-                              }}
+                            value={item.materialId}
+                            onChange={(e) => {
+                              const newItems = [...logForm.items]
+                              newItems[index].materialId = parseInt(e.target.value) || 0
+                              setLogForm({ ...logForm, items: newItems })
+                            }}
                               className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                               disabled={submitting || loadingMaterials[item.type]}
                               onFocus={() => fetchMaterialsByType(item.type)}
@@ -1286,6 +1201,20 @@ const InventoryManagement: React.FC = () => {
                             disabled={submitting}
                           />
                         </div>
+                        <div>
+                          <Label className="text-sm">Ngày hết hạn</Label>
+                          <Input
+                            type="date"
+                            value={item.expiryDate}
+                            onChange={(e) => {
+                              const newItems = [...logForm.items]
+                              newItems[index].expiryDate = e.target.value
+                              setLogForm({ ...logForm, items: newItems })
+                            }}
+                            className="text-sm"
+                            disabled={submitting}
+                          />
+                        </div>
                         <div className="flex items-end">
                           <Button
                             size="sm"
@@ -1307,13 +1236,13 @@ const InventoryManagement: React.FC = () => {
                       variant="outline"
                       onClick={() => {
                         const newItem = {
-                          type: 1,
-                          materialId: 0,
-                          quantity: 0,
-                          expiryDate: '',
-                          unitPrice: 0,
-                          amount: 0,
-                          note: ''
+                            type: 1,
+                            materialId: 0,
+                            quantity: 0,
+                            expiryDate: '',
+                            unitPrice: 0,
+                            amount: 0,
+                            note: ''
                         }
                         setLogForm({
                           ...logForm,
@@ -1351,6 +1280,325 @@ const InventoryManagement: React.FC = () => {
                         <Save size={16} className="mr-2" />
                         {logForm.logType === 1 ? 'Nhập kho' : 'Xuất kho'}
                       </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Item Details Dialog */}
+      {showItemDialog && selectedItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <CardHeader className="border-b">
+              <div className="flex justify-between items-center">
+                <CardTitle>Chi tiết vật tư</CardTitle>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleViewLogs(selectedItem)}
+                    title="Xem lịch sử giao dịch"
+                  >
+                    <History size={14} className="mr-1" />
+                    Lịch sử
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowItemDialog(false)}
+                  >
+                    <X size={16} />
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="space-y-4">
+                {/* Basic Info */}
+                <div className="border-b pb-4">
+                  <h3 className="font-semibold text-lg">{selectedItem.materialName}</h3>
+                  <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
+                    <div>
+                      <span className="text-gray-600">Mã:</span>
+                      <p className="font-medium">{selectedItem.code}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Material ID:</span>
+                      <p className="font-medium">{selectedItem.materialId}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stock Info */}
+                <div className="border-b pb-4">
+                  <h4 className="font-semibold mb-3">Thông tin tồn kho</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Số lượng hiện tại:</span>
+                      <p className="font-bold text-2xl text-emerald-600">
+                        {selectedItem.quantity}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Trạng thái:</span>
+                      <div className="mt-1">
+                        {(() => {
+                          const status = getStockStatus(selectedItem)
+                          return (
+                            <span className={`inline-flex items-center px-2 py-1 text-xs rounded-full ${status.color}`}>
+                              {getStatusIcon(status.status)}
+                              <span className="ml-1">{status.label}</span>
+                            </span>
+                          )
+                        })()}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Ngày nhập:</span>
+                      <p className="font-medium">{selectedItem.importDate}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Ngày hết hạn:</span>
+                      <p className="font-medium">{selectedItem.expiryDate}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stock Transaction Form */}
+                <div>
+                  <h4 className="font-semibold mb-3">Nhập/Xuất kho</h4>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Số lượng</Label>
+                        <Input
+                          type="number"
+                          value={logForm.quantity}
+                          onChange={(e) => setLogForm({...logForm, quantity: parseInt(e.target.value) || 0})}
+                          placeholder="Nhập số lượng"
+                        />
+                      </div>
+                      <div>
+                        <Label>Ghi chú</Label>
+                        <Input
+                          value={logForm.note}
+                          onChange={(e) => setLogForm({...logForm, note: e.target.value})}
+                          placeholder="Ghi chú nhập/xuất"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex space-x-2">
+                      <Button 
+                        onClick={() => handleStockTransaction('import')}
+                        disabled={submitting || logForm.quantity <= 0}
+                        className="flex-1"
+                      >
+                        <ArrowUpCircle size={16} className="mr-1" />
+                        Nhập kho
+                      </Button>
+                      <Button 
+                        onClick={() => handleStockTransaction('export')}
+                        disabled={submitting || logForm.quantity <= 0}
+                        variant="outline"
+                        className="flex-1"
+                      >
+                        <ArrowDownCircle size={16} className="mr-1" />
+                        Xuất kho
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Logs Dialog */}
+      {showLogsDialog && selectedItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <CardHeader className="border-b">
+              <div className="flex justify-between items-center">
+                <CardTitle>Lịch sử nhập xuất - {selectedItem.materialName}</CardTitle>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowLogsDialog(false)
+                      setShowItemDialog(true)
+                    }}
+                    title="Quay lại chi tiết vật tư"
+                  >
+                    <Eye size={14} className="mr-1" />
+                    Chi tiết
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowLogsDialog(false)}
+                  >
+                    <X size={16} />
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="space-y-4">
+                {loadingItemLogs ? (
+                  <div className="text-center py-8">
+                    <Loader2 size={48} className="mx-auto animate-spin text-gray-400" />
+                    <p className="mt-4 text-gray-500">Đang tải lịch sử...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {itemLogs.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        Chưa có giao dịch nào
+                      </div>
+                    ) : (
+                      itemLogs.map(log => (
+                      <div key={log.id} className="p-4 border rounded-lg bg-white shadow-sm">
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex items-center space-x-2">
+                            {log.logType === 1 ? (
+                              <ArrowUpCircle size={16} className="text-green-600" />
+                            ) : (
+                              <ArrowDownCircle size={16} className="text-red-600" />
+                            )}
+                            <span className="font-medium text-lg">{log.logType === 1 ? 'Nhập kho' : 'Xuất kho'}</span>
+                            <span className="text-sm text-gray-500">#{log.id}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className="text-right text-sm text-gray-600">
+                              <div>{formatDateTime(log.createdAt)}</div>
+                              <div>Bởi: {log.createdBy}</div>
+                            </div>
+                            <div className="flex space-x-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleUpdateLog(log)}
+                                title="Cập nhật giao dịch"
+                              >
+                                <Save size={14} />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteLog(log)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                title="Xóa giao dịch"
+                              >
+                                <X size={14} />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="mb-3">
+                          <div className="text-sm text-gray-600 mb-1">
+                            <span className="font-medium">Tổng số lượng:</span> {log.totalQuantity}
+                          </div>
+                          {log.name && (
+                            <div className="text-sm text-gray-600 mb-1">
+                              <span className="font-medium">Phòng ban:</span> {log.name}
+                            </div>
+                          )}
+                          {typeof log.isPay === 'boolean' && (
+                            <div className="text-sm text-gray-600 mb-1">
+                              <span className="font-medium">Thanh toán:</span> 
+                              <span className={`ml-1 ${log.isPay ? 'text-green-600' : 'text-red-600'}`}>
+                                {log.isPay ? 'Đã thanh toán' : 'Chưa thanh toán'}
+                              </span>
+                            </div>
+                          )}
+                          {log.note && (
+                            <div className="text-sm text-gray-600">
+                              <span className="font-medium">Ghi chú:</span> {log.note}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Log Details */}
+                        {log.logDetails && Array.isArray(log.logDetails) && log.logDetails.length > 0 && (
+                          <div className="border-t pt-3">
+                            <div className="text-sm font-medium text-gray-700 mb-2">Chi tiết vật tư:</div>
+                            <div className="space-y-2">
+                              {log.logDetails.map((detail: any, index: number) => (
+                                <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
+                                  <div className="flex-1">
+                                    <div className="font-medium">{detail.materialName}</div>
+                                    <div className="text-gray-600">Mã: {detail.materialCode}</div>
+                                    {detail.expiryDate && (
+                                      <div className="text-gray-600">Hết hạn: {detail.expiryDate}</div>
+                                    )}
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="font-medium">{detail.quantity} {detail.materialType === 1 ? 'Hóa chất' : 'Vật tư'}</div>
+                                    {detail.note && (
+                                      <div className="text-xs text-gray-500">{detail.note}</div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteDialog && itemToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md">
+            <CardHeader className="border-b">
+              <CardTitle className="text-red-600">Xác nhận xóa</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="space-y-4">
+                <p>Bạn có chắc chắn muốn xóa giao dịch <strong>#{itemToDelete.id}</strong>?</p>
+                <p className="text-sm text-gray-600">
+                  Loại: {itemToDelete.logType === 1 ? 'Nhập kho' : 'Xuất kho'}
+                </p>
+                <p className="text-sm text-gray-600">Hành động này không thể hoàn tác.</p>
+                
+                <div className="flex justify-end space-x-2 pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowDeleteDialog(false)
+                      setItemToDelete(null)
+                    }}
+                    disabled={submitting}
+                  >
+                    Hủy
+                  </Button>
+                  <Button
+                    onClick={handleDeleteConfirm}
+                    disabled={submitting}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 size={16} className="mr-2 animate-spin" />
+                        Đang xóa...
+                      </>
+                    ) : (
+                      'Xóa'
                     )}
                   </Button>
                 </div>

@@ -28,6 +28,9 @@ export {
   default as api
 } from './api'
 
+// Export utility functions from types
+export { transformToPaginatedResponse } from '@/types/api'
+
 // import api from './api'
 // import type { 
 //   InventoryItem,

@@ -216,7 +216,7 @@ const UserManagement: React.FC = () => {
           // Refresh the user list
           await fetchUsers()
           toast.success('Cập nhật tài khoản thành công!')
-          setIsEditing(false)
+    setIsEditing(false)
         }
       }
       setShowDetailDialog(false)
@@ -562,7 +562,7 @@ const UserManagement: React.FC = () => {
                         setShowDetailDialog(false)
                       }}>
                         Hủy
-                      </Button>
+                    </Button>
                     </>
                   )}
                   <Button size="sm" variant="outline" onClick={() => {
@@ -575,15 +575,15 @@ const UserManagement: React.FC = () => {
                 </div>
               </div>
 
-              <div className="space-y-4">
-                {/* Basic Info */}
-                <div className="border-b pb-4">
+                <div className="space-y-4">
+                  {/* Basic Info */}
+                  <div className="border-b pb-4">
                   <h3 className="font-semibold text-lg">
                     {isAddingNew ? 'Thông tin tài khoản mới' : selectedUser?.fullName}
                   </h3>
-                  <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
-                    <div>
-                      <span className="text-gray-600">Username:</span>
+                    <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
+                      <div>
+                        <span className="text-gray-600">Username:</span>
                       {isEditing || isAddingNew ? (
                         <Input 
                           className="mt-1" 
@@ -593,10 +593,10 @@ const UserManagement: React.FC = () => {
                         />
                       ) : (
                         <p className="font-medium">@{selectedUser?.username}</p>
-                      )}
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Họ tên:</span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Họ tên:</span>
                       {isEditing || isAddingNew ? (
                         <Input 
                           className="mt-1" 
@@ -605,13 +605,13 @@ const UserManagement: React.FC = () => {
                         />
                       ) : (
                         <p className="font-medium">{selectedUser?.fullName}</p>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
                 {/* Role */}
-                <div className="border-b pb-4">
+                  <div className="border-b pb-4">
                   <h4 className="font-semibold mb-3">Vai trò</h4>
                   <div className="text-sm">
                     {isEditing || isAddingNew ? (
@@ -625,12 +625,12 @@ const UserManagement: React.FC = () => {
                             {role.name}
                           </option>
                         ))}
-                      </select>
-                    ) : (
+                          </select>
+                        ) : (
                       <p className="font-medium">{selectedUser && getRoleLabel(selectedUser.roleCode)}</p>
                     )}
+                    </div>
                   </div>
-                </div>
 
                 {/* Password for new users */}
                 {isAddingNew && (
@@ -676,8 +676,8 @@ const UserManagement: React.FC = () => {
                         Đổi mật khẩu
                       </Button>
                     </div>
-                  </div>
-                )}
+                    </div>
+                  )}
 
                 {/* Created Info */}
                 {!isAddingNew && selectedUser && (
@@ -761,4 +761,4 @@ const UserManagement: React.FC = () => {
   )
 }
 
-export default UserManagement
+export default UserManagement 

@@ -29,7 +29,7 @@ import type {
   PaginatedResponse
 } from '@/types/api'
 import { getMaterialTypeLabel, getInventoryLogTypeLabel } from '@/types/api'
-import { formatDateTime, formatDateSimple } from '@/lib/utils'
+import { formatDateTime } from '@/lib/utils'
 
 const SupplyManagement: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('')
@@ -586,14 +586,13 @@ const SupplyManagement: React.FC = () => {
                       <th className="text-left p-3 font-semibold">Loại</th>
                       <th className="text-left p-3 font-semibold">Đóng gói</th>
                       <th className="text-left p-3 font-semibold">Trạng thái</th>
-                      <th className="text-left p-3 font-semibold">Hết hạn</th>
                       <th className="text-left p-3 font-semibold">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
                     {!Array.isArray(materials) || materials.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="text-center py-8 text-gray-500">
+                        <td colSpan={6} className="text-center py-8 text-gray-500">
                           Không tìm thấy vật tư phù hợp
                         </td>
                       </tr>
@@ -612,9 +611,6 @@ const SupplyManagement: React.FC = () => {
                                 {getStatusIcon(stockStatus.status)}
                                 <span className="ml-1">{stockStatus.label}</span>
                               </span>
-                            </td>
-                            <td className="p-3 text-sm">
-                              {material.expiryTime ? formatDateSimple(material.expiryTime) : '-'}
                             </td>
                             <td className="p-3">
                               <div className="flex space-x-1">
@@ -816,18 +812,6 @@ const SupplyManagement: React.FC = () => {
                         </select>
                       </div>
                       
-                      <div>
-                        <Label>Ngày hết hạn</Label>
-                        <Input
-                          type="date"
-                          value={selectedMaterial.expiryTime ? String(selectedMaterial.expiryTime).slice(0, 10) : ''}
-                          onChange={(e) => setSelectedMaterial({
-                            ...selectedMaterial,
-                            // store as date-only string YYYY-MM-DD
-                            expiryTime: e.target.value || undefined
-                          })}
-                        />
-                      </div>
                       
                       <div className="flex space-x-2">
                         <Button onClick={handleSaveMaterial} disabled={submitting}>
@@ -863,12 +847,6 @@ const SupplyManagement: React.FC = () => {
                           <span className="text-gray-600">Nhập kho:</span>
                           <p className="font-medium">{formatDateTime(selectedMaterial.importTime)}</p>
                         </div>
-                        {selectedMaterial.expiryTime && (
-                          <div className="col-span-2">
-                            <span className="text-gray-600">Hết hạn:</span>
-                            <p className="font-medium">{formatDateSimple(selectedMaterial.expiryTime)}</p>
-                          </div>
-                        )}
                       </div>
 
                       {/* Quick Actions */}
@@ -1042,14 +1020,6 @@ const SupplyManagement: React.FC = () => {
                   </div>
                 </div>
 
-                <div>
-                  <Label>Ngày hết hạn</Label>
-                  <Input
-                    type="date"
-                    value={newMaterial.expiryTime || ''}
-                    onChange={(e) => setNewMaterial({ ...newMaterial, expiryTime: e.target.value || '' })}
-                  />
-                </div>
 
                 <div className="flex justify-end space-x-4 pt-4 border-t">
                   <Button

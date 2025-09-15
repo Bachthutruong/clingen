@@ -267,23 +267,58 @@ export interface PaginatedResponse<T> {
 
 // Transform MethodResult to PaginatedResponse for compatibility
 export function transformToPaginatedResponse<T>(
-  methodResult: MethodResult<T[]>,
+  methodResult: any,
   pageIndex: number = 0,
   pageSize: number = 20
 ): PaginatedResponse<T> {
-  const totalElements = methodResult.totalRecord || 0
+  console.log('🔄 transformToPaginatedResponse input:', methodResult)
+  
+  // Handle different API response structures
+  let content: T[] = []
+  let totalElements = 0
+  
+  if (methodResult && typeof methodResult === 'object') {
+    // Case 1: { status: true, data: { content: [...], totalElements: 3 } }
+    if (methodResult.data && methodResult.data.content) {
+      content = methodResult.data.content || []
+      totalElements = methodResult.data.totalElements || 0
+      console.log('✅ Case 1: Found data.content structure')
+    }
+    // Case 2: { data: [...], totalRecord: 3 } (old structure)
+    else if (methodResult.data && Array.isArray(methodResult.data)) {
+      content = methodResult.data || []
+      totalElements = methodResult.totalRecord || 0
+      console.log('✅ Case 2: Found data array structure')
+    }
+    // Case 3: Direct array
+    else if (Array.isArray(methodResult)) {
+      content = methodResult
+      totalElements = methodResult.length
+      console.log('✅ Case 3: Direct array structure')
+    }
+    // Case 4: { content: [...], totalElements: 3 } (direct paginated structure)
+    else if (methodResult.content) {
+      content = methodResult.content || []
+      totalElements = methodResult.totalElements || 0
+      console.log('✅ Case 4: Direct paginated structure')
+    }
+  }
+  
   const totalPages = Math.ceil(totalElements / pageSize)
   
-  return {
-    content: methodResult.data || [],
+  const result = {
+    content,
     totalElements,
     totalPages,
     size: pageSize,
     number: pageIndex,
     first: pageIndex === 0,
     last: pageIndex >= totalPages - 1,
-    numberOfElements: (methodResult.data || []).length
+    numberOfElements: content.length
   }
+  
+  console.log('✅ transformToPaginatedResponse output:', result)
+  return result
 }
 
 // Legacy types for compatibility

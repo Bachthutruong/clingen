@@ -11,14 +11,6 @@ import type {
   GetUserInfoResponse,
   User
 } from '@/types/auth'
-// import type { 
-//   Patient, 
-//   Registration, 
-//   ReferralSource, 
-//   TestService, 
-//   TestCategory,
-//   TestResult 
-// } from '@/types/patient'
 import type {
   TestType,
   TestSample,
@@ -905,6 +897,17 @@ export const inventoryApi = {
     
     const response: AxiosResponse<any> = await api.post('/inventory/search', searchParams)
     return transformToPaginatedResponse(response.data, searchParams.pageIndex, searchParams.pageSize)
+  },
+
+  // GET /inventory/unpaid-statistics - Get unpaid statistics
+  getUnpaidStatistics: async (params?: {
+    logType?: number
+    exportType?: number
+    fromDate?: string
+    toDate?: string
+  }): Promise<any> => {
+    const response: AxiosResponse<any> = await api.get('/inventory/unpaid-statistics', { params })
+    return response.data.data || response.data
   }
 }
 
@@ -917,8 +920,14 @@ export const inventoryLogsApi = {
   },
 
   // PUT /inventory/logs/{id} - Update log
-  update: async (id: number, data: any): Promise<InventoryLogsDTO> => {
-    const response: AxiosResponse<any> = await api.put(`/inventory/logs/${id}`, data)
+  update: async (id: number, data: Partial<CreateInventoryLogRequest>): Promise<InventoryLogsDTO> => {
+    console.log('Sending update request to /inventory/logs/' + id, data)
+    const response: AxiosResponse<any> = await api.put(`/inventory/logs/${id}`, data, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    console.log('Update response:', response.data)
     return response.data.data || response.data
   },
 
@@ -1089,25 +1098,25 @@ export const patientSamplesApi = {
     }
   },
 
-  getById: async (id: number): Promise<PatientAPI> => {
-    const response: AxiosResponse<MethodResult<PatientAPI>> = await api.get(`/patient-test/${id}`)
+  getById: async (id: number): Promise<any> => {
+    const response: AxiosResponse<MethodResult<any>> = await api.get(`/patient-test/${id}`)
     return response.data.data
   },
 
   // Cập nhật trạng thái mẫu
-  updateStatus: async (id: number, status: number): Promise<PatientAPI> => {
-    const response: AxiosResponse<MethodResult<PatientAPI>> = await api.put(`/patient-test/${id}/status`, { status })
+  updateStatus: async (id: number, status: number): Promise<any> => {
+    const response: AxiosResponse<MethodResult<any>> = await api.put(`/patient-test/${id}/status`, { status })
     return response.data.data
   },
 
   // Lấy mẫu theo bệnh nhân
-  getByPatient: async (patientId: number, params?: PatientTestSearchDTO): Promise<PaginatedResponse<PatientAPI>> => {
+  getByPatient: async (patientId: number, params?: PatientTestSearchDTO): Promise<PaginatedResponse<any>> => {
     const searchParams = { ...(params || {}), keyword: patientId.toString() }
     return patientSamplesApi.getAll(searchParams)
   },
 
   // Lấy mẫu theo loại xét nghiệm
-  getByTestType: async (testTypeId: number, params?: PatientTestSearchDTO): Promise<PaginatedResponse<PatientAPI>> => {
+  getByTestType: async (testTypeId: number, params?: PatientTestSearchDTO): Promise<PaginatedResponse<any>> => {
     const searchParams = { ...(params || {}), testTypeId }
     return patientSamplesApi.getAll(searchParams)
   },
@@ -1116,14 +1125,14 @@ export const patientSamplesApi = {
   createSamplesForPatient: async (data: {
     patientId: number
     testTypes: { testTypeId: number; selectedSampleId: number; priority?: string }[]
-  }): Promise<PatientAPI> => {
+  }): Promise<any> => {
     // Transform to patient test format
     const typeTests = data.testTypes.map(tt => ({
       testId: tt.testTypeId,
       testSampleId: tt.selectedSampleId
     }))
 
-    const response: AxiosResponse<MethodResult<PatientAPI>> = await api.post('/patient-test', {
+    const response: AxiosResponse<MethodResult<any>> = await api.post('/patient-test', {
       patientId: data.patientId,
       typeTests
     })
