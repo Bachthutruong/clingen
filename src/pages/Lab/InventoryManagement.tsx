@@ -78,6 +78,7 @@ const InventoryManagement: React.FC = () => {
       unitPrice: number
       amount: number
       note: string
+      originalItem?: any // For export mode - reference to inventory item
     }>
   }>({
     quantity: 0,
@@ -95,6 +96,10 @@ const InventoryManagement: React.FC = () => {
   const [logsToDate, setLogsToDate] = useState('')
   const [logsPage, setLogsPage] = useState(0)
   const [logsPageSize, setLogsPageSize] = useState(20)
+  
+  // Export selection state
+  const [selectedItemsForExport, setSelectedItemsForExport] = useState<Set<number>>(new Set())
+  const [showMaterialSelect, setShowMaterialSelect] = useState(false)
 
   // Fetch inventory items
   const fetchInventoryItems = async () => {
@@ -161,6 +166,21 @@ const InventoryManagement: React.FC = () => {
   useEffect(() => {
       fetchLogsTab()
   }, [])
+
+  // Close material select dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element
+      if (showMaterialSelect && !target.closest('.material-select-container')) {
+        setShowMaterialSelect(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showMaterialSelect])
 
   // Fetch materials by type
   const fetchMaterialsByType = async (type: number) => {
@@ -229,19 +249,33 @@ const InventoryManagement: React.FC = () => {
   }
 
   const handleImportExport = (type: 'import' | 'export') => {
+    if (type === 'export') {
+      // For export, start with empty items - user will select what to export
     setLogForm({
       quantity: 0,
       note: '',
-      logType: type === 'import' ? 1 : 2,
-      exportType: 1, // 1 - department, 2 - referral source
+        logType: 2, // Export
+        exportType: 1, // Department
       exportId: 1, // Default department ID
       items: []
     })
-    setIsAddingNew(true)
+    } else {
+      // For import, keep original logic
+      setLogForm({
+        quantity: 0,
+        note: '',
+        logType: 1, // Import
+        exportType: 2, // Supplier
+        exportId: 1, // Default supplier ID
+        items: []
+      })
+      
+      // Preload materials for import
+      fetchMaterialsByType(1) // Hóa chất
+      fetchMaterialsByType(2) // Vật tư
+    }
     
-    // Preload materials for both types
-    fetchMaterialsByType(1) // Hóa chất
-    fetchMaterialsByType(2) // Vật tư
+    setIsAddingNew(true)
   }
 
   const handleSubmitImportExport = async () => {
@@ -250,14 +284,29 @@ const InventoryManagement: React.FC = () => {
       return
     }
 
+    // Filter out items with quantity = 0 for export
+    const validItems = logForm.logType === 2 
+      ? logForm.items.filter(item => item.quantity > 0)
+      : logForm.items
+
+    if (validItems.length === 0) {
+      toast.error(logForm.logType === 2 ? 'Vui lòng nhập số lượng xuất cho ít nhất một vật tư' : 'Vui lòng thêm ít nhất một vật tư')
+      return
+    }
+
     // Validate items
-    for (const item of logForm.items) {
-      if (item.materialId <= 0) {
+    for (const item of validItems) {
+      if (logForm.logType === 1 && item.materialId <= 0) {
         toast.error('Vui lòng chọn vật tư/hóa chất')
         return
       }
       if (item.quantity <= 0) {
         toast.error('Vui lòng nhập số lượng hợp lệ')
+        return
+      }
+      // For export, validate against available quantity
+      if (logForm.logType === 2 && item.originalItem && item.quantity > item.originalItem.quantity) {
+        toast.error(`Số lượng xuất không được vượt quá số lượng có sẵn (${item.originalItem.quantity})`)
         return
       }
     }
@@ -270,7 +319,7 @@ const InventoryManagement: React.FC = () => {
         exportType: logForm.exportType,
         exportId: logForm.exportId,
         note: logForm.note,
-        items: logForm.items.map(item => ({
+        items: validItems.map(item => ({
           type: item.type,
           materialId: item.materialId,
           quantity: item.quantity,
@@ -287,7 +336,12 @@ const InventoryManagement: React.FC = () => {
       
       toast.success(logForm.logType === 1 ? 'Nhập kho thành công!' : 'Xuất kho thành công!')
       setIsAddingNew(false)
-      await fetchLogsTab()
+      
+      // Refresh both inventory items and logs
+      await Promise.all([
+        fetchInventoryItems(),
+        fetchLogsTab()
+      ])
       
       // Reset form
       setLogForm({
@@ -298,6 +352,10 @@ const InventoryManagement: React.FC = () => {
         exportId: 1,
         items: []
       })
+      
+      // Reset export selection
+      setSelectedItemsForExport(new Set())
+      setShowMaterialSelect(false)
     } catch (error) {
       console.error('Error submitting inventory log:', error)
       toast.error('Có lỗi xảy ra khi thực hiện giao dịch')
@@ -306,52 +364,52 @@ const InventoryManagement: React.FC = () => {
     }
   }
 
-  const handleStockTransaction = async (type: 'import' | 'export') => {
-    if (!selectedItem || logForm.quantity <= 0) {
-      toast.error('Vui lòng nhập số lượng hợp lệ')
-      return
-    }
+  // const handleStockTransaction = async (type: 'import' | 'export') => {
+  //   if (!selectedItem || logForm.quantity <= 0) {
+  //     toast.error('Vui lòng nhập số lượng hợp lệ')
+  //     return
+  //   }
 
-    try {
-      setSubmitting(true)
+  //   try {
+  //     setSubmitting(true)
       
-      const logData: CreateInventoryLogRequest = {
-        logType: type === 'import' ? 1 : 2, // 1 - nhập kho, 2 - xuất kho
-        exportType: 1, // 1 - department, 2 - referral source
-        exportId: 1, // Default department ID
-        items: [{
-          type: 1, // 1 - hóa chất, 2 - vật tư
-          materialId: selectedItem.materialId, // Use materialId instead of id
-          quantity: logForm.quantity,
-          expiryDate: selectedItem.expiryDate || '', // Use item's expiry date
-          unitPrice: 0, // Default unit price
-          amount: 0, // Default amount
-          note: logForm.note || ''
-        }],
-        note: logForm.note || ''
-      }
+  //     const logData: CreateInventoryLogRequest = {
+  //       logType: type === 'import' ? 1 : 2, // 1 - nhập kho, 2 - xuất kho
+  //       exportType: 1, // 1 - department, 2 - referral source
+  //       exportId: 1, // Default department ID
+  //       items: [{
+  //         type: 1, // 1 - hóa chất, 2 - vật tư
+  //         materialId: selectedItem.materialId, // Use materialId instead of id
+  //         quantity: logForm.quantity,
+  //         expiryDate: selectedItem.expiryDate || '', // Use item's expiry date
+  //         unitPrice: 0, // Default unit price
+  //         amount: 0, // Default amount
+  //         note: logForm.note || ''
+  //       }],
+  //       note: logForm.note || ''
+  //     }
       
-      await inventoryLogsApi.create(logData)
-      toast.success(`${type === 'import' ? 'Nhập' : 'Xuất'} kho thành công!`)
+  //     await inventoryLogsApi.create(logData)
+  //     toast.success(`${type === 'import' ? 'Nhập' : 'Xuất'} kho thành công!`)
       
-      setLogForm({
-        quantity: 0,
-        note: '',
-        logType: 1,
-        exportType: 1,
-        exportId: 1,
-        items: []
-      })
+  //     setLogForm({
+  //       quantity: 0,
+  //       note: '',
+  //       logType: 1,
+  //       exportType: 1,
+  //       exportId: 1,
+  //       items: []
+  //     })
       
-      await fetchInventoryItems()
-      await fetchLogsTab()
-    } catch (error) {
-      console.error('Error creating log:', error)
-      toast.error(`Có lỗi xảy ra khi ${type === 'import' ? 'nhập' : 'xuất'} kho`)
-    } finally {
-      setSubmitting(false)
-    }
-  }
+  //     await fetchInventoryItems()
+  //     await fetchLogsTab()
+  //   } catch (error) {
+  //     console.error('Error creating log:', error)
+  //     toast.error(`Có lỗi xảy ra khi ${type === 'import' ? 'nhập' : 'xuất'} kho`)
+  //   } finally {
+  //     setSubmitting(false)
+  //   }
+  // }
 
   const fetchItemLogs = async (item: any) => {
     try {
@@ -410,11 +468,16 @@ const InventoryManagement: React.FC = () => {
       await inventoryLogsApi.delete(itemToDelete.id)
       toast.success('Xóa giao dịch thành công!')
       
-      // Refresh logs
+      // Refresh both inventory items and logs
+      await Promise.all([
+        fetchInventoryItems(),
+        fetchLogsTab()
+      ])
+      
+      // Refresh item logs if viewing specific item
       if (selectedItem) {
         await fetchItemLogs(selectedItem)
       }
-      await fetchLogsTab()
     } catch (error) {
       console.error('Error deleting log:', error)
       toast.error('Có lỗi xảy ra khi xóa giao dịch')
@@ -469,11 +532,16 @@ const InventoryManagement: React.FC = () => {
       await inventoryLogsApi.update(log.id, updateData)
       toast.success('Cập nhật giao dịch thành công!')
       
-      // Refresh logs
+      // Refresh both inventory items and logs
+      await Promise.all([
+        fetchInventoryItems(),
+        fetchLogsTab()
+      ])
+      
+      // Refresh item logs if viewing specific item
       if (selectedItem) {
         await fetchItemLogs(selectedItem)
       }
-      await fetchLogsTab()
     } catch (error: any) {
       console.error('Error updating log:', error)
       const errorMessage = error?.response?.data?.message || error?.message || 'Có lỗi xảy ra khi cập nhật giao dịch'
@@ -492,6 +560,43 @@ const InventoryManagement: React.FC = () => {
     setLogsPage(0)
     fetchLogsTab()
   }
+
+  // Handle multi-select for export
+  const handleMultiSelectChange = (selectedIds: number[]) => {
+    const newSelected = new Set(selectedIds)
+    setSelectedItemsForExport(newSelected)
+    
+    // Update export items based on selection
+    const selectedItems = inventoryItems.filter((item: any) => newSelected.has(item.id))
+    const exportItems = selectedItems.map((item: any) => ({
+      type: 1, // Default type
+      materialId: item.materialId,
+      quantity: 0,
+      expiryDate: item.expiryDate || '',
+      unitPrice: 0,
+      amount: 0,
+      note: '',
+      originalItem: item
+    }))
+    
+    setLogForm(prev => ({
+      ...prev,
+      items: exportItems
+    }))
+  }
+
+  // Handle quantity change for selected items
+  const handleExportQuantityChange = (itemId: number, quantity: number) => {
+    setLogForm(prev => ({
+      ...prev,
+      items: prev.items.map(item => 
+        item.originalItem?.id === itemId 
+          ? { ...item, quantity }
+          : item
+      )
+    }))
+  }
+
 
   // Ensure inventoryItems is always an array
   const inventoryItems = Array.isArray(inventoryData?.content) 
@@ -1118,22 +1223,27 @@ const InventoryManagement: React.FC = () => {
                 )}
 
                 <div className="border-t pt-4">
-                  <Label className="text-lg font-semibold">Danh sách vật tư</Label>
+                  <Label className="text-lg font-semibold">
+                    {logForm.logType === 1 ? 'Danh sách vật tư' : 'Chọn vật tư để xuất kho'}
+                  </Label>
+                  
+                  {logForm.logType === 1 ? (
+                    // Import mode - original logic
                   <div className="space-y-2 mt-2">
                     {logForm.items.map((item, index) => (
-                      <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-2 p-3 border rounded">
+                        <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-2 p-3 border rounded">
                         <div>
                           <Label className="text-sm">Loại hàng hóa</Label>
                           <select
                             value={item.type}
                             onChange={(e) => {
                               const newItems = [...logForm.items]
-                              const newType = parseInt(e.target.value)
-                              newItems[index].type = newType
-                              newItems[index].materialId = 0 // Reset material selection
+                                const newType = parseInt(e.target.value)
+                                newItems[index].type = newType
+                                newItems[index].materialId = 0 // Reset material selection
                               setLogForm({ ...logForm, items: newItems })
-                              // Fetch materials for the new type
-                              fetchMaterialsByType(newType)
+                                // Fetch materials for the new type
+                                fetchMaterialsByType(newType)
                             }}
                             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                             disabled={submitting}
@@ -1143,49 +1253,49 @@ const InventoryManagement: React.FC = () => {
                           </select>
                         </div>
                         <div>
-                          <Label className="text-sm">Vật tư/Hóa chất</Label>
-                          <div className="relative">
-                            <select
+                            <Label className="text-sm">Vật tư/Hóa chất</Label>
+                            <div className="relative">
+                              <select
                             value={item.materialId}
                             onChange={(e) => {
                               const newItems = [...logForm.items]
                               newItems[index].materialId = parseInt(e.target.value) || 0
                               setLogForm({ ...logForm, items: newItems })
                             }}
-                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                              disabled={submitting || loadingMaterials[item.type]}
-                              onFocus={() => fetchMaterialsByType(item.type)}
-                            >
-                              <option value={0}>
-                                {loadingMaterials[item.type] ? 'Đang tải...' : 'Chọn vật tư/hóa chất'}
-                              </option>
-                              {materialsByType[item.type]?.map((material) => (
-                                <option key={material.id} value={material.id}>
-                                  {material.name} ({material.code})
+                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                disabled={submitting || loadingMaterials[item.type]}
+                                onFocus={() => fetchMaterialsByType(item.type)}
+                              >
+                                <option value={0}>
+                                  {loadingMaterials[item.type] ? 'Đang tải...' : 'Chọn vật tư/hóa chất'}
                                 </option>
-                              ))}
-                            </select>
-                            {loadingMaterials[item.type] && (
-                              <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                                <Loader2 size={14} className="animate-spin text-gray-400" />
+                                {materialsByType[item.type]?.map((material) => (
+                                  <option key={material.id} value={material.id}>
+                                    {material.name} ({material.code})
+                                  </option>
+                                ))}
+                              </select>
+                              {loadingMaterials[item.type] && (
+                                <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                                  <Loader2 size={14} className="animate-spin text-gray-400" />
+                                </div>
+                              )}
+                            </div>
+                            {item.materialId > 0 && materialsByType[item.type] && (
+                              <div className="mt-1 text-xs text-gray-600">
+                                {(() => {
+                                  const selectedMaterial = materialsByType[item.type].find(m => m.id === item.materialId)
+                                  return selectedMaterial ? (
+                                    <span>
+                                      Đã chọn: <span className="font-medium">{selectedMaterial.name}</span>
+                                      {selectedMaterial.description && (
+                                        <span className="block text-gray-500">{selectedMaterial.description}</span>
+                                      )}
+                                    </span>
+                                  ) : null
+                                })()}
                               </div>
                             )}
-                          </div>
-                          {item.materialId > 0 && materialsByType[item.type] && (
-                            <div className="mt-1 text-xs text-gray-600">
-                              {(() => {
-                                const selectedMaterial = materialsByType[item.type].find(m => m.id === item.materialId)
-                                return selectedMaterial ? (
-                                  <span>
-                                    Đã chọn: <span className="font-medium">{selectedMaterial.name}</span>
-                                    {selectedMaterial.description && (
-                                      <span className="block text-gray-500">{selectedMaterial.description}</span>
-                                    )}
-                                  </span>
-                                ) : null
-                              })()}
-                            </div>
-                          )}
                         </div>
                         <div>
                           <Label className="text-sm">Số lượng</Label>
@@ -1201,14 +1311,14 @@ const InventoryManagement: React.FC = () => {
                             disabled={submitting}
                           />
                         </div>
-                        <div>
-                          <Label className="text-sm">Ngày hết hạn</Label>
-                          <Input
-                            type="date"
-                            value={item.expiryDate}
-                            onChange={(e) => {
-                              const newItems = [...logForm.items]
-                              newItems[index].expiryDate = e.target.value
+                          <div>
+                            <Label className="text-sm">Ngày hết hạn</Label>
+                            <Input
+                              type="date"
+                              value={item.expiryDate}
+                              onChange={(e) => {
+                                const newItems = [...logForm.items]
+                                newItems[index].expiryDate = e.target.value
                               setLogForm({ ...logForm, items: newItems })
                             }}
                             className="text-sm"
@@ -1235,7 +1345,7 @@ const InventoryManagement: React.FC = () => {
                       size="sm"
                       variant="outline"
                       onClick={() => {
-                        const newItem = {
+                          const newItem = {
                             type: 1,
                             materialId: 0,
                             quantity: 0,
@@ -1243,25 +1353,136 @@ const InventoryManagement: React.FC = () => {
                             unitPrice: 0,
                             amount: 0,
                             note: ''
-                        }
-                        setLogForm({
-                          ...logForm,
-                          items: [...logForm.items, newItem]
+                          }
+                          setLogForm({
+                            ...logForm,
+                            items: [...logForm.items, newItem]
                         })
-                        // Fetch materials for the default type (1 - Hóa chất)
-                        fetchMaterialsByType(1)
+                          // Fetch materials for the default type (1 - Hóa chất)
+                          fetchMaterialsByType(1)
                       }}
                       disabled={submitting}
                     >
                       + Thêm vật tư
                     </Button>
                   </div>
+                  ) : (
+                    // Export mode - multi-select dropdown
+                    <div className="mt-4 space-y-4">
+                      <div>
+                        <Label className="text-sm font-medium">Chọn vật tư cần xuất</Label>
+                        <div className="relative material-select-container">
+                          <div
+                            className="w-full p-3 border border-gray-300 rounded-md cursor-pointer bg-white hover:bg-gray-50"
+                            onClick={() => setShowMaterialSelect(!showMaterialSelect)}
+                          >
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-700">
+                                {selectedItemsForExport.size === 0 
+                                  ? 'Chọn vật tư...' 
+                                  : `Đã chọn ${selectedItemsForExport.size} vật tư`
+                                }
+                              </span>
+                              <svg className={`w-4 h-4 transition-transform ${showMaterialSelect ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </div>
+                          </div>
+                          
+                          {showMaterialSelect && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                              {inventoryItems.map((item: any) => {
+                                const isSelected = selectedItemsForExport.has(item.id)
+                                return (
+                                  <div
+                                    key={item.id}
+                                    className={`p-3 hover:bg-gray-100 cursor-pointer flex items-center justify-between ${
+                                      isSelected ? 'bg-blue-50' : ''
+                                    }`}
+                                    onClick={() => {
+                                      const newSelected = new Set(selectedItemsForExport)
+                                      if (isSelected) {
+                                        newSelected.delete(item.id)
+                                      } else {
+                                        newSelected.add(item.id)
+                                      }
+                                      handleMultiSelectChange(Array.from(newSelected))
+                                    }}
+                                  >
+                                    <div className="flex-1">
+                                      <div className="font-medium">{item.materialName}</div>
+                                      <div className="text-sm text-gray-600">
+                                        {item.code} • Có: {item.quantity} • Hết hạn: {item.expiryDate}
+                                      </div>
+                                    </div>
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => {}} // Handled by parent onClick
+                                      className="h-4 w-4"
+                                    />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {logForm.items.length > 0 && (
+                        <div className="space-y-3">
+                          <h4 className="font-medium text-gray-900">Vật tư đã chọn để xuất:</h4>
+                          {logForm.items.map((item, index) => (
+                            <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-3 p-3 border rounded-lg bg-gray-50">
+                              <div>
+                                <Label className="text-sm font-medium">Tên vật tư</Label>
+                                <div className="text-sm">{item.originalItem?.materialName}</div>
+                                <div className="text-xs text-gray-600">{item.originalItem?.code}</div>
+                              </div>
+                              <div>
+                                <Label className="text-sm font-medium">Số lượng có</Label>
+                                <div className="text-sm font-bold text-emerald-600">{item.originalItem?.quantity}</div>
+                              </div>
+                              <div>
+                                <Label className="text-sm font-medium">Ngày hết hạn</Label>
+                                <div className="text-sm">{item.originalItem?.expiryDate}</div>
+                              </div>
+                              <div>
+                                <Label className="text-sm font-medium">Số lượng xuất *</Label>
+                                <Input
+                                  type="number"
+                                  value={item.quantity}
+                                  onChange={(e) => {
+                                    const quantity = parseInt(e.target.value) || 0
+                                    if (quantity > item.originalItem?.quantity) {
+                                      toast.error(`Số lượng không được vượt quá ${item.originalItem?.quantity}`)
+                                      return
+                                    }
+                                    handleExportQuantityChange(item.originalItem?.id, quantity)
+                                  }}
+                                  className="text-sm"
+                                  disabled={submitting}
+                                  max={item.originalItem?.quantity}
+                                  min={0}
+                                  placeholder="Nhập số lượng"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-end space-x-2 pt-4 border-t">
                   <Button
                     variant="outline"
-                    onClick={() => setIsAddingNew(false)}
+                    onClick={() => {
+                      setIsAddingNew(false)
+                      setSelectedItemsForExport(new Set())
+                      setShowMaterialSelect(false)
+                    }}
                     disabled={submitting}
                   >
                     Hủy
@@ -1369,49 +1590,6 @@ const InventoryManagement: React.FC = () => {
                 </div>
 
                 {/* Stock Transaction Form */}
-                <div>
-                  <h4 className="font-semibold mb-3">Nhập/Xuất kho</h4>
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label>Số lượng</Label>
-                        <Input
-                          type="number"
-                          value={logForm.quantity}
-                          onChange={(e) => setLogForm({...logForm, quantity: parseInt(e.target.value) || 0})}
-                          placeholder="Nhập số lượng"
-                        />
-                      </div>
-                      <div>
-                        <Label>Ghi chú</Label>
-                        <Input
-                          value={logForm.note}
-                          onChange={(e) => setLogForm({...logForm, note: e.target.value})}
-                          placeholder="Ghi chú nhập/xuất"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex space-x-2">
-                      <Button 
-                        onClick={() => handleStockTransaction('import')}
-                        disabled={submitting || logForm.quantity <= 0}
-                        className="flex-1"
-                      >
-                        <ArrowUpCircle size={16} className="mr-1" />
-                        Nhập kho
-                      </Button>
-                      <Button 
-                        onClick={() => handleStockTransaction('export')}
-                        disabled={submitting || logForm.quantity <= 0}
-                        variant="outline"
-                        className="flex-1"
-                      >
-                        <ArrowDownCircle size={16} className="mr-1" />
-                        Xuất kho
-                      </Button>
-                    </div>
-                  </div>
-                </div>
               </div>
             </CardContent>
           </Card>

@@ -84,18 +84,18 @@ const MonthlyCostsManagement: React.FC = () => {
   }
 
   // Export functions
-  const handleExportExcel = async () => {
-    try {
-      setLoading(true)
-      // TODO: Implement export functionality when API is ready
-      toast.success('Chức năng xuất Excel sẽ được triển khai sớm!')
-    } catch (error) {
-      console.error('Error exporting Excel:', error)
-      toast.error('Lỗi khi xuất file Excel')
-    } finally {
-      setLoading(false)
-    }
-  }
+  // const handleExportExcel = async () => {
+  //   try {
+  //     setLoading(true)
+  //     // TODO: Implement export functionality when API is ready
+  //     toast.success('Chức năng xuất Excel sẽ được triển khai sớm!')
+  //   } catch (error) {
+  //     console.error('Error exporting Excel:', error)
+  //     toast.error('Lỗi khi xuất file Excel')
+  //   } finally {
+  //     setLoading(false)
+  //   }
+  // }
 
   const handleExportSummary = async () => {
     try {
@@ -169,14 +169,14 @@ const MonthlyCostsManagement: React.FC = () => {
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Làm mới
           </Button>
-          <Button
+          {/* <Button
             variant="outline"
             onClick={handleExportExcel}
             disabled={loading}
           >
             <Download className="h-4 w-4 mr-2" />
             Xuất Excel
-          </Button>
+          </Button> */}
           <Button
             variant="outline"
             onClick={handleExportSummary}

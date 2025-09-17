@@ -9,11 +9,9 @@ import {
   Clock,
   CheckCircle,
   AlertTriangle,
-  XCircle,
   Microscope,
   RefreshCw,
   Eye,
-  Package,
   Loader2,
   ChevronLeft,
   ChevronRight,
@@ -23,7 +21,6 @@ import {
   // MapPin,
   DollarSign,
   FileText,
-  Save
 } from 'lucide-react'
 import { formatDateTime } from '@/lib/utils'
 import { patientSamplesApi } from '@/services'
@@ -68,14 +65,13 @@ interface PatientSample {
   sampleType: string
   collectedAt?: string
   collectedBy?: string
-  status: 'pending' | 'collected' | 'processing' | 'completed' | 'rejected'
+  status: 'pending' | 'processing' | 'completed'
   priority: 'normal' | 'urgent' | 'stat'
   notes?: string
   containerType: string
   storageLocation?: string
   processedAt?: string
   processedBy?: string
-  rejectionReason?: string
   price: number
 }
 
@@ -107,6 +103,7 @@ const SampleStatus: React.FC = () => {
   const [showCodeView, setShowCodeView] = useState(false)
   const codeRef = useRef<HTMLElement | null>(null)
   const [hljsReady, setHljsReady] = useState(false)
+  const [showFormatToolbar, setShowFormatToolbar] = useState(false)
 
   // Load highlight.js (CDN) once for pretty HTML code view
   useEffect(() => {
@@ -330,13 +327,11 @@ const SampleStatus: React.FC = () => {
   }
 
   // Helper to map API status number to local status
-  const mapApiStatusToStatus = (status: number): 'pending' | 'collected' | 'processing' | 'completed' | 'rejected' => {
+  const mapApiStatusToStatus = (status: number): 'pending' | 'processing' | 'completed' => {
     switch (status) {
       case 1: return 'pending' // Đang tiếp nhận
-      case 2: return 'collected' // Đã lấy mẫu  
-      case 3: return 'processing' // Đang xử lý
-      case 4: return 'completed' // Hoàn thành
-      case 5: return 'rejected' // Từ chối
+      case 2: return 'processing' // Đang phân tích
+      case 3: return 'completed' // Đã có kết quả
       default: return 'pending'
     }
   }
@@ -358,10 +353,8 @@ const SampleStatus: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800'
-      case 'collected': return 'bg-blue-100 text-blue-800'
-      case 'processing': return 'bg-purple-100 text-purple-800'
+      case 'processing': return 'bg-blue-100 text-blue-800'
       case 'completed': return 'bg-green-100 text-green-800'
-      case 'rejected': return 'bg-red-100 text-red-800'
       default: return 'bg-gray-100 text-gray-800'
     }
   }
@@ -369,10 +362,8 @@ const SampleStatus: React.FC = () => {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'pending': return <Clock size={14} />
-      case 'collected': return <Package size={14} />
       case 'processing': return <Microscope size={14} />
       case 'completed': return <CheckCircle size={14} />
-      case 'rejected': return <XCircle size={14} />
       default: return <AlertTriangle size={14} />
     }
   }
@@ -380,10 +371,8 @@ const SampleStatus: React.FC = () => {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'pending': return 'Đang tiếp nhận'
-      case 'collected': return 'Đang phân tích'
       case 'processing': return 'Đang phân tích'
       case 'completed': return 'Đã có kết quả'
-      case 'rejected': return 'Từ chối'
       default: return status
     }
   }
@@ -408,7 +397,7 @@ const SampleStatus: React.FC = () => {
 
   const handleUpdateStatus = async (sample: PatientSample, newStatus: string) => {
     // Bỏ xác nhận: mở trực tiếp dialog nhập kết quả khi bắt đầu phân tích
-    if (newStatus === 'collected') {
+    if (newStatus === 'processing') {
       setSelectedSample(sample)
       setShowResultUploadDialog(true)
     }
@@ -544,42 +533,8 @@ const SampleStatus: React.FC = () => {
     e.preventDefault()
   }
 
-  // Save edited HTML
+  // Save and approve edited HTML
   const handleSaveHtml = async (sampleId: number) => {
-    try {
-      setIsUploading(true)
-      
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'https://pk.caduceus.vn/api/pk/v1'}/patient-test`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-        },
-        body: JSON.stringify({
-          patientTestId: sampleId,
-          html: uploadedHtml
-        })
-      })
-      
-      if (response.ok) {
-        toast.success('Lưu kết quả thành công!')
-        setShowResultUploadDialog(false)
-        setUploadedHtml('')
-        setIsEditingHtml(false)
-        await fetchSamples() // Refresh data
-      } else {
-        toast.error('Lỗi khi lưu kết quả')
-      }
-    } catch (error) {
-      console.error('Error saving HTML:', error)
-      toast.error('Có lỗi xảy ra khi lưu kết quả')
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
-  // Approve result - call API to approve the test result
-  const handleApproveResult = async (sampleId: number) => {
     try {
       setIsUploading(true)
       
@@ -601,17 +556,54 @@ const SampleStatus: React.FC = () => {
         setUploadedHtml('')
         setIsEditingHtml(false)
         setShowCodeView(false)
+        setShowFormatToolbar(false)
         await fetchSamples() // Refresh data
       } else {
         const errorData = await response.json()
         toast.error(errorData.message || 'Lỗi khi phê duyệt kết quả')
       }
     } catch (error) {
-      console.error('Error approving result:', error)
+      console.error('Error saving HTML:', error)
       toast.error('Có lỗi xảy ra khi phê duyệt kết quả')
     } finally {
       setIsUploading(false)
     }
+  }
+
+  // Format functions for Word-like editing
+  const formatText = (command: string, value?: string) => {
+    document.execCommand(command, false, value)
+    // Update the HTML content after formatting
+    const editor = document.querySelector('[contenteditable="true"]') as HTMLElement
+    if (editor) {
+      setUploadedHtml(editor.innerHTML)
+    }
+  }
+
+  const insertTable = () => {
+    const tableHtml = `
+      <table style="border-collapse: collapse; width: 100%; margin: 10px 0;">
+        <tr>
+          <td style="border: 1px solid #000; padding: 8px;">&nbsp;</td>
+          <td style="border: 1px solid #000; padding: 8px;">&nbsp;</td>
+          <td style="border: 1px solid #000; padding: 8px;">&nbsp;</td>
+        </tr>
+        <tr>
+          <td style="border: 1px solid #000; padding: 8px;">&nbsp;</td>
+          <td style="border: 1px solid #000; padding: 8px;">&nbsp;</td>
+          <td style="border: 1px solid #000; padding: 8px;">&nbsp;</td>
+        </tr>
+      </table>
+    `
+    formatText('insertHTML', tableHtml)
+  }
+
+  const insertLineBreak = () => {
+    formatText('insertHTML', '<br>')
+  }
+
+  const insertHorizontalRule = () => {
+    formatText('insertHTML', '<hr style="margin: 10px 0;">')
   }
 
   // Removed confirm handler and modal
@@ -623,10 +615,8 @@ const SampleStatus: React.FC = () => {
 
   const stats = {
     pending: samples.filter(s => s.status === 'pending').length,
-    collected: samples.filter(s => s.status === 'collected').length,
     processing: samples.filter(s => s.status === 'processing').length,
     completed: samples.filter(s => s.status === 'completed').length,
-    rejected: samples.filter(s => s.status === 'rejected').length,
     urgent: samples.filter(s => s.priority === 'urgent' || s.priority === 'stat').length
   }
 
@@ -646,7 +636,7 @@ const SampleStatus: React.FC = () => {
       </div>
 
       {/* Statistics */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="shadow-lg border-0">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -664,21 +654,9 @@ const SampleStatus: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs text-gray-600">Đang phân tích</p>
-                <p className="text-lg font-bold text-blue-600">{stats.collected}</p>
+                <p className="text-lg font-bold text-blue-600">{stats.processing}</p>
               </div>
-              <Package className="h-6 w-6 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Đang phân tích</p>
-                <p className="text-lg font-bold text-purple-600">{stats.processing}</p>
-              </div>
-              <Microscope className="h-6 w-6 text-purple-600" />
+              <Microscope className="h-6 w-6 text-blue-600" />
             </div>
           </CardContent>
         </Card>
@@ -691,18 +669,6 @@ const SampleStatus: React.FC = () => {
                 <p className="text-lg font-bold text-green-600">{stats.completed}</p>
               </div>
               <CheckCircle className="h-6 w-6 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-lg border-0">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-gray-600">Từ chối</p>
-                <p className="text-lg font-bold text-red-600">{stats.rejected}</p>
-              </div>
-              <XCircle className="h-6 w-6 text-red-600" />
             </div>
           </CardContent>
         </Card>
@@ -742,11 +708,9 @@ const SampleStatus: React.FC = () => {
                 className="px-3 py-2 border border-gray-300 rounded-md w-full sm:w-auto"
               >
                 <option value="">Tất cả trạng thái</option>
-                <option value="pending">Đang tiếp nhận</option>
-                <option value="collected">Đang phân tích</option>
-                <option value="processing">Đang phân tích</option>
-                <option value="completed">Đã có kết quả</option>
-                <option value="rejected">Từ chối</option>
+                <option value="1">Đang tiếp nhận</option>
+                <option value="2">Đang phân tích</option>
+                <option value="3">Đã có kết quả</option>
               </select>
 
               <select
@@ -888,22 +852,11 @@ const SampleStatus: React.FC = () => {
                           {sample.status === 'pending' && (
                             <Button
                               size="sm"
-                              onClick={() => handleUpdateStatus(sample, 'collected')}
+                              onClick={() => handleUpdateStatus(sample, 'processing')}
                               className="text-xs"
                             >
                               <Microscope size={12} className="mr-1" />
                               Bắt đầu phân tích
-                            </Button>
-                          )}
-                          
-                          {sample.status === 'collected' && (
-                            <Button
-                              size="sm"
-                              onClick={() => handleUpdateStatus(sample, 'processing')}
-                              className="text-xs"
-                            >
-                              <CheckCircle size={12} className="mr-1" />
-                              Hoàn thành phân tích
                             </Button>
                           )}
                           
@@ -1210,16 +1163,6 @@ const SampleStatus: React.FC = () => {
                   </div>
                 )}
 
-                {/* Rejection Reason */}
-                {selectedSample.status === 'rejected' && selectedSample.rejectionReason && (
-                  <div className="bg-red-50 p-4 rounded-lg">
-                    <h3 className="font-semibold mb-2 text-red-800 flex items-center">
-                      <XCircle size={16} className="mr-2" />
-                      Lý do từ chối
-                    </h3>
-                    <p className="text-sm text-red-700">{selectedSample.rejectionReason}</p>
-                  </div>
-                )}
               </div>
 
               {/* Action Buttons */}
@@ -1261,6 +1204,7 @@ const SampleStatus: React.FC = () => {
                   setUploadedHtml('')
                   setIsEditingHtml(false)
                   setShowCodeView(false)
+                  setShowFormatToolbar(false)
                 }}
               >
                 <X size={16} />
@@ -1320,63 +1264,192 @@ const SampleStatus: React.FC = () => {
                     </h4>
                     <div className="flex gap-3">
                       {selectedSample?.status !== 'completed' && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setIsEditingHtml(!isEditingHtml)}
-                        >
+                      <Button
+                        size="sm"
+                        variant="outline"
+                          onClick={() => {
+                            setIsEditingHtml(!isEditingHtml)
+                            setShowFormatToolbar(isEditingHtml ? false : true)
+                          }}
+                      >
                           {isEditingHtml ? 'Xem kết quả' : 'Chỉnh sửa Word'}
-                        </Button>
+                      </Button>
                       )}
                       <Button size="sm" variant="outline" onClick={() => setShowCodeView(!showCodeView)}>
                         {showCodeView ? 'Ẩn mã HTML' : 'Xem mã HTML'}
                       </Button>
                       {selectedSample?.status !== 'completed' && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleSaveHtml(parseInt(selectedSample.id))}
-                            disabled={isUploading}
-                          >
-                            {isUploading ? (
-                              <>
-                                <Loader2 size={14} className="mr-1 animate-spin" />
-                                Đang lưu...
-                              </>
-                            ) : (
-                              <>
-                                <Save size={14} className="mr-1" />
-                                Lưu kết quả
-                              </>
-                            )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => handleApproveResult(parseInt(selectedSample.id))}
-                            disabled={isUploading || !uploadedHtml}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            <CheckCircle size={14} className="mr-1" />
-                            Phê duyệt
-                          </Button>
-                        </>
+                      <Button
+                        size="sm"
+                        onClick={() => handleSaveHtml(parseInt(selectedSample.id))}
+                          disabled={isUploading || !uploadedHtml}
+                          className="bg-green-600 hover:bg-green-700"
+                      >
+                        {isUploading ? (
+                          <>
+                            <Loader2 size={14} className="mr-1 animate-spin" />
+                              Đang phê duyệt...
+                          </>
+                        ) : (
+                          <>
+                              <CheckCircle size={14} className="mr-1" />
+                              Phê duyệt
+                          </>
+                        )}
+                      </Button>
                       )}
                     </div>
                   </div>
                   
                   <div className="flex-1 overflow-hidden">
-                    {showCodeView ? (
+                  {showCodeView ? (
                       <pre className="h-full overflow-auto border rounded-md p-4 bg-gray-50 text-sm">
-                        <code ref={codeRef as any} className="language-xml">
-                          {escapeHtmlForCode(uploadedHtml)}
-                        </code>
-                      </pre>
+                      <code ref={codeRef as any} className="language-xml">
+                        {escapeHtmlForCode(uploadedHtml)}
+                      </code>
+                    </pre>
                     ) : (isEditingHtml && selectedSample?.status !== 'completed') ? (
                       <div className="h-full flex flex-col">
                         <div className="mb-2 text-sm text-gray-600">
                           Chỉnh sửa nội dung như Word (HTML sẽ được cập nhật tự động):
                         </div>
+                        
+                        {/* Format Toolbar */}
+                        {showFormatToolbar && (
+                          <div className="mb-4 p-3 bg-gray-50 border border-gray-300 rounded-md">
+                            <div className="flex flex-wrap gap-2">
+                              {/* Text Formatting */}
+                              <div className="flex gap-1 border-r pr-2 mr-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => formatText('bold')}
+                                  title="Bold"
+                                >
+                                  <strong>B</strong>
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => formatText('italic')}
+                                  title="Italic"
+                                >
+                                  <em>I</em>
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => formatText('underline')}
+                                  title="Underline"
+                                >
+                                  <u>U</u>
+                                </Button>
+                              </div>
+                              
+                              {/* Font Size */}
+                              <div className="flex gap-1 border-r pr-2 mr-2">
+                                <select
+                                  onChange={(e) => formatText('fontSize', e.target.value)}
+                                  className="px-2 py-1 text-xs border rounded"
+                                >
+                                  <option value="">Size</option>
+                                  <option value="1">8px</option>
+                                  <option value="2">10px</option>
+                                  <option value="3">12px</option>
+                                  <option value="4">14px</option>
+                                  <option value="5">18px</option>
+                                  <option value="6">24px</option>
+                                  <option value="7">36px</option>
+                                </select>
+                              </div>
+                              
+                              {/* Alignment */}
+                              <div className="flex gap-1 border-r pr-2 mr-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => formatText('justifyLeft')}
+                                  title="Align Left"
+                                >
+                                  ⬅
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => formatText('justifyCenter')}
+                                  title="Align Center"
+                                >
+                                  ⬆
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => formatText('justifyRight')}
+                                  title="Align Right"
+                                >
+                                  ➡
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => formatText('justifyFull')}
+                                  title="Justify"
+                                >
+                                  ⬌
+                                </Button>
+                              </div>
+                              
+                              {/* Lists */}
+                              <div className="flex gap-1 border-r pr-2 mr-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => formatText('insertUnorderedList')}
+                                  title="Bullet List"
+                                >
+                                  •
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => formatText('insertOrderedList')}
+                                  title="Numbered List"
+                                >
+                                  1.
+                                </Button>
+                              </div>
+                              
+                              {/* Insert Elements */}
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={insertTable}
+                                  title="Insert Table"
+                                >
+                                  ⊞
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={insertLineBreak}
+                                  title="Line Break"
+                                >
+                                  ↵
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={insertHorizontalRule}
+                                  title="Horizontal Line"
+                                >
+                                  —
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
                         <div
                           contentEditable
                           suppressContentEditableWarning
@@ -1388,7 +1461,8 @@ const SampleStatus: React.FC = () => {
                             lineHeight: '1.6',
                             wordBreak: 'break-word',
                             whiteSpace: 'pre-wrap',
-                            overflowWrap: 'break-word'
+                            overflowWrap: 'break-word',
+                            outline: 'none'
                           }}
                           dangerouslySetInnerHTML={{ __html: fixImagePaths(uploadedHtml) }}
                           onInput={(e) => {
@@ -1405,6 +1479,11 @@ const SampleStatus: React.FC = () => {
                               e.preventDefault()
                               document.execCommand('insertHTML', false, '<br>')
                             }
+                            // Handle Tab key
+                            if (e.key === 'Tab') {
+                              e.preventDefault()
+                              document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;')
+                            }
                           }}
                           onCompositionStart={(e) => {
                             // Prevent input handling during composition (Vietnamese typing)
@@ -1415,6 +1494,12 @@ const SampleStatus: React.FC = () => {
                             e.currentTarget.removeAttribute('data-composing')
                             const newContent = e.currentTarget.innerHTML
                             setUploadedHtml(newContent)
+                          }}
+                          onPaste={(e) => {
+                            // Handle paste to preserve formatting
+                            e.preventDefault()
+                            const text = e.clipboardData.getData('text/plain')
+                            document.execCommand('insertText', false, text)
                           }}
                         />
                       </div>

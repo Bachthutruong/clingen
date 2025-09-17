@@ -7,12 +7,9 @@ import {
   Trash2, 
   Check, 
   X, 
-  Calendar,
   DollarSign,
-  Building,
-  Receipt,
   RefreshCw,
-  Download,
+  // Download,
   // Eye
 } from 'lucide-react'
 import { monthlyCostsApi } from '@/services'
@@ -49,6 +46,7 @@ export const MonthlyCostList: React.FC<MonthlyCostListProps> = ({
     currentPage: 0,
     size: 20
   })
+  const [pageSize, setPageSize] = useState(20)
   const [selectedCosts, setSelectedCosts] = useState<number[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingCost, setEditingCost] = useState<MonthlyCost | null>(null)
@@ -69,7 +67,7 @@ export const MonthlyCostList: React.FC<MonthlyCostListProps> = ({
         totalElements: response.totalElements || 0,
         totalPages: response.totalPages || 0,
         currentPage: response.number || 0,
-        size: response.size || 20
+        size: response.size || pageSize
       })
     } catch (error) {
       console.error('Error loading monthly costs:', error)
@@ -90,7 +88,8 @@ export const MonthlyCostList: React.FC<MonthlyCostListProps> = ({
       category: filters.category ? parseInt(filters.category) : undefined,
       isPaid: filters.isPaid ? filters.isPaid === 'true' : undefined,
       isRecurring: filters.isRecurring ? filters.isRecurring === 'true' : undefined,
-      page: 0
+      page: 0,
+      size: pageSize
     }
     setSearchParams(newParams)
     loadCosts(newParams)
@@ -98,7 +97,15 @@ export const MonthlyCostList: React.FC<MonthlyCostListProps> = ({
 
   // Handle pagination
   const handlePageChange = (page: number) => {
-    const newParams = { ...searchParams, page }
+    const newParams = { ...searchParams, page, size: pageSize }
+    setSearchParams(newParams)
+    loadCosts(newParams)
+  }
+
+  // Handle page size change
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize)
+    const newParams = { ...searchParams, page: 0, size: newSize }
     setSearchParams(newParams)
     loadCosts(newParams)
   }
@@ -251,7 +258,7 @@ export const MonthlyCostList: React.FC<MonthlyCostListProps> = ({
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Làm mới
           </Button>
-          <Button
+          {/* <Button
             variant="outline"
             onClick={() => {
               // TODO: Export to Excel
@@ -259,7 +266,7 @@ export const MonthlyCostList: React.FC<MonthlyCostListProps> = ({
           >
             <Download className="h-4 w-4 mr-2" />
             Xuất Excel
-          </Button>
+          </Button> */}
           <Button onClick={() => setShowForm(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Thêm chi phí
@@ -269,7 +276,7 @@ export const MonthlyCostList: React.FC<MonthlyCostListProps> = ({
 
       {/* Filters */}
       <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
@@ -309,6 +316,17 @@ export const MonthlyCostList: React.FC<MonthlyCostListProps> = ({
             <option value="false">Chưa thanh toán</option>
             <option value="true">Đã thanh toán</option>
           </select>
+
+          <select
+            value={pageSize}
+            onChange={(e) => handlePageSizeChange(parseInt(e.target.value))}
+            className="px-3 py-2 border border-gray-300 rounded-md"
+          >
+            <option value={10}>10 / trang</option>
+            <option value={20}>20 / trang</option>
+            <option value={50}>50 / trang</option>
+            <option value={100}>100 / trang</option>
+          </select>
           
           <Button onClick={handleSearch} className="w-full">
             <Filter className="h-4 w-4 mr-2" />
@@ -346,152 +364,163 @@ export const MonthlyCostList: React.FC<MonthlyCostListProps> = ({
         </Card>
       )}
 
-      {/* Costs List */}
-      <div className="space-y-4">
+      {/* Costs Table */}
+      <Card className="overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-32">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
           </div>
         ) : costs.length === 0 ? (
-          <Card className="p-8 text-center">
+          <div className="p-8 text-center">
             <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">Không có chi phí nào</p>
-          </Card>
+          </div>
         ) : (
-          costs.map((cost) => (
-            <Card key={cost.id} className="p-4">
-              <div className="flex items-start gap-4">
-                <input
-                  type="checkbox"
-                  checked={selectedCosts.includes(cost.id)}
-                  onChange={() => toggleSelection(cost.id)}
-                  className="mt-1 rounded"
-                />
-                
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-medium text-lg">{cost.costName}</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="px-4 py-3 text-left">
+                    <input
+                      type="checkbox"
+                      checked={selectedCosts.length === costs.length && costs.length > 0}
+                      onChange={() => {
+                        if (selectedCosts.length === costs.length) {
+                          setSelectedCosts([])
+                        } else {
+                          setSelectedCosts(costs.map(cost => cost.id))
+                        }
+                      }}
+                      className="rounded"
+                    />
+                  </th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Tên chi phí</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Loại</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Số tiền</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Trạng thái</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Đến hạn</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Nhà cung cấp</th>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-900">Tạo bởi</th>
+                  <th className="px-4 py-3 text-center text-sm font-medium text-gray-900">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {costs.map((cost) => (
+                  <tr key={cost.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedCosts.includes(cost.id)}
+                        onChange={() => toggleSelection(cost.id)}
+                        className="rounded"
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-gray-900">{cost.costName}</span>
+                        {cost.description && (
+                          <span className="text-sm text-gray-500 mt-1">{cost.description}</span>
+                        )}
+                        {cost.isRecurring && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-600 w-fit mt-1">
+                            Định kỳ
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900">
+                      {getCategoryName(cost.category)}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-semibold text-green-600">
+                      {formatCurrency(cost.amount)}
+                    </td>
+                    <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(cost.isPaid, cost.isOverdue)}`}>
                         {getStatusText(cost.isPaid, cost.isOverdue)}
                       </span>
-                      {cost.isRecurring && (
-                        <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-600">
-                          Định kỳ
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-semibold text-green-600">
-                        {formatCurrency(cost.amount)}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-                    <div className="flex items-center gap-2">
-                      <Building className="h-4 w-4" />
-                      <span>{getCategoryName(cost.category)}</span>
-                    </div>
-                    
-                    {cost.vendorName && (
-                      <div className="flex items-center gap-2">
-                        <Building className="h-4 w-4" />
-                        <span>{cost.vendorName}</span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900">
+                      {formatDate(cost.dueDate)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900">
+                      {cost.vendorName || '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900">
+                      {cost.createdBy}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => togglePaymentStatus(cost.id, cost.isPaid)}
+                          title={cost.isPaid ? 'Đánh dấu chưa thanh toán' : 'Đánh dấu đã thanh toán'}
+                        >
+                          {cost.isPaid ? <X className="h-3 w-3" /> : <Check className="h-3 w-3" />}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditingCost(cost)
+                            setShowForm(true)
+                          }}
+                          title="Chỉnh sửa"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => deleteCost(cost.id)}
+                          title="Xóa"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
                       </div>
-                    )}
-                    
-                    {cost.invoiceNumber && (
-                      <div className="flex items-center gap-2">
-                        <Receipt className="h-4 w-4" />
-                        <span>{cost.invoiceNumber}</span>
-                      </div>
-                    )}
-                    
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4" />
-                      <span>Đến hạn: {formatDate(cost.dueDate)}</span>
-                    </div>
-                    
-                    {cost.paymentDate && (
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        <span>Thanh toán: {formatDate(cost.paymentDate)}</span>
-                      </div>
-                    )}
-                    
-                    <div className="flex items-center gap-2">
-                      <span>Tạo bởi: {cost.createdBy}</span>
-                    </div>
-                  </div>
-                  
-                  {cost.description && (
-                    <p className="text-sm text-gray-600 mt-2">{cost.description}</p>
-                  )}
-                  
-                  {cost.notes && (
-                    <p className="text-sm text-gray-500 mt-1 italic">{cost.notes}</p>
-                  )}
-                </div>
-                
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => togglePaymentStatus(cost.id, cost.isPaid)}
-                  >
-                    {cost.isPaid ? <X className="h-3 w-3" /> : <Check className="h-3 w-3" />}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setEditingCost(cost)
-                      setShowForm(true)
-                    }}
-                  >
-                    <Edit className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => deleteCost(cost.id)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ))
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-      </div>
+      </Card>
 
       {/* Pagination */}
-      {pagination.totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChange(pagination.currentPage - 1)}
-            disabled={pagination.currentPage === 0}
-          >
-            Trước
-          </Button>
+      <Card className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-gray-600">
+            Hiển thị {pagination.currentPage * pageSize + 1} - {Math.min((pagination.currentPage + 1) * pageSize, pagination.totalElements)} / {pagination.totalElements} chi phí
+          </div>
           
-          <span className="text-sm text-gray-600">
-            Trang {pagination.currentPage + 1} / {pagination.totalPages}
-          </span>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChange(pagination.currentPage + 1)}
-            disabled={pagination.currentPage >= pagination.totalPages - 1}
-          >
-            Sau
-          </Button>
+          {pagination.totalPages > 1 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(pagination.currentPage - 1)}
+                disabled={pagination.currentPage === 0}
+              >
+                Trước
+              </Button>
+              
+              <span className="text-sm text-gray-600">
+                Trang {pagination.currentPage + 1} / {pagination.totalPages}
+              </span>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(pagination.currentPage + 1)}
+                disabled={pagination.currentPage >= pagination.totalPages - 1}
+              >
+                Sau
+              </Button>
+            </div>
+          )}
         </div>
-      )}
+      </Card>
 
       {/* Form Modal */}
       <MonthlyCostForm

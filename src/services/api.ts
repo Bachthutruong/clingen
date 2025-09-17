@@ -250,6 +250,16 @@ api.interceptors.response.use(
       }
     }
     
+    // Handle other errors - extract API message if available
+    if (error.response?.data?.message) {
+      // Create a new error with the API message
+      const apiError = new Error(error.response.data.message)
+      apiError.name = 'APIError'
+      // Preserve original error properties
+      Object.assign(apiError, error)
+      return Promise.reject(apiError)
+    }
+    
     return Promise.reject(error)
   }
 )
@@ -259,79 +269,126 @@ const mapRole = (roleCode: number): User['role'] => {
   return mapRoleCodeToRole(roleCode) as User['role']
 }
 
+// Helper: extract error message from API response
+export const getApiErrorMessage = (error: any): string => {
+  // Check for API error message first
+  if (error.response?.data?.message) {
+    return error.response.data.message
+  }
+  
+  // Check for error message in response data
+  if (error.response?.data?.error) {
+    return error.response.data.error
+  }
+  
+  // Check for status text
+  if (error.response?.statusText) {
+    return error.response.statusText
+  }
+  
+  // Check for error message
+  if (error.message) {
+    return error.message
+  }
+  
+  // Default fallback
+  return 'Đã xảy ra lỗi không xác định'
+}
+
 // Auth API
 export const authApi = {
   login: async (credentials: LoginCredentials): Promise<LoginResponse> => {
-    const response = await api.post('/auth/login', credentials)
-    const payload = response?.data?.data ?? response.data
+    try {
+      const response = await api.post('/auth/login', credentials)
+      const payload = response?.data?.data ?? response.data
 
-    const user: User = {
-      id: payload?.username ?? 'unknown',
-      username: payload?.username ?? '',
-      email: payload?.email ?? '',
-      name: payload?.username ?? '',
-      roleCode: payload?.roleCode ?? 1,
-      roleName: payload?.roleName ?? 'ADMIN',
-      role: mapRole(payload?.roleCode ?? 1),
-      avatar: undefined,
-      phone: undefined,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
+      const user: User = {
+        id: payload?.username ?? 'unknown',
+        username: payload?.username ?? '',
+        email: payload?.email ?? '',
+        name: payload?.username ?? '',
+        roleCode: payload?.roleCode ?? 1,
+        roleName: payload?.roleName ?? 'ADMIN',
+        role: mapRole(payload?.roleCode ?? 1),
+        avatar: undefined,
+        phone: undefined,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
 
-    return {
-      user,
-      token: payload?.token,
-      refreshToken: payload?.refreshToken
+      return {
+        user,
+        token: payload?.token,
+        refreshToken: payload?.refreshToken
+      }
+    } catch (error: any) {
+      console.error('Error logging in:', error)
+      throw new Error(getApiErrorMessage(error))
     }
   },
 
   register: async (userData: RegisterData): Promise<LoginResponse> => {
-    const response = await api.post('/auth/register', userData)
-    const payload = response?.data?.data ?? response.data
+    try {
+      const response = await api.post('/auth/register', userData)
+      const payload = response?.data?.data ?? response.data
 
-    const user: User = {
-      id: payload?.username ?? 'unknown',
-      username: payload?.username ?? '',
-      email: payload?.email ?? '',
-      name: payload?.username ?? '',
-      roleCode: payload?.roleCode ?? 1,
-      roleName: payload?.roleName ?? 'ADMIN',
-      role: mapRole(payload?.roleCode ?? 1),
-      avatar: undefined,
-      phone: undefined,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
+      const user: User = {
+        id: payload?.username ?? 'unknown',
+        username: payload?.username ?? '',
+        email: payload?.email ?? '',
+        name: payload?.username ?? '',
+        roleCode: payload?.roleCode ?? 1,
+        roleName: payload?.roleName ?? 'ADMIN',
+        role: mapRole(payload?.roleCode ?? 1),
+        avatar: undefined,
+        phone: undefined,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
 
-    return {
-      user,
-      token: payload?.token,
-      refreshToken: payload?.refreshToken
+      return {
+        user,
+        token: payload?.token,
+        refreshToken: payload?.refreshToken
+      }
+    } catch (error: any) {
+      console.error('Error registering user:', error)
+      throw new Error(getApiErrorMessage(error))
     }
   },
 
   refresh: async (request: RefreshTokenRequest): Promise<RefreshTokenResponse> => {
-    const response = await api.post('/auth/refresh', request)
-    const payload = response?.data?.data ?? response.data
-    return {
-      token: payload?.token,
-      refreshToken: payload?.refreshToken
+    try {
+      const response = await api.post('/auth/refresh', request)
+      const payload = response?.data?.data ?? response.data
+      return {
+        token: payload?.token,
+        refreshToken: payload?.refreshToken
+      }
+    } catch (error: any) {
+      console.error('Error refreshing token:', error)
+      throw new Error(getApiErrorMessage(error))
     }
   },
 
   logout: async (request: LogoutRequest): Promise<void> => {
     try {
       await api.post('/auth/logout', request)
-    } catch (_) {
-      // ignore
+    } catch (error: any) {
+      console.error('Error logging out:', error)
+      // Don't throw error for logout as it's not critical
     }
   },
 
   changePassword: async (request: ChangePasswordRequest): Promise<ChangePasswordResponse> => {
-    const response = await api.post('/auth/change-password', request)
-    const payload = response?.data?.data ?? response.data
-    return payload ?? { success: true, message: 'OK' }
+    try {
+      const response = await api.post('/auth/change-password', request)
+      const payload = response?.data?.data ?? response.data
+      return payload ?? { success: true, message: 'OK' }
+    } catch (error: any) {
+      console.error('Error changing password:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   getUserInfo: async (): Promise<GetUserInfoResponse> => {
@@ -424,17 +481,32 @@ export const packagingApi = {
   },
 
   create: async (data: CreatePackagingRequest): Promise<Packaging> => {
-    const response: AxiosResponse<MethodResult<Packaging>> = await api.post('/packing', data)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<Packaging>> = await api.post('/packing', data)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error creating packaging:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   update: async (id: number, data: Partial<CreatePackagingRequest>): Promise<Packaging> => {
-    const response: AxiosResponse<MethodResult<Packaging>> = await api.put(`/packing/${id}`, data)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<Packaging>> = await api.put(`/packing/${id}`, data)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error updating packaging:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/packing/${id}`)
+    try {
+      await api.delete(`/packing/${id}`)
+    } catch (error: any) {
+      console.error('Error deleting packaging:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 }
 
@@ -466,17 +538,32 @@ export const testTypesApi = {
   },
 
   create: async (data: CreateTestTypeRequest): Promise<TestType> => {
-    const response: AxiosResponse<MethodResult<TestType>> = await api.post('/test-type', data)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<TestType>> = await api.post('/test-type', data)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error creating test type:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   update: async (id: number, data: Partial<CreateTestTypeRequest>): Promise<TestType> => {
-    const response: AxiosResponse<MethodResult<TestType>> = await api.put(`/test-type/${id}`, data)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<TestType>> = await api.put(`/test-type/${id}`, data)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error updating test type:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/test-type/${id}`)
+    try {
+      await api.delete(`/test-type/${id}`)
+    } catch (error: any) {
+      console.error('Error deleting test type:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   // Quản lý mẫu xét nghiệm cho loại xét nghiệm
@@ -522,17 +609,32 @@ export const testSamplesApi = {
   },
 
   create: async (data: CreateTestSampleRequest): Promise<TestSample> => {
-    const response: AxiosResponse<MethodResult<TestSample>> = await api.post('/test-sample', data)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<TestSample>> = await api.post('/test-sample', data)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error creating test sample:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   update: async (id: number, data: Partial<CreateTestSampleRequest>): Promise<TestSample> => {
-    const response: AxiosResponse<MethodResult<TestSample>> = await api.put(`/test-sample/${id}`, data)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<TestSample>> = await api.put(`/test-sample/${id}`, data)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error updating test sample:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/test-sample/${id}`)
+    try {
+      await api.delete(`/test-sample/${id}`)
+    } catch (error: any) {
+      console.error('Error deleting test sample:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 }
 
@@ -558,17 +660,32 @@ export const referralSourcesApi = {
   },
 
   create: async (data: CreateReferralSourceRequest): Promise<ReferralSourceAPI> => {
-    const response: AxiosResponse<MethodResult<ReferralSourceAPI>> = await api.post('/referral-source', data)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<ReferralSourceAPI>> = await api.post('/referral-source', data)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error creating referral source:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   update: async (id: number, data: Partial<CreateReferralSourceRequest>): Promise<ReferralSourceAPI> => {
-    const response: AxiosResponse<MethodResult<ReferralSourceAPI>> = await api.put(`/referral-source/${id}`, data)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<ReferralSourceAPI>> = await api.put(`/referral-source/${id}`, data)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error updating referral source:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/referral-source/${id}`)
+    try {
+      await api.delete(`/referral-source/${id}`)
+    } catch (error: any) {
+      console.error('Error deleting referral source:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 }
 
@@ -616,19 +733,34 @@ export const patientsApi = {
 
   // POST /patient - Tạo bệnh nhân mới
   create: async (patientData: CreatePatientRequest): Promise<PatientAPI> => {
-    const response: AxiosResponse<MethodResult<PatientAPI>> = await api.post('/patient', patientData)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<PatientAPI>> = await api.post('/patient', patientData)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error creating patient:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   // PUT /patient/{id} - Cập nhật thông tin bệnh nhân
   update: async (id: number, patientData: Partial<CreatePatientRequest>): Promise<PatientAPI> => {
-    const response: AxiosResponse<MethodResult<PatientAPI>> = await api.put(`/patient/${id}`, patientData)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<PatientAPI>> = await api.put(`/patient/${id}`, patientData)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error updating patient:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   // DELETE /patient/{id} - Xóa bệnh nhân
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/patient/${id}`)
+    try {
+      await api.delete(`/patient/${id}`)
+    } catch (error: any) {
+      console.error('Error deleting patient:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   // GET /patient/{id}/history - Lấy lịch sử xét nghiệm của bệnh nhân
@@ -821,17 +953,32 @@ export const materialsApi = {
   },
 
   create: async (data: CreateMaterialRequest): Promise<Material> => {
-    const response: AxiosResponse<MethodResult<Material>> = await api.post('/material', data)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<Material>> = await api.post('/material', data)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error creating material:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   update: async (id: number, data: Partial<CreateMaterialRequest>): Promise<Material> => {
-    const response: AxiosResponse<MethodResult<Material>> = await api.put(`/material/${id}`, data)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<Material>> = await api.put(`/material/${id}`, data)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error updating material:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/material/${id}`)
+    try {
+      await api.delete(`/material/${id}`)
+    } catch (error: any) {
+      console.error('Error deleting material:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   // Lấy vật tư theo type
@@ -921,19 +1068,29 @@ export const inventoryLogsApi = {
 
   // PUT /inventory/logs/{id} - Update log
   update: async (id: number, data: Partial<CreateInventoryLogRequest>): Promise<InventoryLogsDTO> => {
-    console.log('Sending update request to /inventory/logs/' + id, data)
-    const response: AxiosResponse<any> = await api.put(`/inventory/logs/${id}`, data, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-    console.log('Update response:', response.data)
-    return response.data.data || response.data
+    try {
+      console.log('Sending update request to /inventory/logs/' + id, data)
+      const response: AxiosResponse<any> = await api.put(`/inventory/logs/${id}`, data, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      console.log('Update response:', response.data)
+      return response.data.data || response.data
+    } catch (error: any) {
+      console.error('Error updating inventory log:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   // DELETE /inventory/logs/{id} - Delete log
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/inventory/logs/${id}`)
+    try {
+      await api.delete(`/inventory/logs/${id}`)
+    } catch (error: any) {
+      console.error('Error deleting inventory log:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   // GET /inventory/logs - Get all logs
@@ -944,8 +1101,13 @@ export const inventoryLogsApi = {
 
   // POST /inventory/logs - Create new log (logType 1 - nhập kho, 2 - xuất kho)
   create: async (data: CreateInventoryLogRequest): Promise<InventoryLogsDTO> => {
-    const response: AxiosResponse<any> = await api.post('/inventory/logs', data)
-    return response.data.data || response.data
+    try {
+      const response: AxiosResponse<any> = await api.post('/inventory/logs', data)
+      return response.data.data || response.data
+    } catch (error: any) {
+      console.error('Error creating inventory log:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   // POST /inventory/logs/search - Search logs with pagination
@@ -1225,8 +1387,13 @@ export const notificationApi = {
 
   // POST /notifications - Create and send notification
   create: async (data: any): Promise<any> => {
-    const response: AxiosResponse<any> = await api.post('/notifications', data)
-    return response.data.data || response.data
+    try {
+      const response: AxiosResponse<any> = await api.post('/notifications', data)
+      return response.data.data || response.data
+    } catch (error: any) {
+      console.error('Error creating notification:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   // GET /notifications/config - Get user notification configs
@@ -1470,25 +1637,45 @@ export const patientTestApi = {
 
   // POST /patient-test - Save new patient test
   create: async (data: any): Promise<any> => {
-    const response: AxiosResponse<MethodResult<any>> = await api.post('/patient-test', data)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<any>> = await api.post('/patient-test', data)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error creating patient test:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   // PUT /patient-test/{id} - Update patient test
   update: async (id: number, data: any): Promise<any> => {
-    const response: AxiosResponse<MethodResult<any>> = await api.put(`/patient-test/${id}`, data)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<any>> = await api.put(`/patient-test/${id}`, data)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error updating patient test:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   // PATCH /patient-test/{id}/status - Update test status
   updateStatus: async (id: number, status: any): Promise<any> => {
-    const response: AxiosResponse<MethodResult<any>> = await api.patch(`/patient-test/${id}/status`, { status })
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<any>> = await api.patch(`/patient-test/${id}/status`, { status })
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error updating patient test status:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   // DELETE /patient-test/{id} - Delete patient test
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/patient-test/${id}`)
+    try {
+      await api.delete(`/patient-test/${id}`)
+    } catch (error: any) {
+      console.error('Error deleting patient test:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   // Get patient tests by patient ID
@@ -1623,8 +1810,13 @@ export const revenueApi = {
 
   // PUT /revenue/{id} - Update revenue
   update: async (id: number, data: any): Promise<any> => {
-    const response: AxiosResponse<MethodResult<any>> = await api.put(`/revenue/${id}`, data)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<any>> = await api.put(`/revenue/${id}`, data)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error updating revenue:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   // GET /revenue/{id} - Get revenue by ID
@@ -1667,7 +1859,7 @@ export const usersApi = {
       return response.data.data || response.data
     } catch (error: any) {
       console.error(`Error calling updateByUsername API with username ${username}:`, error)
-      throw error
+      throw new Error(getApiErrorMessage(error))
     }
   },
 
@@ -1677,7 +1869,7 @@ export const usersApi = {
       await api.delete(`/api/users/${username}`)
     } catch (error: any) {
       console.error(`Error calling deleteByUsername API with username ${username}:`, error)
-      throw error
+      throw new Error(getApiErrorMessage(error))
     }
   },
 
@@ -1693,7 +1885,7 @@ export const usersApi = {
       return response.data.data || response.data
     } catch (error: any) {
       console.error('Error calling create API:', error)
-      throw error
+      throw new Error(getApiErrorMessage(error))
     }
   },
 
@@ -1884,7 +2076,7 @@ export const financialReportsApi = {
       return response.data.data
     } catch (error: any) {
       console.error('Error calling current month financial report API:', error)
-      throw error
+      throw new Error(getApiErrorMessage(error))
     }
   },
 
@@ -2059,18 +2251,33 @@ export const supplierApi = {
   },
 
   create: async (supplier: Omit<SupplierDTO, 'id'>): Promise<MethodResult<SupplierDTO>> => {
-    const response: AxiosResponse<MethodResult<SupplierDTO>> = await api.post('/supplier', supplier)
-    return response.data
+    try {
+      const response: AxiosResponse<MethodResult<SupplierDTO>> = await api.post('/supplier', supplier)
+      return response.data
+    } catch (error: any) {
+      console.error('Error creating supplier:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   update: async (id: number, supplier: Omit<SupplierDTO, 'id'>): Promise<MethodResult<SupplierDTO>> => {
-    const response: AxiosResponse<MethodResult<SupplierDTO>> = await api.put(`/supplier/${id}`, supplier)
-    return response.data
+    try {
+      const response: AxiosResponse<MethodResult<SupplierDTO>> = await api.put(`/supplier/${id}`, supplier)
+      return response.data
+    } catch (error: any) {
+      console.error('Error updating supplier:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   delete: async (id: number): Promise<MethodResult<void>> => {
-    const response: AxiosResponse<MethodResult<void>> = await api.delete(`/supplier/${id}`)
-    return response.data
+    try {
+      const response: AxiosResponse<MethodResult<void>> = await api.delete(`/supplier/${id}`)
+      return response.data
+    } catch (error: any) {
+      console.error('Error deleting supplier:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   search: async (searchParams: SupplierSearchDTO): Promise<SupplierResponse> => {
@@ -2088,23 +2295,39 @@ export const monthlyCostsApi = {
   },
 
   create: async (cost: MonthlyCostRequest): Promise<MonthlyCost> => {
-    const response: AxiosResponse<MethodResult<MonthlyCost>> = await api.post('/monthly-costs', cost)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<MonthlyCost>> = await api.post('/monthly-costs', cost)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error creating monthly cost:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   update: async (id: number, cost: MonthlyCostRequest): Promise<MonthlyCost> => {
-    const response: AxiosResponse<MethodResult<MonthlyCost>> = await api.put(`/monthly-costs/${id}`, cost)
-    return response.data.data
+    try {
+      const response: AxiosResponse<MethodResult<MonthlyCost>> = await api.put(`/monthly-costs/${id}`, cost)
+      return response.data.data
+    } catch (error: any) {
+      console.error('Error updating monthly cost:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   delete: async (id: number): Promise<void> => {
-    await api.delete(`/monthly-costs/${id}`)
+    try {
+      await api.delete(`/monthly-costs/${id}`)
+    } catch (error: any) {
+      console.error('Error deleting monthly cost:', error)
+      throw new Error(getApiErrorMessage(error))
+    }
   },
 
   // Search and filtering
   search: async (searchParams: MonthlyCostSearchRequest): Promise<MonthlyCostSearchResponse> => {
-    const response: AxiosResponse<MethodResult<MonthlyCostSearchResponse>> = await api.post('/monthly-costs/search', searchParams)
-    return response.data.data
+    const response: AxiosResponse<MonthlyCostSearchResponse> = await api.post('/monthly-costs/search', searchParams)
+    console.log('monthlyCostsApi.search response:', response.data)
+    return response.data
   },
 
   getByMonthYear: async (month: number, year: number): Promise<MonthlyCost[]> => {
@@ -2209,8 +2432,9 @@ export const monthlyCostsApi = {
 
   // Summary and analytics
   getSummaryByMonth: async (month: number, year: number): Promise<MonthlyCostSummary> => {
-    const response: AxiosResponse<MethodResult<MonthlyCostSummary>> = await api.get(`/monthly-costs/summary/month/${month}/year/${year}`)
-    return response.data.data
+    const response: AxiosResponse<MonthlyCostSummary> = await api.get(`/monthly-costs/summary/month/${month}/year/${year}`)
+    console.log('getSummaryByMonth response:', response.data)
+    return response.data
   },
 
   getSummaryByYear: async (year: number): Promise<MonthlyCostSummary> => {
@@ -2219,13 +2443,15 @@ export const monthlyCostsApi = {
   },
 
   getTrendByYear: async (year: number): Promise<MonthlyCostTrend[]> => {
-    const response: AxiosResponse<MethodResult<MonthlyCostTrend[]>> = await api.get(`/monthly-costs/trend/year/${year}`)
-    return response.data.data
+    const response: AxiosResponse<MonthlyCostTrend[]> = await api.get(`/monthly-costs/trend/year/${year}`)
+    console.log('getTrendByYear response:', response.data)
+    return response.data
   },
 
   getBreakdownByMonth: async (month: number, year: number): Promise<MonthlyCostBreakdown[]> => {
-    const response: AxiosResponse<MethodResult<MonthlyCostBreakdown[]>> = await api.get(`/monthly-costs/breakdown/month/${month}/year/${year}`)
-    return response.data.data
+    const response: AxiosResponse<MonthlyCostBreakdown[]> = await api.get(`/monthly-costs/breakdown/month/${month}/year/${year}`)
+    console.log('getBreakdownByMonth response:', response.data)
+    return response.data
   },
 
   // Totals
@@ -2292,7 +2518,7 @@ export const departmentApi = {
       return response.data.data
     } catch (error: any) {
       console.error('Error calling create department API:', error)
-      throw error
+      throw new Error(getApiErrorMessage(error))
     }
   },
 
@@ -2303,7 +2529,7 @@ export const departmentApi = {
       return response.data.data
     } catch (error: any) {
       console.error(`Error calling update department API with id ${id}:`, error)
-      throw error
+      throw new Error(getApiErrorMessage(error))
     }
   },
 
@@ -2313,7 +2539,7 @@ export const departmentApi = {
       await api.delete(`/department/${id}`)
     } catch (error: any) {
       console.error(`Error calling delete department API with id ${id}:`, error)
-      throw error
+      throw new Error(getApiErrorMessage(error))
     }
   },
 
@@ -2441,7 +2667,7 @@ export const systemLogApi = {
       return null
     } catch (error: any) {
       console.error('Error calling systemLogApi.create:', error)
-      throw error
+      throw new Error(getApiErrorMessage(error))
     }
   },
 

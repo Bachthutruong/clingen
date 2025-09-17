@@ -4,6 +4,7 @@ import { monthlyCostsApi } from '@/services'
 import type { MonthlyCost, CreateMonthlyCostRequest } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { getApiErrorMessage } from '@/services/api'
 
 interface MonthlyCostFormProps {
   isOpen: boolean
@@ -154,7 +155,7 @@ export const MonthlyCostForm: React.FC<MonthlyCostFormProps> = ({
       onClose()
     } catch (error) {
       console.error('Error saving monthly cost:', error)
-      setErrors({ submit: 'Có lỗi xảy ra khi lưu chi phí' })
+      setErrors({ submit: getApiErrorMessage(error) })
     } finally {
       setLoading(false)
     }

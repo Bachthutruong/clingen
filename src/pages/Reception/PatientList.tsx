@@ -31,7 +31,8 @@ import {
   TestTube,
   DollarSign,
   Barcode,
-  Activity
+  Activity,
+  FileText
 } from 'lucide-react'
 import { patientsApi, referralSourcesApi } from '@/services'
 import { getGenderLabel } from '@/types/api'
@@ -358,7 +359,7 @@ const PatientList: React.FC = () => {
       case 0: return { label: 'Chưa thực hiện', color: 'bg-gray-100 text-gray-800', icon: Clock }
       case 1: return { label: 'Đang thực hiện', color: 'bg-yellow-100 text-yellow-800', icon: Activity }
       case 2: return { label: 'Hoàn thành', color: 'bg-green-100 text-green-800', icon: CheckCircle }
-      case 3: return { label: 'Từ chối', color: 'bg-red-100 text-red-800', icon: AlertCircle }
+      case 3: return { label: 'Đã có kết quả', color: 'bg-blue-100 text-blue-800', icon: FileCheck }
       default: return { label: 'Không xác định', color: 'bg-gray-100 text-gray-800', icon: Clock }
     }
   }
@@ -381,6 +382,11 @@ const PatientList: React.FC = () => {
   const handleRefresh = () => {
     fetchPatients()
     toast.success('Đã làm mới dữ liệu')
+  }
+
+  const handleViewTestResult = (service: any) => {
+    // Navigate to SampleStatus page with the specific test ID
+    navigate(`/lab/sample-status?testId=${service.id}`)
   }
 
   // Get patients data and apply client-side filters
@@ -891,6 +897,24 @@ const PatientList: React.FC = () => {
                                         <p>Mẫu: {service.testSampleName}</p>
                                         <p>Giá: {formatCurrency(service.price)}</p>
                                       </div>
+                                      
+                                      {/* Test Result Button for Mobile */}
+                                      <div className="mt-2">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => handleViewTestResult(service)}
+                                          disabled={service.status !== 3}
+                                          className={`w-full text-xs ${
+                                            service.status === 3 
+                                              ? 'text-blue-600 hover:text-blue-700 hover:border-blue-300' 
+                                              : 'text-gray-400 cursor-not-allowed'
+                                          }`}
+                                        >
+                                          <FileText size={12} className="mr-1" />
+                                          {service.status === 3 ? 'Xem kết quả' : 'Chưa có kết quả'}
+                                        </Button>
+                                      </div>
                                     </div>
                                   )
                                 })}
@@ -1079,6 +1103,24 @@ const PatientList: React.FC = () => {
                                         ID: {service.id}
                                       </span>
                                     </div>
+                                  </div>
+                                  
+                                  {/* Test Result Button */}
+                                  <div className="mt-3 pt-3 border-t border-gray-200">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleViewTestResult(service)}
+                                      disabled={service.status !== 3}
+                                      className={`w-full ${
+                                        service.status === 3 
+                                          ? 'text-blue-600 hover:text-blue-700 hover:border-blue-300' 
+                                          : 'text-gray-400 cursor-not-allowed'
+                                      }`}
+                                    >
+                                      <FileText size={14} className="mr-2" />
+                                      {service.status === 3 ? 'Xem kết quả xét nghiệm' : 'Chưa có kết quả'}
+                                    </Button>
                                   </div>
                                 </div>
                               </div>
